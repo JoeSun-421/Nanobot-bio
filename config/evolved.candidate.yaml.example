@@ -1,0 +1,65 @@
+schema_version: 2.0+evolved
+backend: delivery
+cohort: K562
+device: cuda
+top_k: 5
+n_cand: 5
+encoder: esmc
+offline: false
+force_transfer: false
+parallel_retrieve: true
+boost_function_in_fuse: false
+tau_drop: 0.3
+axes:
+  embedding: true
+  sequence: true
+  domain: true
+  structure: true
+  use_af3: true
+  function_annotation: true
+  rna_blastn: true
+  struct_align_refine: true
+  literature: true
+fusion_weights:
+  esmc_cosine: 1.0
+  esm2_cosine: 0.5
+  domain_jaccard: 0.6
+  domain_overlap: 0.3
+  seq_identity: 0.3
+  tm_score: 0.3
+  lddt: 0.3
+  function_similarity: 0.4
+  saprot_cosine: 0.0
+  rna_peak_homology: 0.0
+  fident: 0.2
+abstain_thresholds:
+  esmc_cosine: 0.55
+  esm2_cosine: 0.55
+  domain_jaccard: 0.5
+  domain_overlap: 0.5
+  seq_identity: 0.3
+  tm_score: 0.5
+  fused: 0.75
+  rna_peak_homology: 0.4
+  saprot_cosine: 0.55
+  lddt: 0.5
+label_thresholds:
+  strong: 0.75
+  likely: 0.5
+  unlikely: 0.25
+integrate:
+  use_transfer_prior: true
+  use_donor_quality: true
+  use_abstain: true
+predict:
+  aggregate: weighted
+structure_policy:
+  prefer_afdb: true
+  use_af3_fallback: true
+llm:
+  enabled: true
+  stage1_function_reasoning: true
+  stage3_explanation: true
+near_match_seq_identity: 0.95
+evolved: false
+candidate: true

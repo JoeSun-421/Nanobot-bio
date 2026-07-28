@@ -1,0 +1,34 @@
+# Keep the build context lean and avoid leaking local state into the image.
+.venv
+**/.venv
+__pycache__
+**/__pycache__
+*.pyc
+*.egg-info
+dist
+build
+.git
+.gitignore
+
+# Runtime artifacts (mounted as volumes, not baked in)
+artifacts/
+workspace/sessions
+workspace/memory/*
+workspace/.nanobot/
+*.log
+.af3_status
+.setup_complete
+
+# Local docs (gitignored subset stays out too)
+docs/worklog/
+.cursor/
+.idea/
+**/.idea/
+
+# Env / secrets — never bake
+.env
+.env.*
+!.env.example
+**/nanobot.config.local.json
+config/*.local.json
+config/evolved.candidate.yaml

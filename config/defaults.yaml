@@ -1,0 +1,108 @@
+# Full architecture defaults — HANDOFF + AGENT_BUILD_SPEC + DESIGN
+schema_version: "2.0"
+backend: delivery
+cohort: K562
+device: cuda
+top_k: 5
+n_cand: 5
+encoder: esmc
+offline: false
+force_transfer: false
+parallel_retrieve: true
+boost_function_in_fuse: false
+tau_drop: 0.30
+
+axes:
+  embedding: true
+  sequence: true
+  domain: true
+  structure: true
+  # AF3 fallback when AFDB miss (proposal §4); probe failure → caveat, ≠ sim 0.
+  use_af3: true
+  function_annotation: true
+  rna_blastn: true
+  struct_align_refine: true
+  literature: true
+
+fusion_weights:
+  esmc_cosine: 1.0
+  esm2_cosine: 0.5
+  domain_jaccard: 0.6
+  domain_overlap: 0.6
+  seq_identity: 0.3
+  tm_score: 0.3
+  lddt: 0.3
+  function_similarity: 0.4
+  saprot_cosine: 0.0
+  # Delivery rna_blastn remains collected as evidence, but the current held-out
+  # ablation found its fusion weight harmful; keep 0 until a later promote gate.
+  rna_peak_homology: 0.0
+
+abstain_thresholds:
+  esmc_cosine: 0.55
+  esm2_cosine: 0.55
+  domain_jaccard: 0.5
+  domain_overlap: 0.5
+  seq_identity: 0.30
+  tm_score: 0.5
+  fused: 0.45
+  rna_peak_homology: 0.40
+
+# Four-level confidence labels (also used by llm_touchpoints)
+label_thresholds:
+  strong: 0.75
+  likely: 0.50
+  unlikely: 0.25
+
+integrate:
+  use_transfer_prior: true
+  use_donor_quality: true
+  use_abstain: true
+  require_cohort_head: true
+  min_vote_similarity: 0.35
+  # Keep retrieval/commit at N_cand=5, but prevent weaker tail donors diluting p_hat.
+  max_vote_donors: 2
+  # Disabled until an offline candidate clears the transfer promotion gate.
+  min_donor_quality: 0.0
+
+predict:
+  # Delivery BUILD_SPEC: p_hat = similarity_weighted_vote(s, prob, tprior, quality).
+  aggregate: weighted
+
+structure_policy:
+  prefer_afdb: true
+  # No AFDB → try predict_structure once; on failure surface structure_axis_unavailable.
+  use_af3_fallback: true
+
+llm:
+  enabled: true   # two BUILD_SPEC §5 touchpoints; configure with `nanobot-bio onboard`
+  stage1_function_reasoning: true
+  stage3_explanation: true
+
+near_match_seq_identity: 0.95
+
+# Model capability metadata for doctor / Tool gating (not a second registry).
+models:
+  rhobind:
+    tool: predict_interaction
+    backend: delivery
+    conda_env: rhobind
+    produces: [prob]
+    timeout_s: 180
+    gpu: preferred
+  esm_c:
+    tool: seq_similarity
+    backend: delivery
+    conda_env: protein_embed
+    produces: [RbpHit]
+    cache: artifacts/cache/esm
+  af3:
+    tool: predict_structure
+    backend: delivery
+    conda_env: af3
+    degraded_fallback: afdb_foldseek
+  rna_blastn:
+    tool: rna_blastn
+    backend: delivery
+    conda_env: rna
+    produces: [RbpHit]

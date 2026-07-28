@@ -1,0 +1,45 @@
+# Runtime / local data
+artifacts/
+workspace/sessions
+workspace/memory/*
+workspace/.nanobot/
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.setup_complete
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.cursor/
+.idea/
+**/.idea/
+*.log
+*.pem
+*.key
+.af3_status
+
+# Never commit live LLM configs
+**/nanobot.config.local.json
+config/*.local.json
+config/evolved.candidate.yaml
+
+# Local-only docs — never commit / push to GitHub (keep on the machine only)
+docs/
+# Ignore other assets; keep README logo trackable
+assets/*
+!assets/nanobot_logo.png
+
+# Proposal binaries (do not require in-repo)
+RNA_RBP_Agent_Proposal.docx
+rna_app_proposal.pdf
+rna_app_proposal_*.pdf

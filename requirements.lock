@@ -1,0 +1,87 @@
+#
+# Sole App pip pin file (runtime + transitive deps). Install:
+#   pip install -r requirements.lock && pip install -e ".[dev]"
+#
+# Direct deps also declared in pyproject.toml [project.dependencies].
+# Refresh pins (example): pip install -e . && pip freeze > requirements.lock
+# (then trim unrelated env packages). Originally generated via pip-compile.
+#
+
+annotated-doc==0.0.4
+    # via typer
+annotated-types==0.7.0
+    # via pydantic
+anyio==4.14.2
+    # via
+    #   httpx
+    #   openai
+certifi==2026.6.17
+    # via
+    #   httpcore
+    #   httpx
+distro==1.9.0
+    # via openai
+dulwich==1.2.12
+    # via nanobot-bio App pins
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via openai
+idna==3.18
+    # via
+    #   anyio
+    #   httpx
+jiter==0.16.0
+    # via openai
+loguru==0.7.3
+    # via nanobot-bio App pins
+markdown-it-py==4.2.0
+    # via rich
+mdurl==0.1.2
+    # via markdown-it-py
+numpy==2.5.1
+    # via nanobot-bio App pins
+openai==2.46.0
+    # via nanobot-bio App pins
+prompt-toolkit==3.0.52
+    # via
+    #   nanobot-bio App pins
+    #   questionary
+pydantic==2.13.4
+    # via
+    #   nanobot-bio App pins
+    #   openai
+pydantic-core==2.46.4
+    # via pydantic
+pygments==2.20.0
+    # via rich
+pyyaml==6.0.3
+    # via nanobot-bio App pins
+questionary==2.1.1
+    # via nanobot-bio App pins
+rich==15.0.0
+    # via
+    #   nanobot-bio App pins
+    #   typer
+shellingham==1.5.4
+    # via typer
+sniffio==1.3.1
+    # via openai
+tqdm==4.69.0
+    # via openai
+typer==0.27.0
+    # via nanobot-bio App pins
+typing-extensions==4.16.0
+    # via
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
+urllib3==2.7.0
+    # via dulwich
+wcwidth==0.8.2
+    # via prompt-toolkit

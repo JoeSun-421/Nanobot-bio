@@ -1,0 +1,135 @@
+# syntax=docker/dockerfile:1.6
+# =============================================================================
+# nanobot-bio — container image for collaborators
+# =============================================================================
+# Two build profiles (BUILDARG PROFILE):
+#   PROFILE=agent   (default) — app venv only, no conda science stack. Light.
+#                               Enough for `doctor`, `layout`, `gate`, LLM chat,
+#                               and any tool whose conda env is not needed.
+#   PROFILE=full    — also builds delivery conda envs (protein_embed / rna /
+#                               rhobind / af3) via setup_envs.sh. Heavy, GPU
+#                               recommended. AF3 harden is opt-in via RUN_AF3=1.
+#
+# Data (agent_db, AFDB structures, AF3 params, LOO CSVs) is NOT baked in.
+# Mount it via -v / docker-compose volumes (see docker-compose.yml). The image
+# only contains code + Python/conda environments.
+#
+# Build:
+#   docker build -t nanobot-bio:agent .
+#   docker build --build-arg PROFILE=full -t nanobot-bio:full \
+#     --build-arg DELIVERY_BIND=/abs/path/to/rhobind_agent_delivery .
+#
+# Run (quick smoke):
+#   docker run --rm -v $BIO_ROOT/rhobind_agent_delivery:/delivery \
+#     -e DELIVERY_ROOT=/delivery \
+#     -v $HOME/.nanobot:/root/.nanobot nanobot-bio:agent doctor
+#
+# Entrypoint runs `nanobot-bio doctor` as a self-check, then execs the given
+# command (default: `nanobot-bio chat`).
+# =============================================================================
+
+ARG PYTHON_VERSION=3.13
+ARG NANOBOT_GIT=https://github.com/HKUDS/nanobot.git
+
+FROM mambaorg/micromamba:1.5-jammy AS base
+
+ARG PYTHON_VERSION
+ARG NANOBOT_GIT
+ARG PROFILE=agent
+ARG RUN_AF3=0
+
+LABEL org.opencontainers.image.title="nanobot-bio"
+LABEL org.opencontainers.image.description="RNA-RBP agent (Nanobot + rhobind delivery bridge)"
+LABEL org.opencontainers.image.source="https://github.com/JoeSun-421/rbp-nanobot-bio"
+
+USER root
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git build-essential curl ca-certificates bash procps \
+        libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV BIO_ROOT=/bio
+ENV NANOBOT_SRC=$BIO_ROOT/nanobot
+ENV NANOBOT_BIO_ROOT=$BIO_ROOT/nanobot-bio
+ENV DELIVERY_ROOT=/delivery
+ENV NANOBOT_WORKSPACE=$NANOBOT_BIO_ROOT/workspace
+ENV NANOBOT_CONFIG=/root/.nanobot/config.json
+RUN mkdir -p "$BIO_ROOT" /delivery /root/.nanobot
+
+WORKDIR $BIO_ROOT
+
+# 1. Clone nanobot runtime (sibling)
+RUN git clone --depth 1 "$NANOBOT_GIT" "$NANOBOT_SRC" && \
+    test -f "$NANOBOT_SRC/nanobot.py" || test -f "$NANOBOT_SRC/pyproject.toml"
+
+# 2. Copy app sources
+COPY . "$NANOBOT_BIO_ROOT/"
+RUN chmod +x "$NANOBOT_BIO_ROOT/scripts/setup_all.sh" \
+             "$NANOBOT_BIO_ROOT/scripts/check_secrets.sh" 2>/dev/null || true
+
+# 3. App venv (Python $PYTHON_VERSION) + pinned deps + nanobot .pth + overlay sync
+RUN micromamba create -y -n base python="$PYTHON_VERSION" pip && \
+    micromamba run -n base python -m venv "$NANOBOT_BIO_ROOT/.venv"
+
+ENV PATH="$NANOBOT_BIO_ROOT/.venv/bin:$PATH"
+
+RUN "$NANOBOT_BIO_ROOT/.venv/bin/python" -m pip install -U pip setuptools wheel && \
+    "$NANOBOT_BIO_ROOT/.venv/bin/pip" install -r "$NANOBOT_BIO_ROOT/requirements.lock" && \
+    NB_DEPS=$("$NANOBOT_BIO_ROOT/.venv/bin/python" - <<'PY'
+import tomllib, pathlib
+p = pathlib.Path("/bio/nanobot/pyproject.toml")
+for d in tomllib.loads(p.read_text()).get("project", {}).get("dependencies", []):
+    print(d)
+PY
+    ) && \
+    if [ -n "$NB_DEPS" ]; then \
+      "$NANOBOT_BIO_ROOT/.venv/bin/pip" install $NB_DEPS; \
+    fi && \
+    SITE=$("$NANOBOT_BIO_ROOT/.venv/bin/python" -c 'import site; print(site.getsitepackages()[0])') && \
+    echo "$(dirname "$NANOBOT_SRC")" > "$SITE/_nanobot_src.pth" && \
+    ( "$NANOBOT_BIO_ROOT/.venv/bin/pip" install -e "$NANOBOT_BIO_ROOT"[dev] -q || \
+      "$NANOBOT_BIO_ROOT/.venv/bin/pip" install -e "$NANOBOT_BIO_ROOT" -q )
+
+# 4. Optional: full science conda stack (PROFILE=full).
+#    Delivery tree is bind-mounted at build time via --build-arg DELIVERY_BIND.
+RUN --mount=type=bind,source=rhobind_agent_delivery,target=/delivery,required=false \
+    if [ "$PROFILE" = "full" ]; then \
+      bash "$DELIVERY_ROOT/agent/setup_envs.sh" || \
+      echo "[warn] setup_envs.sh failed; full profile incomplete"; \
+      if [ "$RUN_AF3" = "1" ]; then \
+        bash "$DELIVERY_ROOT/agent/setup_af3.sh" || \
+        echo "[warn] AF3 harden failed; AFDB path still usable"; \
+      fi; \
+    else \
+      echo "[info] PROFILE=agent — skipping conda science stack"; \
+    fi
+
+# 5. Sync plugin overlay → nanobot runtime + workspace (best-effort)
+RUN "$NANOBOT_BIO_ROOT/.venv/bin/python" -m app.sync_overlay || \
+    echo "[warn] sync_overlay failed; doctor will retry at runtime"
+
+# 6. Default .env the entrypoint can rewrite; users override via -e or mount
+RUN { \
+      echo "# Generated by Dockerfile"; \
+      echo "BIO_ROOT=$BIO_ROOT"; \
+      echo "DELIVERY_ROOT=$DELIVERY_ROOT"; \
+      echo "NANOBOT_SRC=$NANOBOT_SRC"; \
+      echo "NANOBOT_BIO_ROOT=$NANOBOT_BIO_ROOT"; \
+      echo "NANOBOT_WORKSPACE=$NANOBOT_WORKSPACE"; \
+      echo "RBP_BACKEND=delivery"; \
+      echo "RHOBIND_DEVICE=auto"; \
+    } > "$NANOBOT_BIO_ROOT/.env"
+
+USER root
+WORKDIR $NANOBOT_BIO_ROOT
+
+# Volumes collaborators mount at runtime
+VOLUME ["/delivery", "/root/.nanobot", "/bio/nanobot-bio/artifacts", "/bio/nanobot-bio/workspace/sessions"]
+
+# Entrypoint: self-check (doctor) then exec user command (default: chat)
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["nanobot-bio", "chat"]

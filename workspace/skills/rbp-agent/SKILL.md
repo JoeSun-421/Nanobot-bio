@@ -1,0 +1,1 @@
+../../../nanobot/skills/rbp-agent/SKILL.md

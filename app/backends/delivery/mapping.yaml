@@ -1,0 +1,167 @@
+predict_interaction:
+  stages: [stage0, stage2]
+  suppress_raw: true
+  script: agent/backbone/predict_api.py
+  conda_env: rhobind
+  registry_name: rhobind_predict
+get_known_rbp_list:
+  stage: stage0
+  type: local_json
+  path: agent_db/registry/rbp_registry.json
+seq_similarity:
+  stage: stage1
+  axis: sequence
+  retrieve: true
+  primary:
+    script: agent/tools/sequence/esm_similarity.py
+    conda_env: protein_embed
+    registry_name: esm_similarity
+  secondary:
+    script: agent/tools/sequence/protein_seq_similarity.py
+    conda_env: rna
+    registry_name: protein_seq_similarity
+struct_similarity:
+  stage: stage1
+  axis: structure
+  retrieve: true
+  primary:
+    script: agent/tools/structure/struct_similarity_foldseek.py
+    conda_env: protein_embed
+    registry_name: struct_similarity_foldseek
+  refine:
+    script: agent/tools/structure/struct_align_usalign.py
+    conda_env: protein_embed
+    registry_name: struct_align_usalign
+get_func_annotation:
+  stage: stage1
+  axis: function_annotation
+  retrieve: true
+  suppress_raw: true
+  network:
+    script: agent/tools/function/uniprot_annotation.py
+    registry_name: uniprot_annotation
+  offline:
+    script: agent/tools/function/go_pfam_lookup.py
+    registry_name: go_pfam_lookup
+predict_structure:
+  stage: stage1
+  axis: use_af3
+  retrieve: true
+  suppress_raw: true
+  script: agent/tools/structure/structure_predict_af3.py
+  conda_env: af3
+  registry_name: structure_predict_af3
+literature_search:
+  stage: stage1
+  axis: literature
+  retrieve: true
+  suppress_raw: true
+  script: agent/tools/function/literature_retrieval.py
+  registry_name: literature_retrieval
+lookup_proxy_cache:
+  stage: stage1
+  retrieve: true
+  type: agent_local
+  module: rbp_eval.evolve.proxy_cache
+  note: Promoted p*→proxies cache lookup
+fuse_similarity_views:
+  stage: stage1
+  type: agent_local
+  module: rbp_eval.scoring.fuse_hits
+  note: Fuse hits with config/evolved.yaml fusion_weights
+commit_proxy_candidates:
+  stage: stage1
+  type: agent_local
+  module: nanobot.agent.tools.rbp.commit_proxies
+  note: "Proposal §4 Checkpoint 1 — LLM-calibrated proxy s_i (authoritative)"
+domain_architecture:
+  stage: stage1
+  axis: domain
+  retrieve: true
+  script: agent/tools/sequence/domain_architecture.py
+  registry_name: domain_architecture
+resolve_rbp:
+  stage: stage0
+  script: agent/tools/utility/resolve_rbp.py
+  registry_name: resolve_rbp
+structure_fetch:
+  stage: stage1
+  axis: structure
+  retrieve: true
+  script: agent/tools/structure/structure_fetch.py
+  registry_name: structure_fetch
+rna_preprocess:
+  stage: stage0
+  script: agent/tools/backbone/rna_preprocess.py
+  registry_name: rna_preprocess
+similarity_weighted_vote:
+  stage: stage3
+  script: agent/tools/integrate/similarity_weighted_vote.py
+  registry_name: similarity_weighted_vote
+transfer_prior_lookup:
+  stage: stage3
+  script: agent/tools/integrate/transfer_prior_lookup.py
+  registry_name: transfer_prior_lookup
+donor_quality_prior:
+  stage: stage3
+  script: agent/tools/integrate/donor_quality_prior.py
+  registry_name: donor_quality_prior
+confidence_abstain:
+  stage: stage3
+  script: agent/tools/integrate/confidence_abstain.py
+  registry_name: confidence_abstain
+function_category:
+  stage: stage1
+  axis: function_annotation
+  retrieve: true
+  script: agent/tools/function/function_category.py
+  registry_name: function_category
+go_pfam_lookup:
+  stage: stage1
+  axis: function_annotation
+  retrieve: true
+  script: agent/tools/function/go_pfam_lookup.py
+  registry_name: go_pfam_lookup
+colabfold_msa:
+  stage: stage1
+  axis: use_af3
+  retrieve: true
+  script: agent/tools/structure/colabfold_msa.py
+  registry_name: colabfold_msa
+esm_embed:
+  stage: stage1
+  axis: sequence
+  retrieve: true
+  script: agent/tools/sequence/esm_embed.py
+  conda_env: protein_embed
+  registry_name: esm_embed
+pymol_util:
+  stage: stage1
+  axis: structure
+  retrieve: true
+  script: agent/tools/structure/pymol_util.py
+  registry_name: pymol_util
+check_near_known:
+  stage: stage1
+  retrieve: true
+  type: agent_local
+  module: nanobot.agent.tools.rbp.near_known
+  note: Near-known Fast Path
+structure_consensus:
+  stage: stage1
+  axis: structure
+  retrieve: true
+  script: agent/tools/structure/structure_consensus.py
+  registry_name: structure_consensus
+pdb_metadata:
+  stage: stage1
+  axis: function_annotation
+  retrieve: true
+  script: agent/tools/function/pdb_metadata.py
+  registry_name: pdb_metadata
+rna_blastn:
+  stage: stage1
+  axis: rna_blastn
+  retrieve: true
+  script: agent/tools/sequence/rna_blastn.py
+  registry_name: rna_blastn

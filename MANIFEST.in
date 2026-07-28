@@ -1,0 +1,4 @@
+# Overlay SoT trees shipped in the source distribution (synced at setup/doctor).
+graft nanobot/skills
+graft nanobot/agent/tools/rbp
+global-exclude __pycache__ *.py[cod] .pytest_cache

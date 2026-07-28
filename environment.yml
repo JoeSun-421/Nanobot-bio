@@ -1,0 +1,37 @@
+# nanobot-bio — optional conda env (agent layer only)
+# =============================================================================
+# Secondary path. Prefer scripts/setup_all.sh or:
+#   pip install -r requirements.lock && pip install -e ".[dev]"
+#
+# Science tools (ESM / mmseqs / rhobind / AF3) live in delivery conda envs.
+# requirements.lock is the authoritative pip pin; keep this file roughly in
+# sync with pyproject.toml when you change dependencies.
+#
+# Usage:
+#   mamba env create -f environment.yml && mamba activate nanobot-bio
+#   pip install -e ".[dev]"
+#   # NANOBOT_SRC defaults to in-repo nanobot-bio/nanobot/
+#   nanobot-bio doctor
+# =============================================================================
+name: nanobot-bio
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10,<3.14
+  - pip>=24
+  # Runtime (mirrors pyproject.toml [project.dependencies])
+  - pyyaml>=6.0
+  - pydantic>=2.0
+  - numpy>=1.24
+  - loguru>=0.7
+  - typer>=0.12
+  - rich>=13
+  - questionary>=2
+  - prompt_toolkit>=3.0
+  - openai>=1.0
+  - pip:
+      - dulwich>=0.21
+      - pytest>=7.0
+      - pytest-cov>=4.0
+      - ruff>=0.6
+      # Then: pip install -e ".[dev]"

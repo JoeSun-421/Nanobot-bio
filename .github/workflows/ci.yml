@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout App
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install App (slim in-repo nanobot)
+        env:
+          NANOBOT_BIO_ROOT: ${{ github.workspace }}
+          NANOBOT_SRC: ${{ github.workspace }}/nanobot
+        run: |
+          python -m pip install -U pip setuptools wheel
+          pip install -r requirements.lock
+          # Ensure no legacy nanobot-ai shadows in-repo package
+          pip uninstall -y nanobot-ai nanobot 2>/dev/null || true
+          pip install -e ".[dev]"
+          python -c "import nanobot; p=nanobot.__file__; print(p); assert 'nanobot-bio' in p.replace(chr(92),'/') or 'github/workspace' in p.replace(chr(92),'/') or '/nanobot/' in p"
+          python -m app.sync_overlay
+
+      - name: Secret scan
+        run: bash scripts/check_secrets.sh
+
+      - name: Ruff
+        run: ruff check app rbp_eval tests
+
+      - name: Pytest
+        env:
+          NANOBOT_BIO_ROOT: ${{ github.workspace }}
+          NANOBOT_SRC: ${{ github.workspace }}/nanobot
+        run: pytest -q
+
+      - name: Layout (in-repo slim runtime)
+        env:
+          NANOBOT_BIO_ROOT: ${{ github.workspace }}
+          NANOBOT_SRC: ${{ github.workspace }}/nanobot
+        run: rbp-agent layout
+
+      - name: Note — own-head / light eval skipped on public CI
+        run: |
+          echo "own-head and light LOO/eval-plan require delivery + GPU/RAM."
+          echo "Run locally: bash scripts/ci_gate.sh"
+          echo "Or: rbp-agent gate"
+
+  science:
+    if: github.repository == 'JoeSun-421/rbp-nanobot-bio' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, science]
+    timeout-minutes: 60
+    env:
+      BIO_ROOT: ${{ github.workspace }}/_bio_root
+      NANOBOT_BIO_ROOT: ${{ github.workspace }}
+      NANOBOT_SRC: ${{ github.workspace }}/nanobot
+      DELIVERY_ROOT: ${{ secrets.DELIVERY_BUNDLE_PATH }}
+      NANOBOT_CONFIG: ${{ secrets.NANOBOT_CONFIG_PATH }}
+      RHOBIND_DEVICE: ${{ vars.RHOBIND_DEVICE || 'auto' }}
+    steps:
+      - name: Checkout App
+        uses: actions/checkout@v4
+
+      - name: Link BIO_ROOT layout
+        run: |
+          mkdir -p "$BIO_ROOT"
+          ln -sfn "$GITHUB_WORKSPACE" "$BIO_ROOT/nanobot-bio"
+          echo "DELIVERY_ROOT=$DELIVERY_ROOT"
+          test -d "$DELIVERY_ROOT/agent" || { echo "DELIVERY_BUNDLE_PATH invalid"; exit 1; }
+
+      - name: Set up Python (app venv)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install App (lock + editable dev)
+        run: |
+          python -m pip install -U pip setuptools wheel
+          pip install -r requirements.lock
+          pip uninstall -y nanobot-ai nanobot 2>/dev/null || true
+          pip install -e ".[dev]"
+          python -c "import nanobot; print(nanobot.__file__)"
+
+      - name: Sync workspace skill links
+        run: python -m app.sync_overlay
+
+      - name: Engineering gate (ruff + pytest + layout + optional LOO)
+        run: rbp-agent gate
+
+      - name: Accept-golden (lightweight if no GPU)
+        run: |
+          if conda run -n rhobind python -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+            rbp-agent accept-golden
+          else
+            echo "[science] no CUDA — running accept-golden --skip-predict"
+            rbp-agent accept-golden --skip-predict
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: science-reports
+          path: |
+            artifacts/reports/
+            artifacts/traces/
+
+  eval:
+    if: github.repository == 'JoeSun-421/rbp-nanobot-bio' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, science]
+    timeout-minutes: 90
+    env:
+      BIO_ROOT: ${{ github.workspace }}/_bio_root
+      NANOBOT_BIO_ROOT: ${{ github.workspace }}
+      NANOBOT_SRC: ${{ github.workspace }}/nanobot
+      DELIVERY_ROOT: ${{ secrets.DELIVERY_BUNDLE_PATH }}
+      NANOBOT_CONFIG: ${{ secrets.NANOBOT_CONFIG_PATH }}
+      RHOBIND_DEVICE: ${{ vars.RHOBIND_DEVICE || 'auto' }}
+    steps:
+      - name: Checkout App
+        uses: actions/checkout@v4
+
+      - name: Link BIO_ROOT layout
+        run: |
+          mkdir -p "$BIO_ROOT"
+          ln -sfn "$GITHUB_WORKSPACE" "$BIO_ROOT/nanobot-bio"
+          test -d "$DELIVERY_ROOT/agent" || { echo "DELIVERY_BUNDLE_PATH invalid"; exit 1; }
+
+      - name: Set up Python (app venv)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install App (lock + editable dev)
+        run: |
+          python -m pip install -U pip setuptools wheel
+          pip install -r requirements.lock
+          pip uninstall -y nanobot-ai nanobot 2>/dev/null || true
+          pip install -e ".[dev]"
+
+      - name: Sync workspace skill links
+        run: python -m app.sync_overlay
+
+      - name: Evaluation Plan (light + ablation + ECE)
+        run: |
+          LABELS=""
+          LLM=""
+          if [ -f artifacts/eval/no_llm.json ]; then LABELS="--labels artifacts/eval/no_llm.json"; fi
+          if [ -f artifacts/eval/full_llm.json ]; then LLM="--labels-llm artifacts/eval/full_llm.json"; fi
+          python -m rbp_eval.plans.evaluation_plan \
+            --out artifacts/reports/evaluation_plan_report.json \
+            --md  artifacts/reports/evaluation_plan_report.md \
+            --qual artifacts/reports/faithfulness_rating_sheet.csv \
+            $LABELS $LLM --no-llm-explanation
+
+      - name: LOO light (with ECE when labels present)
+        run: |
+          LABELS=""
+          if [ -f artifacts/eval/no_llm.json ]; then LABELS="--labels artifacts/eval/no_llm.json"; fi
+          python -m rbp_eval.loo.loo_eval \
+            --out artifacts/reports/loo_report.json \
+            $LABELS
+
+      - name: Upload eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: |
+            artifacts/reports/evaluation_plan_report.*
+            artifacts/reports/loo_report.*
+            artifacts/reports/faithfulness_rating_sheet.csv

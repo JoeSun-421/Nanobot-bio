@@ -1,0 +1,94 @@
+# docker-compose.yml — nanobot-bio collaborator stack
+#
+# Profiles:
+#   default (agent-only): docker compose up chat
+#   full    (science):    docker compose --profile full up chat
+#   af3     (with AF3):   docker compose --profile full --profile af3 up chat
+#
+# Mounts (edit paths to your host layout):
+#   ./rhobind_agent_delivery  -> /delivery      (data + delivery scripts)
+#   ~/.nanobot                -> /root/.nanobot  (LLM config + key)
+#
+# Build:
+#   docker compose build                 # agent image
+#   docker compose --profile full build  # full science image
+#
+# One-shot commands:
+#   docker compose run --rm app doctor
+#   docker compose run --rm app accept-golden
+#   docker compose run --rm app agent --message "Does RNA X interact with RBP PTBP1?"
+
+services:
+  app:
+    image: nanobot-bio:${NANOBOT_BIO_TAG:-agent}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PROFILE: ${NANOBOT_BIO_PROFILE:-agent}
+        PYTHON_VERSION: "3.13"
+    profiles: ["default"]
+    environment:
+      DELIVERY_ROOT: /delivery
+      NANOBOT_CONFIG: /root/.nanobot/config.json
+      RHOBIND_DEVICE: ${RHOBIND_DEVICE:-auto}
+      RBP_BACKEND: delivery
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+    volumes:
+      - ../rhobind_agent_delivery:/delivery:ro
+      - ${HOME}/.nanobot:/root/.nanobot:rw
+      - nanobot_artifacts:/bio/nanobot-bio/artifacts
+      - nanobot_sessions:/bio/nanobot-bio/workspace/sessions
+    # Interactive chat needs a TTY
+    stdin_open: true
+    tty: true
+
+  app-full:
+    image: nanobot-bio:${NANOBOT_BIO_TAG:-full}
+    build:
+      context: ..
+      dockerfile: nanobot-bio/Dockerfile
+      args:
+        PROFILE: full
+        PYTHON_VERSION: "3.13"
+    profiles: ["full"]
+    environment:
+      DELIVERY_ROOT: /delivery
+      NANOBOT_CONFIG: /root/.nanobot/config.json
+      RHOBIND_DEVICE: ${RHOBIND_DEVICE:-auto}
+      RBP_BACKEND: delivery
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+    volumes:
+      - ../rhobind_agent_delivery:/delivery:rw
+      - ${HOME}/.nanobot:/root/.nanobot:rw
+      - nanobot_artifacts:/bio/nanobot-bio/artifacts
+      - nanobot_sessions:/bio/nanobot-bio/workspace/sessions
+      # Conda envs are baked into the full image; no host conda mount needed.
+    stdin_open: true
+    tty: true
+    # GPU support (uncomment if your host has nvidia-container-toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Convenience one-shot target: `docker compose run --rm doctor`
+  doctor:
+    image: nanobot-bio:${NANOBOT_BIO_TAG:-agent}
+    profiles: ["default", "full"]
+    environment:
+      DELIVERY_ROOT: /delivery
+      NANOBOT_CONFIG: /root/.nanobot/config.json
+    volumes:
+      - ../rhobind_agent_delivery:/delivery:ro
+      - ${HOME}/.nanobot:/root/.nanobot:ro
+    command: ["nanobot-bio", "doctor"]
+
+volumes:
+  nanobot_artifacts:
+  nanobot_sessions:
