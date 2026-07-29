@@ -282,24 +282,31 @@ def promote_evolved_config(
             )
     if require_reports:
         from app.dev.gate import assert_eval_plan_report, assert_loo_report
-        from app.core.paths import REPORTS
+        from app.core.paths import REPORTS, find_report
 
         report_root = reports_dir or REPORTS
-        loo = report_root / "eval_loo_report.json"
-        plan = report_root / "evaluation_plan_report.json"
-        if not loo.is_file() or not plan.is_file():
+        loo = find_report("eval_loo_report.json", root=report_root)
+        plan = find_report("evaluation_plan_report.json", root=report_root)
+        if loo is None or plan is None:
             raise FileNotFoundError(
                 "Missing light eval reports. Run: rbp-agent gate   "
-                f"(expected {loo.name} and {plan.name})"
+                "(expected eval_loo_report.json and evaluation_plan_report.json "
+                f"under {report_root}/json/ or flat)"
             )
         assert_loo_report(loo)
         assert_eval_plan_report(plan)
-        assert_legacy_evolve_decision(
-            report_root / "evolve_eval_decision.json"
-        )
-        transfer_report = assert_transfer_calibration_report(
-            report_root / "transfer_calibration.json"
-        )
+        decision = find_report("evolve_eval_decision.json", root=report_root)
+        if decision is None:
+            raise FileNotFoundError(
+                f"Missing evolve_eval_decision.json under {report_root}"
+            )
+        assert_legacy_evolve_decision(decision)
+        transfer = find_report("transfer_calibration.json", root=report_root)
+        if transfer is None:
+            raise FileNotFoundError(
+                f"Missing transfer_calibration.json under {report_root}"
+            )
+        transfer_report = assert_transfer_calibration_report(transfer)
         expected_candidate_sha = str(
             (transfer_report.get("policy_manifest") or {}).get("candidate_sha256")
             or ""
@@ -311,11 +318,11 @@ def promote_evolved_config(
                 "policy_manifest"
             )
         # Refuse promote when the latest evolve report was retrieval-only synthetic.
-        evolve_rep = report_root / "evolve_report.json"
-        if not evolve_rep.is_file():
-            fallback = report_root / EVOLVED_REPORT.name
-            evolve_rep = fallback if fallback.is_file() else EVOLVED_REPORT
-        if evolve_rep.is_file():
+        # Stay under report_root (do not leak to the live DEFAULT_EVOLVE_REPORT).
+        evolve_rep = find_report("evolve_report.json", root=report_root) or find_report(
+            EVOLVED_REPORT.name, root=report_root
+        )
+        if evolve_rep is not None and evolve_rep.is_file():
             try:
                 er = json.loads(evolve_rep.read_text(encoding="utf-8"))
             except Exception:

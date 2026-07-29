@@ -609,7 +609,11 @@ class MemoryStore:
         files are never touched.
         """
         dream_files = sorted(
-            sessions_dir.glob("dream_*.jsonl"), key=lambda p: p.stat().st_mtime,
+            [
+                *sessions_dir.glob("dream_*.jsonl"),
+                *sessions_dir.glob("*/dream_*.jsonl"),
+            ],
+            key=lambda p: p.stat().st_mtime,
         )
         if len(dream_files) <= keep:
             return

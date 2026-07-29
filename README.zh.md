@@ -45,7 +45,7 @@ cd nanobot-bio
 bash scripts/setup_all.sh
 source .venv/bin/activate
 
-nanobot-bio onboard    # 配置 LLM 与 API key → ~/.nanobot/config.json
+nanobot-bio onboard    # 选择 LLM 厂商 + API key → .env（config 仅 ${VAR} 引用）
 nanobot-bio doctor     # 路径 / conda / 科学栈自检
 nanobot-bio chat
 ```
@@ -81,7 +81,7 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | 目录布局 | `rhobind_agent_delivery/` 与本仓库**同级**；可用 `DELIVERY_ROOT` 覆盖 |
 | Agent 环境 | `nanobot-bio/.venv`（由 `setup_all.sh` 创建） |
 | 科学 conda | delivery：`protein_embed` / `rna` / `rhobind` / `af3` |
-| LLM | `nanobot-bio onboard` → `~/.nanobot/config.json`（`NANOBOT_CONFIG` 可改路径） |
+| LLM | `nanobot-bio onboard` → 必须显式选择厂商（无默认）；密钥在 `nanobot-bio/.env`，`~/.nanobot/config.json` 仅存 `${…_API_KEY}` 引用 |
 | 设备 | `RHOBIND_DEVICE=auto\|cuda\|cpu`；`chat` / `agent` 亦支持 `--device` |
 | 内存 | RhoBind / ESM 建议充足 RAM，并优先 CUDA；cgroup 内存过小易 OOM |
 

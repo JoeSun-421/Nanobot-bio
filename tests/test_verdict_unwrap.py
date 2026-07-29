@@ -115,3 +115,59 @@ def test_prior_missing_and_structure_flags_force_low_confidence():
         }
     )
     assert v2["confidence"] == "low"
+
+
+def test_literature_unavailable_does_not_deduct_confidence_points():
+    """Literature offline is caveat-only; confidence_from_evidence must ignore it."""
+    from app.core.verdict_schema import confidence_from_evidence
+
+    base = dict(
+        mode="multi_head",
+        p_hat=0.61,
+        provenance={
+            "aggregation": {
+                "terms": [
+                    {"donor": "A", "prob": 0.5},
+                    {"donor": "B", "prob": 0.6},
+                    {"donor": "C", "prob": 0.7},
+                ],
+                "n_transfer_priors": 3,
+                "n_donor_quality": 3,
+            },
+            "predictions": [
+                {"prob": 0.5},
+                {"prob": 0.6},
+                {"prob": 0.7},
+            ],
+        },
+    )
+    without = confidence_from_evidence(
+        **base, evidence_flags={"structure_evidence_available": True}
+    )
+    with_lit = confidence_from_evidence(
+        **base,
+        evidence_flags={
+            "structure_evidence_available": True,
+            "literature_unavailable": True,
+        },
+    )
+    assert without == with_lit
+    assert with_lit == "medium"
+
+
+def test_literature_unavailable_still_surfaces_as_caveat_only():
+    from app.core.verdict_schema import normalize_verdict
+
+    v = normalize_verdict(
+        {
+            "label": "Likely",
+            "p_hat": 0.61,
+            "confidence": "medium",
+            "explanation": "transfer vote",
+            "supporting_rbps": [],
+            "evidence_flags": {"literature_unavailable": True},
+            "_deterministic_confidence": "medium",
+        }
+    )
+    assert "literature_unavailable" in (v.get("caveats") or [])
+    assert v["confidence"] == "medium"

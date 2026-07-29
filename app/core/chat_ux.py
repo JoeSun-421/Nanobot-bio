@@ -177,6 +177,22 @@ def print_status_panel(
     stream.flush()
 
 
+# Engineering / provenance keys kept in turn state but never shown in chat JSON.
+_PUBLIC_VERDICT_STRIP = frozenset(
+    {
+        "score_source",
+        "score_kind",
+        "score_disclaimer",
+        "mode",
+        "score_provenance",
+        "evidence_flags",
+        "prior_missing",
+        "structure_unavailable",
+        "_deterministic_confidence",
+    }
+)
+
+
 def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     s = Style(stream)
     w = _term_width()
@@ -189,14 +205,12 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     evidence = []
     caveats: list[str] = []
     confidence = None
-    score_kind = None
-    score_disclaimer = None
     if parsed is not None:
         evidence = list(parsed.pop("evidence_table", []) or [])
+        for key in _PUBLIC_VERDICT_STRIP:
+            parsed.pop(key, None)
         caveats = [str(x) for x in (parsed.get("caveats") or [])]
         confidence = parsed.get("confidence")
-        score_kind = parsed.get("score_kind")
-        score_disclaimer = parsed.get("score_disclaimer")
         body = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
     if evidence:
         stream.write("\n" + s.bold("▸ evidence") + "\n")
@@ -223,17 +237,11 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     stream.write(s.bold(title) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
     stream.write(body if body.endswith("\n") else body + "\n")
-    if confidence or caveats or score_kind or score_disclaimer:
+    if confidence or caveats:
         detail = f"confidence={confidence or 'unknown'}"
-        if score_kind:
-            detail += f" · score={score_kind}"
         if caveats:
             detail += " · caveats=" + ", ".join(caveats)
         stream.write(s.dim(detail) + "\n")
-        if score_disclaimer:
-            stream.write(s.dim(f"disclaimer={score_disclaimer}") + "\n")
-        elif score_kind and score_kind != "own_head":
-            stream.write(s.dim("disclaimer=not calibrated binding probability") + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
     stream.flush()
 
@@ -388,7 +396,7 @@ _SLASH_COMMANDS = (
 
 
 def _init_prompt_session(history_dir: Optional[Path] = None) -> None:
-    """Create a PromptSession with file history under artifacts/sessions."""
+    """Create a PromptSession with file history under artifacts/sessions/ (root sidecar)."""
     global _PROMPT_SESSION
     if _PROMPT_SESSION is not None:
         return
@@ -698,7 +706,7 @@ def make_agent_trace_hook(
     """AgentHook: tools visible; thinking buffered then folded (Cursor-like).
 
     Live token spam is suppressed. Full thought text only when
-    ``RBP_SHOW_THINKING=1`` (also saved under artifacts/sessions/).
+    ``RBP_SHOW_THINKING=1`` (also saved under artifacts/sessions/ root).
     """
     from nanobot.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext
 
@@ -981,15 +989,13 @@ def format_verdict_display(result: Any) -> str:
         "label": verdict.get("label"),
         "p_hat": verdict.get("p_hat"),
         "confidence": verdict.get("confidence"),
-        "score_source": verdict.get("score_source"),
-        "score_kind": verdict.get("score_kind"),
-        "score_disclaimer": verdict.get("score_disclaimer"),
-        "mode": verdict.get("mode"),
         "explanation": verdict.get("explanation"),
         "supporting_rbps": verdict.get("supporting_rbps") or [],
         "caveats": verdict.get("caveats") or [],
     }
     display = {k: v for k, v in display.items() if v is not None}
+    # Internal provenance stays on the turn verdict; only donor terms surface
+    # as evidence_table above the public JSON (then stripped from the body).
     provenance = verdict.get("score_provenance")
     if isinstance(provenance, dict):
         aggregation = provenance.get("aggregation")

@@ -346,6 +346,13 @@ class RBPAgent:
     def build_nanobot(self) -> Any:
         from nanobot import Nanobot
 
+        try:
+            from app.core.onboard import prepare_llm_config
+
+            prepare_llm_config(persist=True)
+        except Exception:
+            pass
+
         ensure_workspace_skill(self.workspace)
         kwargs: dict[str, Any] = {
             "workspace": self.workspace,

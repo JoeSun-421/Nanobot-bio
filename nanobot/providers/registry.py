@@ -384,6 +384,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         backend="openai_compat",
         default_api_base="https://api.moonshot.ai/v1",
         model_overrides=(
+            ("kimi-k3", {"temperature": 1.0}),
             ("kimi-k2.5", {"temperature": 1.0}),
             ("kimi-k2.6", {"temperature": 1.0}),
             ("kimi-k2.7", {"temperature": 1.0}),

@@ -2,8 +2,16 @@
 # =============================================================================
 # nanobot-bio — sole environment setup entry (Linux / SSH)
 # =============================================================================
+# 智能默认：按 nvidia-smi 的 compute capability 自动选 AF3 栈
+#   - CC 12.*（Blackwell，如 RTX 5090）→ 仓外 af3_blackwell + jax≥0.10
+#   - 其它（Ampere/Ada/Hopper 等）→ delivery 经典 conda env `af3`（jax 0.4.x）
+#
 # First-time (science conda + agent + optional AF3 hardening):
 #   bash scripts/setup_all.sh
+#
+# 明确机型入口（薄包装，推荐协作方按 GPU 选用）：
+#   bash scripts/setup_all_ampere_or_older.sh   # 经典 af3（A100/H100/4090…）
+#   bash scripts/setup_all_blackwell.sh         # 强制 Blackwell 隔离栈
 #
 # Day-to-day (standard venv; CLI loads .env automatically):
 #   source $BIO_ROOT/nanobot-bio/.venv/bin/activate
@@ -13,6 +21,8 @@
 #   --skip-conda     agent venv only (no RhoBind/ESM/AF3)
 #   --skip-smoke     skip doctor smoke check
 #   --skip-af3       skip AF3 hardening (default on; 10-minute budget)
+#   --af3-stack=auto|classic|blackwell
+#                    AF3 栈选择（也可用环境变量 AF3_STACK；默认 auto）
 #   AF3_BUDGET_SEC=600  AF3 hardening timeout (then deferred)
 #
 # Does not modify rhobind_agent_delivery sources; read-only use of setup_envs / tools.
@@ -22,15 +32,26 @@ set -euo pipefail
 WITH_CONDA=1
 SKIP_SMOKE=0
 SKIP_AF3=0
+# auto = 按 GPU CC 探测；classic = delivery `af3`；blackwell = 隔离栈
+AF3_STACK="${AF3_STACK:-auto}"
 for arg in "$@"; do
   case "$arg" in
     --with-conda) WITH_CONDA=1 ;;
     --skip-conda) WITH_CONDA=0 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
     --skip-af3) SKIP_AF3=1 ;;
-    -h|--help) sed -n '1,25p' "$0"; exit 0 ;;
+    --af3-stack=*) AF3_STACK="${arg#*=}" ;;
+    -h|--help) sed -n '1,40p' "$0"; exit 0 ;;
   esac
 done
+case "$AF3_STACK" in
+  auto|classic|blackwell) ;;
+  *)
+    echo "ERROR: AF3_STACK / --af3-stack must be auto|classic|blackwell (got: $AF3_STACK)" >&2
+    exit 1
+    ;;
+esac
+export AF3_STACK
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -72,15 +93,22 @@ _ensure_nanobot() {
 }
 
 # ---------------------------------------------------------------------------
-# Inline: AF3 harden (writes nanobot-bio/.af3_status only; delivery read-only)
+# Inline: AF3 harden (writes AF3 status outside the git workspace; delivery read-only)
+# Default: ${XDG_CACHE_HOME:-$HOME/.cache}/nanobot-bio/af3_status  (override: AF3_STATUS_FILE)
 # ---------------------------------------------------------------------------
+_af3_status_default() {
+  echo "${AF3_STATUS_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/nanobot-bio/af3_status}"
+}
+
 _setup_af3() {
   local AF3_DIR="${AF3_DIR:-$DELIVERY_ROOT/agent/third_party/alphafold3}"
   local YML="$AF3_DIR/af3_env.yml"
   local PIP_INDEX="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
   local PIP_HOST="${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
   local AF3_BUDGET_SEC="${AF3_BUDGET_SEC:-600}"
-  local STATUS_FILE="${AF3_STATUS_FILE:-$AGENT_ROOT/.af3_status}"
+  local STATUS_FILE
+  STATUS_FILE="$(_af3_status_default)"
+  mkdir -p "$(dirname "$STATUS_FILE")"
   local _START
   _START=$(date +%s)
 
@@ -125,14 +153,30 @@ _setup_af3() {
   }
 
   echo "[af3] budget=${AF3_BUDGET_SEC}s  DELIVERY_ROOT=$DELIVERY_ROOT (read-only)"
+  echo "[af3] AF3_STACK=${AF3_STACK:-auto}"
   # Delivery's pinned JAX cannot execute on Blackwell (compute capability 12).
   # Keep its official env untouched and use the isolated agent-side stack.
+  # AF3_STACK: auto → CC 12.* 用 blackwell；classic / blackwell 可强制覆盖探测结果。
   local GPU_CC
   GPU_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | awk 'NR==1{print; exit}' || true)"
-  if [[ "$GPU_CC" == 12.* ]]; then
+  local use_blackwell=0
+  case "${AF3_STACK:-auto}" in
+    blackwell) use_blackwell=1 ;;
+    classic) use_blackwell=0 ;;
+    auto)
+      if [[ "$GPU_CC" == 12.* ]]; then
+        use_blackwell=1
+      fi
+      ;;
+  esac
+  if (( use_blackwell )); then
     local BW_ROOT="${AF3_BLACKWELL_ROOT:-/root/autodl-tmp/af3_blackwell}"
     local BW_ENV="${AF3_BLACKWELL_ENV:-/root/autodl-tmp/conda/envs/af3_blackwell}"
-    echo "[af3] Blackwell CC $GPU_CC detected; preserving delivery af3 env"
+    if [[ "$GPU_CC" == 12.* ]]; then
+      echo "[af3] Blackwell CC $GPU_CC detected; preserving delivery af3 env"
+    else
+      echo "[af3] AF3_STACK=blackwell forced (GPU CC=${GPU_CC:-unknown}); preserving delivery af3 env"
+    fi
     if [[ ! -x "$BW_ENV/bin/python" || ! -f "$BW_ROOT/alphafold3/run_alphafold.py" ]]; then
       echo "[af3] installing isolated Blackwell stack via scripts/setup_af3_blackwell.sh"
       timeout "$(_budget_left)" bash "$AGENT_ROOT/scripts/setup_af3_blackwell.sh" \
@@ -287,6 +331,7 @@ echo "  BIO_ROOT      = $BIO_ROOT"
 echo "  AGENT_ROOT    = $AGENT_ROOT"
 echo "  DELIVERY_ROOT = $DELIVERY_ROOT"
 echo "  NANOBOT_SRC   = $NANOBOT_SRC"
+echo "  AF3_STACK     = $AF3_STACK"
 echo "  OS            = $(uname -s)"
 echo
 
@@ -362,8 +407,12 @@ if [[ "$WITH_CONDA" == "1" ]]; then
       echo "[2b/6] AF3 harden (budget ${AF3_BUDGET_SEC:-600}s; deferred ≠ setup fail) ..."
       AF3_BUDGET_SEC="${AF3_BUDGET_SEC:-600}" _setup_af3 \
         || echo "  WARN: AF3 harden exited non-zero (science stack still usable via AFDB)" >&2
-      if [[ -f "$AGENT_ROOT/.af3_status" ]]; then
-        echo "  AF3 status: $(tr '\n' ' ' < "$AGENT_ROOT/.af3_status")"
+      _af3_st="$(_af3_status_default)"
+      if [[ ! -f "$_af3_st" && -f "$AGENT_ROOT/.af3_status" ]]; then
+        _af3_st="$AGENT_ROOT/.af3_status"  # legacy in-repo path (read-only fallback)
+      fi
+      if [[ -f "$_af3_st" ]]; then
+        echo "  AF3 status ($_af3_st): $(tr '\n' ' ' < "$_af3_st")"
       fi
     else
       echo "[2b/6] skip AF3 harden (--skip-af3)"
@@ -457,25 +506,56 @@ python -m app.sync_overlay
 ( cd "$AGENT_ROOT" && PYTHONSAFEPATH=1 python -c "from nanobot.agent.tools.rbp.predict import PredictInteractionTool; print('  nanobot.agent.tools.rbp OK', PredictInteractionTool)" )
 
 echo "[5/6] .env + workspace skill ..."
-# AF3_PYTHON must be the `af3` conda env interpreter (has the alphafold3 module).
+# AF3_PYTHON must be a conda AF3 interpreter (classic `af3` or `af3_blackwell`).
 # Never accept the agent .venv python — that is the exact misconfig we are fixing.
 _AF3_PY="${AF3_PYTHON:-/bin/false}"
-if [[ "$_AF3_PY" == *"/.venv/"* || "$_AF3_PY" != *"/af3/"* || ! -x "$_AF3_PY" ]]; then
+_af3_py_ok=0
+if [[ -x "$_AF3_PY" && "$_AF3_PY" != *"/.venv/"* ]]; then
+  # classic: .../envs/af3/bin/python（路径含 /af3/）；blackwell: .../af3_blackwell/...
+  if [[ "$_AF3_PY" == *"af3_blackwell"* && "${AF3_STACK:-auto}" != "classic" ]]; then
+    _af3_py_ok=1
+  elif [[ "$_AF3_PY" == *"/af3/"* && "$_AF3_PY" != *"af3_blackwell"* && "${AF3_STACK:-auto}" != "blackwell" ]]; then
+    _af3_py_ok=1
+  fi
+fi
+if [[ "$_af3_py_ok" != "1" ]]; then
   _AF3_PY="/bin/false"
-  for _c in \
-    "/root/autodl-tmp/conda/envs/af3/bin/python" \
-    "$HOME/miniconda3/envs/af3/bin/python" \
-    "$HOME/miniforge3/envs/af3/bin/python" \
-    "$HOME/mambaforge/envs/af3/bin/python" \
+  # 候选顺序跟随 AF3_STACK，避免 classic 机写进 blackwell 解释器（或相反）。
+  _af3_cands=()
+  _gpu_cc="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | awk 'NR==1{print; exit}' || true)"
+  case "${AF3_STACK:-auto}" in
+    blackwell) _prefer_bw=1 ;;
+    classic) _prefer_bw=0 ;;
+    auto) [[ "$_gpu_cc" == 12.* ]] && _prefer_bw=1 || _prefer_bw=0 ;;
+  esac
+  if [[ "$_prefer_bw" == "1" ]]; then
+    _af3_cands+=(
+      "/root/autodl-tmp/conda/envs/af3_blackwell/bin/python"
+      "$HOME/miniconda3/envs/af3_blackwell/bin/python"
+    )
+  fi
+  _af3_cands+=(
+    "/root/autodl-tmp/conda/envs/af3/bin/python"
+    "$HOME/miniconda3/envs/af3/bin/python"
+    "$HOME/miniforge3/envs/af3/bin/python"
+    "$HOME/mambaforge/envs/af3/bin/python"
     "$HOME/anaconda3/envs/af3/bin/python"
-  do
+  )
+  for _c in "${_af3_cands[@]}"; do
     [[ -x "$_c" ]] && _AF3_PY="$_c" && break
   done
   if [[ "$_AF3_PY" == "/bin/false" ]] && command -v conda >/dev/null 2>&1; then
-    if conda env list 2>/dev/null | awk '{print $1}' | grep -qx af3; then
-      _cand="$(conda run -n af3 which python 2>/dev/null || true)"
-      [[ -x "$_cand" ]] && _AF3_PY="$_cand"
-    fi
+    _env_order=(af3)
+    [[ "$_prefer_bw" == "1" ]] && _env_order=(af3_blackwell af3)
+    for _env in "${_env_order[@]}"; do
+      if conda env list 2>/dev/null | awk '{print $1}' | grep -qx "$_env"; then
+        _cand="$(conda run -n "$_env" which python 2>/dev/null || true)"
+        if [[ -x "$_cand" ]]; then
+          _AF3_PY="$_cand"
+          break
+        fi
+      fi
+    done
   fi
 fi
 export AF3_PYTHON="${_AF3_PY:-/bin/false}"
@@ -517,7 +597,10 @@ print('[setup] artifacts dirs OK')
 " || mkdir -p \
   "$AGENT_ROOT/artifacts/traces" \
   "$AGENT_ROOT/artifacts/sessions" \
-  "$AGENT_ROOT/artifacts/reports" \
+  "$AGENT_ROOT/artifacts/reports/json" \
+  "$AGENT_ROOT/artifacts/reports/md" \
+  "$AGENT_ROOT/artifacts/reports/csv" \
+  "$AGENT_ROOT/artifacts/memory" \
   "$AGENT_ROOT/artifacts/cache" \
   "$AGENT_ROOT/artifacts/logs" \
   "$AGENT_ROOT/artifacts/diag"

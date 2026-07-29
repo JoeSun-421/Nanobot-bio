@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Lightweight gap-closure report (Proposal evidence without full GPU LOO).
 
-Writes ``artifacts/reports/gap_closure_YYYYMMDD.{json,md}`` covering:
+Writes ``artifacts/reports/json|md/gap_closure_YYYYMMDD.{json,md}`` covering:
 - Stage-0 own-head golden shape (optional live smoke)
 - Unseen / force_transfer tool-trace shape fixtures
 - Faithfulness / output schema locks
@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from app.core.paths import REPORTS, ensure_artifact_dirs
+from app.core.paths import REPORTS, ensure_artifact_dirs, report_path
 
 # Canonical unseen / force_transfer tool order (names only; LLM not required).
 UNSEEN_REQUIRED_PREFIX = (
@@ -288,8 +288,10 @@ def write_gap_closure_report(
     root = Path(out_dir) if out_dir else REPORTS
     root.mkdir(parents=True, exist_ok=True)
     data = build_gap_closure_report(live_own_head=live_own_head)
-    jp = root / f"gap_closure_{day}.json"
-    mp = root / f"gap_closure_{day}.md"
+    jp = report_path(f"gap_closure_{day}.json", root=root)
+    mp = report_path(f"gap_closure_{day}.md", root=root)
+    jp.parent.mkdir(parents=True, exist_ok=True)
+    mp.parent.mkdir(parents=True, exist_ok=True)
     jp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     mp.write_text(_to_markdown(data), encoding="utf-8")
     return jp, mp
@@ -326,7 +328,7 @@ def _to_markdown(data: dict[str, Any]) -> str:
         "",
         "## Notes",
         "- Full GPU LOO / faithfulness×30 remain offline (`rbp_eval` eval-plan); this report is the lightweight Proposal evidence pack.",
-        "- Scientific claims in SKILL should cite this path under `~/.nanobot-bio/artifacts/reports/`.",
+        "- Scientific claims in SKILL should cite this path under `~/.nanobot-bio/artifacts/reports/md/`.",
         "",
     ]
     return "\n".join(lines) + "\n"

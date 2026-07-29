@@ -55,9 +55,9 @@ def test_checklist_two_fails_forces_low_confidence():
 
 def test_model_capability_matrix_writes():
     from app.core.model_registry import write_capability_matrix
-    from app.core.paths import REPORTS
+    from app.core.paths import report_path
 
-    path = write_capability_matrix(REPORTS / "model_capability_matrix_test.json")
+    path = write_capability_matrix(report_path("model_capability_matrix_test.json"))
     assert path.is_file()
     text = path.read_text(encoding="utf-8")
     assert "rhobind" in text

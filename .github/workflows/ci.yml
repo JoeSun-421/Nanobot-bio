@@ -53,9 +53,10 @@ jobs:
           NANOBOT_SRC: ${{ github.workspace }}/nanobot
         run: rbp-agent layout
 
-      - name: Note — own-head / light eval skipped on public CI
+      - name: Note — own-head / light eval / delivery tests skipped on public CI
         run: |
           echo "own-head and light LOO/eval-plan require delivery + GPU/RAM."
+          echo "Pytest auto-skips requires_delivery when DELIVERY_ROOT / sibling bundle is absent."
           echo "Run locally: bash scripts/ci_gate.sh"
           echo "Or: rbp-agent gate"
 
@@ -161,9 +162,9 @@ jobs:
           if [ -f artifacts/eval/no_llm.json ]; then LABELS="--labels artifacts/eval/no_llm.json"; fi
           if [ -f artifacts/eval/full_llm.json ]; then LLM="--labels-llm artifacts/eval/full_llm.json"; fi
           python -m rbp_eval.plans.evaluation_plan \
-            --out artifacts/reports/evaluation_plan_report.json \
-            --md  artifacts/reports/evaluation_plan_report.md \
-            --qual artifacts/reports/faithfulness_rating_sheet.csv \
+            --out artifacts/reports/json/evaluation_plan_report.json \
+            --md  artifacts/reports/md/evaluation_plan_report.md \
+            --qual artifacts/reports/csv/faithfulness_rating_sheet.csv \
             $LABELS $LLM --no-llm-explanation
 
       - name: LOO light (with ECE when labels present)
@@ -171,7 +172,7 @@ jobs:
           LABELS=""
           if [ -f artifacts/eval/no_llm.json ]; then LABELS="--labels artifacts/eval/no_llm.json"; fi
           python -m rbp_eval.loo.loo_eval \
-            --out artifacts/reports/loo_report.json \
+            --out artifacts/reports/json/loo_report.json \
             $LABELS
 
       - name: Upload eval reports
@@ -180,6 +181,8 @@ jobs:
         with:
           name: eval-reports
           path: |
-            artifacts/reports/evaluation_plan_report.*
-            artifacts/reports/loo_report.*
-            artifacts/reports/faithfulness_rating_sheet.csv
+            artifacts/reports/json/evaluation_plan_report.json
+            artifacts/reports/md/evaluation_plan_report.md
+            artifacts/reports/json/loo_report.json
+            artifacts/reports/md/loo_report.md
+            artifacts/reports/csv/faithfulness_rating_sheet.csv

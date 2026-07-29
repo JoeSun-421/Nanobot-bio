@@ -5,16 +5,25 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
+# Tests may install pytest.skip here so missing delivery skips instead of fails.
+_delivery_missing_hook: Callable[[], None] | None = None
 
-def delivery_root() -> Path:
-    """Package root of rhobind_agent_delivery."""
+
+def try_delivery_root() -> Path | None:
+    """Return rhobind_agent_delivery root if present, else None.
+
+    Unlike ``delivery_root()``, never raises. An explicit ``DELIVERY_ROOT`` that
+    does not exist is treated as missing (returns None).
+    """
     env = os.environ.get("DELIVERY_ROOT")
     if env:
-        return Path(env).expanduser().resolve()
+        p = Path(env).expanduser().resolve()
+        return p if p.is_dir() else None
     # Default: sibling of nanobot-bio under bio_agent/
     here = Path(__file__).resolve()
     # .../nanobot-bio/app/backends/delivery/env.py → parents[4] = bio_agent
@@ -25,6 +34,26 @@ def delivery_root() -> Path:
     legacy = here.parents[3] / "rhobind_agent_delivery"
     if legacy.is_dir():
         return legacy.resolve()
+    return None
+
+
+def delivery_root() -> Path:
+    """Package root of rhobind_agent_delivery.
+
+    Raises ``FileNotFoundError`` when unset and no sibling bundle exists.
+    When a ``_delivery_missing_hook`` is installed (pytest conftest), the hook
+    runs first so CI without delivery can skip rather than fail.
+    """
+    found = try_delivery_root()
+    if found is not None:
+        return found
+    # Preserve historical behavior: explicit DELIVERY_ROOT wins even if missing
+    # (callers then fail on the concrete path).
+    env = os.environ.get("DELIVERY_ROOT")
+    if env:
+        return Path(env).expanduser().resolve()
+    if _delivery_missing_hook is not None:
+        _delivery_missing_hook()
     raise FileNotFoundError(
         "DELIVERY_ROOT not set and sibling rhobind_agent_delivery not found. "
         "export DELIVERY_ROOT=/path/to/rhobind_agent_delivery"

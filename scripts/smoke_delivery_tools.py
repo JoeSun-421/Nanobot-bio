@@ -4,7 +4,7 @@
 The delivery registry is authoritative: every registered tool must have a bridge
 mapping, an app mapping entry, and a real scenario here. External prerequisites
 are reported separately from failures. A machine-readable report is always
-written under ``artifacts/reports`` by default.
+written under ``artifacts/reports/json`` by default.
 
 Usage:
     python scripts/smoke_delivery_tools.py            # offline-safe subset + science
@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.backends.delivery.client import DEFAULT_CONDA_ENV, SCRIPT_MAP  # noqa: E402
 from app.backends.delivery.env import apply_delivery_env  # noqa: E402
-from app.core.paths import REPORTS, ensure_artifact_dirs  # noqa: E402
+from app.core.paths import ensure_artifact_dirs, report_path  # noqa: E402
 from app.dotenv_util import load_dotenv  # noqa: E402
 
 RNA = (
@@ -39,7 +39,7 @@ RNA = (
 )
 TARGET_ALIAS = "PTBP1"
 TARGET_UNIPROT = "P26599"
-DEFAULT_REPORT = REPORTS / "delivery_tools_smoke_report.json"
+DEFAULT_REPORT = report_path("delivery_tools_smoke_report.json")
 MAPPING_PATH = ROOT / "app" / "backends" / "delivery" / "mapping.yaml"
 
 STATUS_PASSED = "passed"
@@ -357,9 +357,11 @@ def _af3_cached_result() -> dict[str, Any] | None:
             artifact = ROOT / artifact
         if not artifact.is_file():
             return None
+    from app.core.capability_matrix import af3_status_path
+
     return {
         "source": "af3_status",
-        "status_path": str(ROOT / ".af3_status"),
+        "status_path": str(af3_status_path()),
         "artifact": str(artifact) if artifact else None,
         "recorded_at": status.get("ts"),
         "note": note,

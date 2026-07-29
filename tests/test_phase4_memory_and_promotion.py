@@ -33,6 +33,8 @@ def test_scientific_context_excludes_personal_memory_and_scopes_history(tmp_path
     assert "PERSONAL MEMORY SECRET" not in prompt
     assert "same-session fact" in prompt
     assert "other-session fact" not in prompt
+    assert "personal long-term memory" in prompt.lower() or "Scientific mode" in prompt
+    assert "automatically managed by Dream" not in prompt
 
     no_key = builder.build_system_prompt(session_key="", unified_session=False)
     unified = builder.build_system_prompt(

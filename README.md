@@ -45,7 +45,7 @@ cd nanobot-bio
 bash scripts/setup_all.sh
 source .venv/bin/activate
 
-nanobot-bio onboard    # configure LLM and API key → ~/.nanobot/config.json
+nanobot-bio onboard    # pick LLM provider + API key → .env + config refs
 nanobot-bio doctor     # path / conda / science-stack self-check
 nanobot-bio chat
 ```
@@ -81,7 +81,7 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | Layout | `rhobind_agent_delivery/` **sibling** to this repo; override with `DELIVERY_ROOT` |
 | Agent env | `nanobot-bio/.venv` (created by `setup_all.sh`) |
 | Science conda | delivery: `protein_embed` / `rna` / `rhobind` / `af3` |
-| LLM | `nanobot-bio onboard` → `~/.nanobot/config.json` (`NANOBOT_CONFIG` can change the path) |
+| LLM | `nanobot-bio onboard` → pick provider (no default); key in `nanobot-bio/.env`, refs in `~/.nanobot/config.json` |
 | Device | `RHOBIND_DEVICE=auto\|cuda\|cpu`; `chat` / `agent` also support `--device` |
 | Memory | RhoBind / ESM prefer ample RAM and CUDA first; low cgroup memory limits risk OOM |
 

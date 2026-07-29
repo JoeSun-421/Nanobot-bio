@@ -35,7 +35,7 @@ Your **entire** final message must be one object:
 | Unseen / force_transfer path | `caveats` (method limits + any failed axes) |
 | Multi-view fuse produced modality scores | `similarity_breakdown` on each supporting donor when available |
 | Checklist ≥ 2 failures | Low confidence **and** list failures in `caveats` / `evidence_flags` |
-| `literature_search` failed or skipped | `caveats` entry `literature_unavailable` or `literature_skipped` |
+| `literature_search` failed or skipped | `caveats` entry `literature_unavailable` or `literature_skipped` (caveat only; does **not** deduct confidence) |
 
 Do **not** omit `caveats` on unseen paths just because `label` is Likely/Strong.
 

@@ -87,6 +87,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
   "science: real delivery science smoke (needs conda envs + GPU); auto-skips when absent",
+  "requires_delivery: needs DELIVERY_ROOT / sibling rhobind_agent_delivery; skipped on public CI",
 ]
 addopts = [
   "--cov=app",

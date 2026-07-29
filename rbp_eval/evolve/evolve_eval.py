@@ -24,13 +24,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.core.paths import PACKAGE_ROOT, REPORTS, ensure_artifact_dirs
+from app.core.paths import PACKAGE_ROOT, REPORTS_JSON, REPORTS_MD, ensure_artifact_dirs
 from rbp_eval.scoring.fuse_hits import DEFAULT_WEIGHTS, fuse_rbp_hits
 from rbp_eval.evolve.runner import DEFAULT_VAL_RBPS
 
-DEFAULT_OUT = REPORTS / "evolve_eval_report.json"
-DEFAULT_MD = REPORTS / "evolve_eval_report.md"
-DEFAULT_DECISION = REPORTS / "evolve_eval_decision.json"
+DEFAULT_OUT = REPORTS_JSON / "evolve_eval_report.json"
+DEFAULT_MD = REPORTS_MD / "evolve_eval_report.md"
+DEFAULT_DECISION = REPORTS_JSON / "evolve_eval_decision.json"
 ABSTAIN_BAND = (0.05, 0.55)
 DEFAULT_SEED = 42
 
@@ -278,7 +278,7 @@ def assemble_report(
             "No scored_labels / label-threshold CE",
             "No dark_protein / cross_kingdom fixtures",
             "Heavy force-transfer RhoBind recompute deferred",
-            "AF3 runtime deferred (see .af3_status)",
+            "AF3 runtime deferred (see AF3 status file / AF3_STATUS_FILE)",
         ],
     }
 

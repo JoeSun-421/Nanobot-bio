@@ -139,9 +139,9 @@ def build_parser() -> argparse.ArgumentParser:
     ee.add_argument("--with-esm", action="store_true")
     ee.add_argument("--no-live", action="store_true")
     ee.add_argument("--tier-a-ok", choices=["true", "false"], default=None)
-    from app.core.paths import REPORTS as _REPORTS
-    ee.add_argument("--out", default=str(_REPORTS / "evolve_eval_report.json"))
-    ee.add_argument("--md", default=str(_REPORTS / "evolve_eval_report.md"))
+    from app.core.paths import report_path as _report_path
+    ee.add_argument("--out", default=str(_report_path("evolve_eval_report.json")))
+    ee.add_argument("--md", default=str(_report_path("evolve_eval_report.md")))
     ee.set_defaults(func=cmd_evolve_eval)
 
     pe = sub.add_parser("promote-evolved", help="Promote evolved.candidate → evolved.yaml")
@@ -152,8 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
     ep = sub.add_parser("eval-plan", help="Evaluation plan report")
     ep.add_argument("--with-seq", action="store_true")
     ep.add_argument("--labels", default=None)
-    from app.core.paths import REPORTS
-    ep.add_argument("--out", default=str(REPORTS / "evaluation_plan_report.json"))
+    ep.add_argument("--out", default=str(_report_path("evaluation_plan_report.json")))
     ep.set_defaults(func=cmd_eval_plan)
 
     hl = sub.add_parser(

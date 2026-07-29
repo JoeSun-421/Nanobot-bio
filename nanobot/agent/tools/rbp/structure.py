@@ -31,9 +31,35 @@ def _af3_cache_key(seq: str, name: str) -> str:
     return f"af3:{name}:{len(seq)}:{seq[:32]}:{seq[-16:]}"
 
 
+def _is_colabfold_rate_limit(detail: str, stderr: str = "") -> bool:
+    """True when ColabFold / MSA stage hit HTTP 429 or an explicit rate-limit."""
+    blob = f"{detail}\n{stderr}".lower()
+    if "429" in blob and any(
+        tok in blob for tok in ("colabfold", "msa", "too many requests", "rate")
+    ):
+        return True
+    return any(
+        tok in blob
+        for tok in (
+            "http 429",
+            "too many requests",
+            "colabfold rate",
+            "rate limit",
+            "ratelimit",
+        )
+    )
+
+
 def _classify_af3_failure(detail: str, stderr: str = "") -> str:
     """Map AF3 failures to actionable agent-facing reasons (esp. Blackwell CC 12.0)."""
     blob = f"{detail}\n{stderr}"
+    if _is_colabfold_rate_limit(detail, stderr):
+        return (
+            "af3 failed: ColabFold MSA HTTP 429 (shared public API rate limit). "
+            "Not a permanent AF3 failure — wait a few minutes and retry, or pass "
+            "msa_path/msa_a3m (precomputed), or use structure_fetch (AFDB) when "
+            "UniProt has a model. Do not map to sim=0."
+        )
     if any(
         tok in blob
         for tok in (
@@ -265,6 +291,26 @@ class StructSimilarityTool(Tool):
                     "maxItems": 2,
                 },
             },
+            "msa_path": {
+                "type": "string",
+                "description": (
+                    "Optional path to a precomputed a3m MSA. Skips ColabFold "
+                    "online MSA (avoids HTTP 429)."
+                ),
+            },
+            "msa_a3m": {
+                "type": "string",
+                "description": (
+                    "Optional a3m MSA string. Skips ColabFold online MSA."
+                ),
+            },
+            "msa_mode": {
+                "type": "string",
+                "description": (
+                    "ColabFold MSA mode when fetching online (default env). "
+                    "Ignored if msa_path/msa_a3m is set."
+                ),
+            },
         },
         "required": [],
     }
@@ -284,7 +330,9 @@ class PredictStructureTool(Tool):
             "catalogue sequence. Pass regions=[[start,end],...] from "
             "domain_architecture / RBD features when known. Prefer "
             "structure_fetch / struct_similarity when AFDB PDB exists. "
-            "Call ≤1 time; failures are disk-cached."
+            "On ColabFold MSA 429: falls back to AFDB when possible; pass "
+            "msa_path/msa_a3m to skip online MSA. Call ≤1 time; permanent "
+            "failures are disk-cached (429 is not)."
         )
 
     @property
@@ -343,13 +391,9 @@ class PredictStructureTool(Tool):
 
         # Honor axes / structure_policy before AF3
         try:
-            from pathlib import Path
-            import os
-
             from nanobot.agent.tools.rbp.common import (
                 axis_tool_enabled,
                 get_runtime_config,
-                package_root_dir,
             )
 
             allowed, blocking = axis_tool_enabled("predict_structure")
@@ -368,21 +412,10 @@ class PredictStructureTool(Tool):
                         "continue without structure zeros"
                     )
                 )
-            # Host .af3_status deferred/broken → clear degrade (not silent 0)
-            package_root = package_root_dir()
-            status_file = package_root / ".af3_status"
-            for cand in (
-                Path(os.environ.get("NANOBOT_BIO_ROOT", "") or ".") / ".af3_status",
-                package_root / ".af3_status",
-            ):
-                if cand.is_file():
-                    status_file = cand
-                    break
-            st = ""
-            if status_file.is_file():
-                for line in status_file.read_text(encoding="utf-8").splitlines():
-                    if line.startswith("state="):
-                        st = line.split("=", 1)[1].strip()
+            # Host AF3 status deferred/broken → clear degrade (not silent 0)
+            from app.core.capability_matrix import read_af3_status
+
+            st = (read_af3_status().get("state") or "").strip()
             if st in ("deferred", "broken", "missing", "disabled"):
                 return dumps(
                     err(
@@ -398,21 +431,64 @@ class PredictStructureTool(Tool):
         cached = structure_cache_get(ckey)
         if cached is not None:
             cached = dict(cached)
-            cached["cache"] = "hit"
-            _hit_ms = (time.perf_counter() - t0) * 1000.0
-            if cached.get("ok") is False or cached.get("error"):
-                return dumps(
-                    err(
-                        _classify_af3_failure(
-                            str(
-                                cached.get("error")
-                                or "af3 failed (cached); structure_axis=unavailable"
-                            )
-                        ),
-                        _hit_ms,
+            # Do not replay rate-limit failures — they are transient and used to
+            # poison the 7-day disk cache, making every retry look "always 429".
+            cached_err = str(cached.get("error") or "")
+            if (cached.get("ok") is False or cached.get("error")) and _is_colabfold_rate_limit(
+                cached_err
+            ):
+                cached = None
+            else:
+                cached["cache"] = "hit"
+                _hit_ms = (time.perf_counter() - t0) * 1000.0
+                if cached.get("ok") is False or cached.get("error"):
+                    return dumps(
+                        err(
+                            _classify_af3_failure(
+                                str(
+                                    cached.get("error")
+                                    or "af3 failed (cached); structure_axis=unavailable"
+                                )
+                            ),
+                            _hit_ms,
+                        )
                     )
-                )
-            return dumps(ok(cached, _hit_ms))
+                return dumps(ok(cached, _hit_ms))
+
+        def _try_afdb_on_msa_429() -> dict[str, Any] | None:
+            """Soft-degrade: AFDB structure_fetch when ColabFold MSA is rate-limited."""
+            uniprot = str(kw.get("uniprot") or kw.get("uniprot_id") or "").strip()
+            alias = str(kw.get("alias") or name or "").strip()
+            if not uniprot and not alias:
+                return None
+            client = get_delivery_client()
+            sf_payload: dict[str, Any] = {"allow_download": True}
+            if uniprot:
+                sf_payload["uniprot"] = uniprot
+            if alias:
+                sf_payload["alias"] = alias
+            try:
+                sf = client.call("structure_fetch", sf_payload)
+            except Exception:
+                return None
+            pdb = sf.get("pdb_path") if isinstance(sf, dict) else None
+            if not pdb:
+                return None
+            return {
+                "structure": str(pdb),
+                "mean_plddt": None,
+                "ptm": None,
+                "sequence_source": src,
+                "structure_axis": "afdb",
+                "structure_trust": "afdb_fallback",
+                "af3_degraded": "colabfold_msa_429",
+                "note": (
+                    "AF3 skipped: ColabFold MSA HTTP 429; using AFDB via "
+                    "structure_fetch (soft degradation — not an AF3 model)"
+                ),
+                "afdb_source": sf.get("source"),
+                "ok": True,
+            }
 
         def _run():
             client = get_delivery_client(device="cuda")
@@ -434,11 +510,36 @@ class PredictStructureTool(Tool):
                             continue
                 if clean_regions:
                     payload["regions"] = clean_regions
+            # Optional precomputed MSA bypasses ColabFold (avoids 429).
+            for key in ("msa_path", "msa_a3m", "msa_mode"):
+                val = kw.get(key)
+                if val:
+                    payload[key] = val
             return client.call("structure_predict_af3", payload)
 
         out, ms, error = await asyncio.to_thread(lambda: timed_call(_run))
         if error:
             detail = _classify_af3_failure(error)
+            if _is_colabfold_rate_limit(error):
+                fb = await asyncio.to_thread(_try_afdb_on_msa_429)
+                if fb is not None:
+                    try:
+                        from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                        add_evidence_flag("af3_msa_429_afdb_fallback", True)
+                    except Exception:
+                        pass
+                    structure_cache_put(ckey, fb)
+                    return dumps(ok(fb, ms))
+                # Transient — do not poison the 7-day failure cache.
+                try:
+                    from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                    add_evidence_flag("af3_unavailable", True)
+                    add_evidence_flag("colabfold_msa_429", True)
+                except Exception:
+                    pass
+                return dumps(err(f"{detail} | structure_axis=unavailable", ms))
             payload = {
                 "ok": False,
                 "error": detail,
@@ -454,10 +555,28 @@ class PredictStructureTool(Tool):
                 pass
             return dumps(err(f"{detail} | structure_axis=unavailable", ms))
         if out.get("error") or out.get("ok") is False:
-            detail = _classify_af3_failure(
-                str(out.get("error") or "AF3 failed"),
-                str(out.get("stderr") or ""),
-            )
+            raw_err = str(out.get("error") or "AF3 failed")
+            stderr = str(out.get("stderr") or "")
+            detail = _classify_af3_failure(raw_err, stderr)
+            if _is_colabfold_rate_limit(raw_err, stderr):
+                fb = await asyncio.to_thread(_try_afdb_on_msa_429)
+                if fb is not None:
+                    try:
+                        from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                        add_evidence_flag("af3_msa_429_afdb_fallback", True)
+                    except Exception:
+                        pass
+                    structure_cache_put(ckey, fb)
+                    return dumps(ok(fb, ms))
+                try:
+                    from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                    add_evidence_flag("af3_unavailable", True)
+                    add_evidence_flag("colabfold_msa_429", True)
+                except Exception:
+                    pass
+                return dumps(err(detail, ms))
             payload = {
                 "ok": False,
                 "error": detail,

@@ -14,29 +14,40 @@ from app.cli.common import ROOT, read_fasta
 
 
 def _ensure_llm_configured() -> int:
-    """Ensure an LLM config exists; auto-launch onboarding on first run (TTY).
+    """Ensure a usable LLM API key exists; auto-launch onboarding when missing.
 
-    Returns 0 when a usable config is present (or was just created), else 1.
-    On an interactive terminal with no config we run the onboarding wizard inline
-    instead of dumping the user back to the shell (hardening plan item 7). In a
-    non-interactive context we keep the clear, scriptable error.
+    Returns 0 when a usable key is present (or was just created), else 1.
+    Checks the active provider key (preferring ``nanobot-bio/.env``), not merely
+    whether ``~/.nanobot/config.json`` exists — a config without a key used to
+    hard-fail with ``No API key configured for provider '…'``.
+    On a TTY we run the onboarding wizard inline then continue; non-interactive
+    contexts keep a clear, scriptable error.
     """
-    cfg = Path(os.environ.get("NANOBOT_CONFIG", "~/.nanobot/config.json")).expanduser()
-    if cfg.is_file():
+    from app.core.onboard import (
+        DEFAULT_CONFIG,
+        interactive_onboard,
+        llm_is_configured,
+        prepare_llm_config,
+    )
+
+    cfg = Path(os.environ.get("NANOBOT_CONFIG", str(DEFAULT_CONFIG))).expanduser()
+    prepare_llm_config(cfg, persist=True)
+    if llm_is_configured(cfg):
         return 0
+
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
     if not interactive:
         print(
-            "No LLM configured. Run:  rbp-agent onboard\n"
-            "(or set provider + API key non-interactively: "
-            "rbp-agent onboard --provider deepseek --model deepseek-chat --key ...)",
+            "No LLM provider/API key configured. Run:  rbp-agent onboard\n"
+            "(pick a provider explicitly — there is no default — e.g.:\n"
+            "  rbp-agent onboard --provider openai --model gpt-5.6 --key ...\n"
+            "  rbp-agent onboard --provider deepseek --model deepseek-v4-pro --key ...\n"
+            " or put the matching *_API_KEY=… in nanobot-bio/.env)",
             file=sys.stderr,
         )
         return 1
-    print("No LLM configured yet — let's set one up (first-run onboarding).\n")
+    print("No LLM provider/API key configured — let's set one up.\n")
     try:
-        from app.core.onboard import interactive_onboard
-
         ok = interactive_onboard(cfg)
     except KeyboardInterrupt:
         print("\nOnboarding cancelled.", file=sys.stderr)
@@ -45,11 +56,45 @@ def _ensure_llm_configured() -> int:
         print(f"Onboarding failed: {e}", file=sys.stderr)
         print("Run:  rbp-agent onboard", file=sys.stderr)
         return 1
-    if not ok or not cfg.is_file():
+    prepare_llm_config(cfg, persist=True)
+    if not ok or not llm_is_configured(cfg):
         print("Onboarding did not complete. Run:  rbp-agent onboard", file=sys.stderr)
         return 1
-    print("\nLLM configured. Starting...\n")
+    print("\nLLM configured. Starting chat...\n")
     return 0
+
+
+def _is_missing_api_key_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "no api key configured" in msg or (
+        "api key" in msg and "not set" in msg
+    )
+
+
+def _start_nanobot_with_onboard(agent) -> int:
+    """Call ``agent.get_nanobot()``; on missing-key errors, onboard then retry once."""
+    try:
+        agent.get_nanobot()
+        return 0
+    except Exception as e:
+        if not _is_missing_api_key_error(e):
+            print(f"Failed to start: {e}", file=sys.stderr)
+            return 1
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        if not interactive:
+            print(f"Failed to start: {e}", file=sys.stderr)
+            print("Fix: rbp-agent onboard   (set provider + API key)", file=sys.stderr)
+            return 1
+        print("LLM API key missing — opening configuration...\n", file=sys.stderr)
+        if _ensure_llm_configured() != 0:
+            return 1
+        agent._bot = None  # force rebuild with fresh config / .env
+        try:
+            agent.get_nanobot()
+            return 0
+        except Exception as e2:
+            print(f"Failed to start: {e2}", file=sys.stderr)
+            return 1
 
 
 def cmd_agent(args: argparse.Namespace) -> int:
@@ -149,10 +194,7 @@ def cmd_agent(args: argparse.Namespace) -> int:
         auto_install_into_nanobot=False,
         hooks=[RBPTraceHook(trace)],
     )
-    try:
-        agent.get_nanobot()
-    except Exception as e:
-        print(f"Failed to start: {e}", file=sys.stderr)
+    if _start_nanobot_with_onboard(agent) != 0:
         return 1
     print_registration(agent.tool_names, skill_path=_skill_path())
 
@@ -231,11 +273,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         auto_install_into_nanobot=False,
         hooks=[RBPTraceHook(trace)],
     )
-    try:
-        agent.get_nanobot()
-    except Exception as e:
-        print(f"Failed to start: {e}", file=sys.stderr)
-        print("Fix: rbp-agent onboard   (set provider + API key)", file=sys.stderr)
+    if _start_nanobot_with_onboard(agent) != 0:
         return 1
 
     try:
@@ -317,15 +355,17 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 print("  thinking expanded", file=sys.stderr)
             continue
         if low in ("/onboard", "/login"):
-            from app.core.onboard import interactive_onboard
+            from app.core.onboard import current_summary, interactive_onboard, prepare_llm_config
 
-            interactive_onboard()
-            try:
-                from app.core.onboard import current_summary
-
-                summary = current_summary()
-            except Exception:
-                pass
+            if interactive_onboard():
+                prepare_llm_config(persist=True)
+                agent._bot = None
+                if _start_nanobot_with_onboard(agent) != 0:
+                    print("  ⚠ LLM still not ready after onboard", file=sys.stderr)
+                try:
+                    summary = current_summary()
+                except Exception:
+                    pass
             continue
 
         try:
@@ -370,7 +410,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     from app.backends.delivery.client import DeliveryToolClient, SCRIPT_MAP, tools_meta_by_name
     from app.backends.delivery.env import apply_delivery_env, resolve_delivery_paths
     from app.core.chat_ux import cgroup_memory_gb, memory_blocker_message
-    from app.core.paths import ARTIFACTS, REPORTS, ensure_artifact_dirs
+    from app.core.paths import ARTIFACTS, describe_canonical_stores, ensure_artifact_dirs
 
     apply_delivery_env()
     sync_ok = False
@@ -382,6 +422,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as e:
         sync_err = f"{type(e).__name__}: {e}"
     dirs = ensure_artifact_dirs()
+    stores = describe_canonical_stores()
     paths = resolve_delivery_paths()
     print("=== nanobot-bio doctor ===")
     print(f"DELIVERY_ROOT={paths['delivery_root']}")
@@ -394,7 +435,37 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print(f"artifacts root: {ARTIFACTS}")
     for name, p in dirs.items():
-        print(f"  {name}: {'OK' if p.exists() else 'MISSING'}  {p}")
+        if name == "proxy_cache":
+            print(f"  {name}: {'OK' if p.is_file() else 'absent'}  {p}")
+        else:
+            print(f"  {name}: {'OK' if p.exists() else 'MISSING'}  {p}")
+
+    # One-liner: canonical stores (sessions / PA memory / domain_memory)
+    sess = stores["sessions"]
+    pam = stores["pa_memory"]
+    dom = stores["domain_memory"]
+    print(
+        "canonical stores: "
+        f"sessions={sess['canonical']}  "
+        f"pa_memory={pam['canonical']}  "
+        f"domain_memory={dom['canonical']}"
+    )
+    for label, key in (
+        ("workspace/sessions", "sessions"),
+        ("workspace/memory", "pa_memory"),
+    ):
+        link = stores[key]["workspace_link"]
+        status = "OK" if link.get("ok") else "WARN"
+        kind = link.get("kind")
+        print(
+            f"  {label}: {status}  {kind}"
+            + (f" → {link.get('points_to')}" if link.get("points_to") else "")
+            + f"  (canonical {link.get('canonical')})"
+        )
+    print(
+        "  scientific_mode: PA long-term memory (MEMORY.md / Dream) disabled; "
+        "sessions + proxy_map domain_memory remain"
+    )
 
     meta = tools_meta_by_name()
     print(f"delivery registry tools: {len(meta)}")
@@ -619,26 +690,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     # Compact traffic-light summary. LLM readiness is informative only: all
     # scientific certification commands are deliberately non-LLM.
-    llm_key_ok = bool(
-        os.environ.get("DEEPSEEK_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-    )
-    if not llm_key_ok:
-        try:
-            cfg_path = Path(
-                os.environ.get("NANOBOT_CONFIG")
-                or (Path.home() / ".nanobot" / "config.json")
-            )
-            cfg_data = json.loads(cfg_path.read_text(encoding="utf-8"))
-            providers = cfg_data.get("providers") or {}
-            llm_key_ok = any(
-                isinstance(value, dict)
-                and bool(value.get("api_key") or value.get("apiKey"))
-                for value in providers.values()
-            )
-        except Exception:
-            llm_key_ok = False
+    try:
+        from app.core.onboard import llm_is_configured
+
+        llm_key_ok = llm_is_configured()
+    except Exception:
+        llm_key_ok = bool(
+            os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+        )
     envs_ok = bool(rhobind_py and protein_embed_py and esm_ok)
     peaks_ok = rna_feature_status.get("status") == "ready"
     af3_real_ok = bool(af3_ok and af3_feature_status.get("status") == "ready")
@@ -679,6 +740,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "sync_overlay_error": sync_err,
         "delivery_root": str(paths["delivery_root"]),
         "paths": path_status,
+        "canonical_stores": stores,
         "script_map": {"total": len(SCRIPT_MAP), "missing": len(missing), "missing_names": missing[:20]},
         "registry_tools": len(meta),
         "cgroup_memory_gib": gb,
@@ -716,7 +778,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         report["axes"] = {"error": f"{type(e).__name__}: {e}"}
-    out = REPORTS / "doctor_report.json"
+    from app.core.paths import report_path as _report_path
+
+    out = _report_path("doctor_report.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"doctor report: {out}")
@@ -738,11 +802,14 @@ def cmd_nanobot_smoke(args: argparse.Namespace) -> int:
 
 
 def cmd_onboard(args: argparse.Namespace) -> int:
-    """Configure LLM provider + API key + model (writes nanobot config)."""
+    """Configure LLM provider + API key + model (``.env`` + nanobot config)."""
     from app.core.onboard import (
         current_summary,
+        dotenv_path,
+        env_key_for,
         interactive_onboard,
         list_models_text,
+        prepare_llm_config,
         save_provider,
         DEFAULT_CONFIG,
     )
@@ -752,6 +819,7 @@ def cmd_onboard(args: argparse.Namespace) -> int:
         return 0
 
     if getattr(args, "show", False):
+        prepare_llm_config(persist=False)
         print(current_summary())
         return 0
 
@@ -769,6 +837,8 @@ def cmd_onboard(args: argparse.Namespace) -> int:
             api_base=getattr(args, "api_base", None),
         )
         print(f"saved → {DEFAULT_CONFIG}  [{provider} · {model}]")
+        if getattr(args, "key", None):
+            print(f"API key → {dotenv_path()} ({env_key_for(provider)})")
         return 0
 
     return 0 if interactive_onboard() else 1

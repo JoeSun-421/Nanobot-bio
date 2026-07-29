@@ -60,7 +60,7 @@ def assert_eval_plan_report(path: Path) -> None:
 
 def run_gate(*, skip_eval: bool = False, with_cov: bool = True) -> int:
     """Run Phase-1 local/CI gate. Return process exit code."""
-    from app.core.paths import REPORTS, ensure_artifact_dirs
+    from app.core.paths import ensure_artifact_dirs, report_path
 
     ensure_artifact_dirs()
     failures: list[str] = []
@@ -96,8 +96,8 @@ def run_gate(*, skip_eval: bool = False, with_cov: bool = True) -> int:
     else:
         eval_status["skipped"] = False
         eval_status["ran"] = True
-        loo_out = REPORTS / "eval_loo_report.json"
-        plan_out = REPORTS / "evaluation_plan_report.json"
+        loo_out = report_path("eval_loo_report.json")
+        plan_out = report_path("evaluation_plan_report.json")
         if _run([sys.executable, "-m", "rbp_eval.loo.loo_eval", "--out", str(loo_out)]):
             failures.append("loo_eval")
         else:
@@ -123,7 +123,7 @@ def run_gate(*, skip_eval: bool = False, with_cov: bool = True) -> int:
         "ok": not failures,
         "eval": eval_status,
     }
-    gate_path = REPORTS / "gate_report.json"
+    gate_path = report_path("gate_report.json")
     gate_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"[gate] wrote {gate_path} ok={report['ok']} failures={failures}")
     return 0 if not failures else 1

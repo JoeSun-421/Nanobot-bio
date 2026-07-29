@@ -151,7 +151,7 @@ Full playbooks: [`references/stages.md`](references/stages.md).
 **Structure:** AFDB → Foldseek; **on AFDB miss, call `predict_structure` once** (`use_af3_fallback` default on). If AF3 also fails → **surface `structure_axis_unavailable` in `caveats`** (checklist failure). Failure ≠ sim `0`.
 **Sequence:** ESM-C + MMseqs dual axes. **Aggregate default:** `weighted` — delivery `similarity_weighted_vote`: `Σ(s_i × tprior_i × quality_i × prob_i) / Σ(s_i × tprior_i × quality_i)`. `s_i` = committed proxy similarity; `tprior_i` / `quality_i` from `transfer_prior_lookup` / `donor_quality_prior` (auto-fetched in `predict_interaction` when enabled). Verdict `confidence` is rule-based (Stage-3 checklist), not per-donor weighting.
 **`p_hat`:** raw from predict tools only (weighted over committed proxies on transfer).
-**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** retrieve axes on the unseen path. If a tool errors, surface the corresponding caveat (`literature_unavailable`) and count it as a checklist failure — do **not** substitute model-memory annotations.
+**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** retrieve axes on the unseen path. If a tool errors, surface the corresponding caveat (`literature_unavailable`) as a **caveat only** (does **not** count as a checklist failure or deduct confidence) — do **not** substitute model-memory annotations.
 
 ---
 
@@ -202,7 +202,7 @@ The agent runs with a **whitelist** tool set by default (curated P0–P2 + Stage
 | `structure_fetch` | AFDB / cached structures. On error (AFDB miss, unseen RBP) → **must** call `predict_structure` once (default `use_af3_fallback`); if AF3 also fails → surface `structure_axis_unavailable` caveat |
 | `struct_similarity` | Structure neighbors (+ US-align refine) |
 | `structure_consensus` | Optional AFDB/AF3 consensus |
-| `predict_structure` | AF3 ≤ 1; **after `domain_architecture` gives an RBD interval, pass `regions=[[start,end]]`** so `region_plddt` is computed for the binding-relevant region. Cite `mean_plddt`/`iptm`/`region_plddt` in caveats when low (<50) |
+| `predict_structure` | AF3 ≤ 1; **after `domain_architecture` gives an RBD interval, pass `regions=[[start,end]]`** so `region_plddt` is computed for the binding-relevant region. Cite `mean_plddt`/`iptm`/`region_plddt` in caveats when low (<50). ColabFold MSA HTTP 429 → tool retries with backoff, may soft-fallback to AFDB (`af3_degraded`); pass `msa_path`/`msa_a3m` to skip online MSA; wait+retry if still limited |
 | `domain_architecture` | Domains / RBD overlap. Prefer passing `alias`/`uniprot`; the bridge reuses the resolved canonical identifier when only sequence is sent. If it returns `domain_source:"none"` (no registry Pfam for this unseen RBP), the domain axis is empty → surface `domain_empty` caveat. Optionally re-call with `network=true` for InterProScan (slow, minutes) when domain evidence is critical; default is to accept the empty axis and count it as a checklist failure |
 | `get_func_annotation` | Function + category + optional PDB ≤ 1 / UniProt. **Required on the unseen path** — function/category/RNA-motif annotations cited in the explanation must come from here (or `literature_search`), never from model memory |
 | `function_category` | Raw delivery category (also merged into get_func_annotation) |
@@ -263,4 +263,4 @@ Any `predict_interaction` killed / timeout → **no retry** → `"p_hat": null`,
 
 ---
 
-*Maintainer accept evidence: `nanobot-bio dev gap-closure` / `accept-golden` / `accept-llm` → `~/.nanobot-bio/artifacts/reports/`.*
+*Maintainer accept evidence: `nanobot-bio dev gap-closure` / `accept-golden` / `accept-llm` → `~/.nanobot-bio/artifacts/reports/{json,md}/`.*

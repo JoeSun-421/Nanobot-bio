@@ -8,12 +8,29 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.core.paths import CACHE, REPORTS, ensure_artifact_dirs
+from app.core.paths import CACHE, REPORTS_JSON, ensure_artifact_dirs, find_report
 from app.core.runtime_config import load_runtime_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AF3_STATUS_PATH = REPO_ROOT / ".af3_status"
-DELIVERY_SMOKE_REPORT_PATH = REPORTS / "delivery_tools_smoke_report.json"
+# AF3 host status lives outside the git workspace by default (never under the repo).
+# Override with AF3_STATUS_FILE. Legacy repo-root ``.af3_status`` is still read as fallback.
+_LEGACY_AF3_STATUS_PATH = REPO_ROOT / ".af3_status"
+DELIVERY_SMOKE_REPORT_PATH = REPORTS_JSON / "delivery_tools_smoke_report.json"
+
+
+def af3_status_path() -> Path:
+    """Resolved path for the AF3 ``state=...`` status file (outside the repo)."""
+    override = (os.environ.get("AF3_STATUS_FILE") or "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    xdg = (os.environ.get("XDG_CACHE_HOME") or "").strip()
+    cache_root = Path(xdg).expanduser() if xdg else (Path.home() / ".cache")
+    return (cache_root / "nanobot-bio" / "af3_status").resolve()
+
+
+# Back-compat alias for callers that still import AF3_STATUS_PATH as a Path.
+# Prefer af3_status_path() — this is resolved once at import for display only.
+AF3_STATUS_PATH = af3_status_path()
 
 # Product: predict_interaction uses the same formula as similarity_weighted_vote.
 SIMILARITY_WEIGHTED_VOTE_DRIVES_P_HAT = True
@@ -27,15 +44,19 @@ P_HAT_FORMULA = {
 RNA_FUSION_KEYS = ("rna_peak_homology",)
 
 
-def af3_status_path() -> Path:
-    return AF3_STATUS_PATH
+def _resolve_af3_status_file() -> Path | None:
+    """Return the first existing AF3 status file (canonical, then legacy repo root)."""
+    for path in (af3_status_path(), _LEGACY_AF3_STATUS_PATH):
+        if path.is_file():
+            return path
+    return None
 
 
 def read_af3_status() -> dict[str, str]:
-    """Parse ``.af3_status`` key=value lines into a dict (empty if missing)."""
-    path = AF3_STATUS_PATH
+    """Parse AF3 status key=value lines into a dict (empty if missing)."""
+    path = _resolve_af3_status_file()
     out: dict[str, str] = {}
-    if not path.is_file():
+    if path is None:
         return out
     raw = path.read_text(encoding="utf-8", errors="replace")
     for line in raw.splitlines():
@@ -48,7 +69,7 @@ def read_af3_status() -> dict[str, str]:
 
 
 def af3_runtime_status(status: dict[str, str] | None = None) -> str:
-    """Map host ``.af3_status`` + AF3_PYTHON → ready|degraded|off."""
+    """Map host AF3 status file + AF3_PYTHON → ready|degraded|off."""
     st = status if status is not None else read_af3_status()
     first = (st.get("state") or "").strip().lower()
     if first == "ok":
@@ -64,19 +85,19 @@ def af3_runtime_status(status: dict[str, str] | None = None) -> str:
 
 def delivery_smoke_report_status(path: Path | None = None) -> dict[str, Any]:
     """Summarize the latest registry-driven delivery smoke report, if present."""
-    report_path = path or DELIVERY_SMOKE_REPORT_PATH
+    smoke_path = path or find_report("delivery_tools_smoke_report.json") or DELIVERY_SMOKE_REPORT_PATH
     base: dict[str, Any] = {
         "status": "unavailable",
-        "path": str(report_path),
+        "path": str(smoke_path),
         "generated_at": None,
         "summary": {},
         "coverage_ok": None,
     }
-    if not report_path.is_file():
+    if not smoke_path.is_file():
         base["reason"] = "delivery smoke report has not been generated"
         return base
     try:
-        data = json.loads(report_path.read_text(encoding="utf-8"))
+        data = json.loads(smoke_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError) as exc:
         base["reason"] = f"invalid delivery smoke report: {type(exc).__name__}"
         return base
@@ -108,12 +129,11 @@ def feature_attribution_status() -> dict[str, Any]:
 
 def rna_blastn_status() -> dict[str, Any]:
     """Delivery registry RNA axis (proposal Table 1 optional)."""
-    from app.backends.delivery.env import resolve_delivery_paths
+    from app.backends.delivery.env import try_delivery_root
 
-    paths = resolve_delivery_paths()
-    delivery = Path(paths["delivery_root"])
+    delivery = try_delivery_root()
     peaks = (os.environ.get("PEAKS_DB") or "").strip()
-    if not delivery.is_dir():
+    if delivery is None or not delivery.is_dir():
         return {
             "status": "unavailable",
             "reason": "DELIVERY_ROOT missing",
@@ -165,11 +185,10 @@ def model_specs() -> dict[str, dict[str, Any]]:
 
 def probe_model_capabilities() -> dict[str, Any]:
     """Per-model ready/degraded/unavailable (used by doctor artifact)."""
-    from app.backends.delivery.env import resolve_delivery_paths
+    from app.backends.delivery.env import try_delivery_root
 
     specs = model_specs()
-    paths = resolve_delivery_paths()
-    delivery = Path(paths["delivery_root"])
+    delivery = try_delivery_root()
     af3 = read_af3_status()
     matrix: dict[str, Any] = {}
 
@@ -183,7 +202,7 @@ def probe_model_capabilities() -> dict[str, Any]:
         backend = spec.get("backend")
         if backend == "delivery":
             env_name = spec.get("conda_env")
-            if not delivery.is_dir():
+            if delivery is None or not delivery.is_dir():
                 entry["status"] = "unavailable"
                 entry["reason"] = "DELIVERY_ROOT missing"
             else:
@@ -269,7 +288,9 @@ def probe_capabilities() -> dict[str, Any]:
                 "af3_python": af3.get("af3_python")
                 or (os.environ.get("AF3_PYTHON") or ""),
                 "axes_use_af3": bool(axes.get("use_af3")),
-                "status_path": str(AF3_STATUS_PATH),
+                "status_path": str(
+                    _resolve_af3_status_file() or af3_status_path()
+                ),
             },
             "similarity_weighted_vote_drives_p_hat": SIMILARITY_WEIGHTED_VOTE_DRIVES_P_HAT,
             "p_hat_formula": dict(P_HAT_FORMULA),
@@ -282,7 +303,7 @@ def probe_capabilities() -> dict[str, Any]:
 
 def write_capability_matrix(path: Path | None = None) -> Path:
     ensure_artifact_dirs()
-    out = path or (REPORTS / "model_capability_matrix.json")
+    out = path or (REPORTS_JSON / "model_capability_matrix.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     data = probe_capabilities()
     out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

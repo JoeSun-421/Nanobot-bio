@@ -73,7 +73,13 @@ def test_resolve_device_auto_does_not_import_torch(monkeypatch):
 
 
 def test_onboard_catalog_covers_mainstream_vendors():
-    from app.core.onboard import FEATURED, PROVIDER_MODELS, list_models_text, models_for
+    from app.core.onboard import (
+        FEATURED,
+        PROVIDER_MODELS,
+        env_key_for,
+        list_models_text,
+        models_for,
+    )
 
     required = {
         "openai",
@@ -85,18 +91,33 @@ def test_onboard_catalog_covers_mainstream_vendors():
         "moonshot",
         "mistral",
         "openrouter",
+        "groq",
+        "minimax",
+        "siliconflow",
     }
     assert required.issubset(set(PROVIDER_MODELS))
     assert len(FEATURED) == len(PROVIDER_MODELS)
+    from app.core import onboard as ob
+
+    # No product default provider — FEATURED order is catalog only.
+    assert getattr(ob, "DEFAULT_PROVIDER", None) is None
+    # Per-vendor suggested models (first entry) should be current flagships.
+    assert models_for("openai")[0] == "gpt-5.6"
+    assert models_for("anthropic")[0] == "claude-opus-5"
+    assert models_for("deepseek")[0] == "deepseek-v4-pro"
+    assert "deepseek-chat" not in models_for("deepseek")
     for name in required:
         ms = models_for(name)
         assert ms, name
         assert all(isinstance(m, str) and m for m in ms)
+        assert env_key_for(name).endswith("_API_KEY")
     text = list_models_text()
     assert "OpenAI" in text or "openai" in text
     assert "gpt-" in text
     assert "claude" in text
     assert "deepseek" in text
+    assert "Default provider" not in text
+    assert "default openai" not in text.lower()
 
 
 def test_predict_schema_defaults_auto():

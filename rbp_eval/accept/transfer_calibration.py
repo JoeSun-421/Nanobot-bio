@@ -1406,10 +1406,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.out is None and args.reanalyze_report is not None:
         out = args.reanalyze_report
     elif args.out is None:
-        from app.core.paths import REPORTS, ensure_artifact_dirs
+        from app.core.paths import ensure_artifact_dirs, report_path
 
         ensure_artifact_dirs()
-        out = REPORTS / "transfer_calibration.json"
+        out = report_path("transfer_calibration.json")
     else:
         out = args.out
     written = _write_report(report, out)

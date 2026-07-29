@@ -17,6 +17,9 @@ workspace/memory/*
 workspace/.nanobot/
 *.log
 .af3_status
+.af3_status.*
+**/.af3_status
+**/.af3_status.*
 .setup_complete
 
 # Local docs (gitignored subset stays out too)

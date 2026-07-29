@@ -527,6 +527,7 @@ def confidence_from_evidence(
             "ood",
         )
     )
+    # literature_unavailable is caveat-only: surface in caveats, do not deduct points.
     failures = sum(
         bool(flags.get(k))
         for k in (
@@ -536,7 +537,6 @@ def confidence_from_evidence(
             "structure_axis_unavailable",
             "domain_empty",
             "rna_axis_unavailable",
-            "literature_unavailable",
         )
     )
     points -= min(failures, 2)

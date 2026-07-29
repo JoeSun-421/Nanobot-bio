@@ -26,7 +26,11 @@ build/
 *.log
 *.pem
 *.key
+# AF3 host status reports (default write path is ~/.cache/nanobot-bio/; keep belt+suspenders)
 .af3_status
+.af3_status.*
+**/.af3_status
+**/.af3_status.*
 
 # Never commit live LLM configs
 **/nanobot.config.local.json

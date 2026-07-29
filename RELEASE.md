@@ -55,7 +55,7 @@ Slim-vendor / honesty / session-memory checks before tagging: see
 
 - Use the `vX.Y.Z` tag; title `vX.Y.Z`.
 - Paste the `## [X.Y.Z]` block from `CHANGELOG.md` as the body.
-- Attach `artifacts/reports/gate_report.json` (and `accept-golden` / LOO reports if generated) as evidence.
+- Attach `artifacts/reports/json/gate_report.json` (and `accept-golden` / LOO reports if generated) as evidence.
 - Mark as **latest** for stable releases; leave pre-releases unmarked.
 
 ## 5. Docker image (optional, after P0-A)
@@ -121,6 +121,6 @@ rbp-agent promote-evolved --seed
 ```
 
 `promote-evolved` asserts that `reports/eval_loo_report.json` and
-`reports/evaluation_plan_report.json` exist and pass (use `--force` only for
+`reports/json/evaluation_plan_report.json` exist and pass (use `--force` only for
 offline fixtures). The candidate is gitignored so collaborators never commit
 in-progress tuning; the tracked `.example` seed keeps the link reproducible.

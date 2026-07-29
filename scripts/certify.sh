@@ -39,14 +39,14 @@ fi
 
 if (( RUN_RELEASE )); then
   "$PY" -m rbp_eval.accept.release_metrics \
-    --device cuda --out artifacts/reports/release_metrics.json
+    --device cuda --out artifacts/reports/json/release_metrics.json
 fi
 
 if (( RUN_TRANSFER )); then
   "$PY" -m rbp_eval.accept.transfer_calibration \
     --regime both --rbp "$TARGET" --max-seqs "$MAX_SEQS" --device cuda \
-    --out artifacts/reports/transfer_calibration.json
+    --out artifacts/reports/json/transfer_calibration.json
 fi
 
 "$PY" -m pytest -q
-echo "certification complete: artifacts/reports/"
+echo "certification complete: artifacts/reports/{json,md,csv}/"

@@ -132,7 +132,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=ROOT / "artifacts" / "reports" / "environment_manifest.json",
+        default=ROOT / "artifacts" / "reports" / "json" / "environment_manifest.json",
     )
     args = parser.parse_args()
     manifest = build_manifest()

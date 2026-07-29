@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-from app.core.paths import REPORTS, ensure_artifact_dirs
+from app.core.paths import REPORTS, ensure_artifact_dirs, find_report, report_path
 from rbp_eval.scoring.fuse_hits import DEFAULT_WEIGHTS, fuse_rbp_hits
 from rbp_eval.loo.loo_eval import load_loo_summary, resolve_loo_csvs
 
@@ -155,17 +155,18 @@ def require_loo_or_heavy_report(
 ) -> Path:
     """Return path to an existing LOO or heavy-LOO report; raise if neither exists."""
     root = reports_dir or REPORTS
-    candidates = [
-        root / "eval_loo_report.json",
-        root / "heavy_loo_report.json",
-        root / "loo_eval_report.json",
-    ]
-    for p in candidates:
-        if p.is_file():
-            return p
+    names = (
+        "eval_loo_report.json",
+        "heavy_loo_report.json",
+        "loo_eval_report.json",
+    )
+    for name in names:
+        found = find_report(name, root=root)
+        if found is not None:
+            return found
     raise FileNotFoundError(
         "LOO or heavy-LOO report required for self-evolution. "
-        f"Expected one of: {', '.join(c.name for c in candidates)} under {root}. "
+        f"Expected one of: {', '.join(names)} under {root} (json/ or flat). "
         "Run: rbp-agent gate  or  rbp-agent heavy-loo"
     )
 
@@ -187,6 +188,7 @@ def run_eval(
     ensure_artifact_dirs()
     out = out_dir or REPORTS
     out.mkdir(parents=True, exist_ok=True)
+    (out / "json").mkdir(parents=True, exist_ok=True)
 
     summary_path, _matrix_path = resolve_loo_csvs()
     summary = load_loo_summary(summary_path) if summary_path and summary_path.is_file() else {}
@@ -230,14 +232,16 @@ def run_eval(
     }
 
     if write:
-        abl_path = out / ABLATION_REPORT_NAME
+        abl_path = report_path(ABLATION_REPORT_NAME, root=out)
         if ablation is not None:
+            abl_path.parent.mkdir(parents=True, exist_ok=True)
             abl_path.write_text(
                 json.dumps(ablation, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
             report["paths"] = {"ablation": str(abl_path)}
-        re_path = out / RUN_EVAL_REPORT_NAME
+        re_path = report_path(RUN_EVAL_REPORT_NAME, root=out)
+        re_path.parent.mkdir(parents=True, exist_ok=True)
         re_path.write_text(
             json.dumps(report, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

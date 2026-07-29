@@ -391,6 +391,9 @@ def test_skill_playbook_locks_proposal_defaults_and_paths():
     assert "Stage 1" in src and "Stage 2" in src
     for key in ("label", "p_hat", "confidence", "explanation", "supporting_rbps"):
         assert key in src, f"verdict field {key} missing from SKILL"
+    # Literature soft-fail is caveat-only (must not deduct confidence / checklist).
+    assert "literature_unavailable" in src
+    assert "caveat only" in src.lower() or "does **not** count as a checklist failure" in src
 
 
 def test_similarity_breakdown_in_fuse_and_verdict_supports_caveats():

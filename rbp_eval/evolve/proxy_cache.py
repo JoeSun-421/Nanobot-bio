@@ -19,7 +19,8 @@ def _default_cache_path() -> Path:
 
         return PROXY_CACHE
     except Exception:
-        return Path(__file__).resolve().parents[1] / "artifacts" / "cache" / "proxy_map.json"
+        # nanobot-bio/artifacts/... (proxy_cache.py → evolve → rbp_eval → root)
+        return Path(__file__).resolve().parents[2] / "artifacts" / "cache" / "proxy_map.json"
 
 
 # Resolved at import for tests that monkeypatch DEFAULT_CACHE.

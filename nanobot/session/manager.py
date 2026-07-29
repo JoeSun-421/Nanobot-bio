@@ -29,6 +29,7 @@ FILE_MAX_MESSAGES = 2000
 _MESSAGE_TIME_PREFIX_RE = re.compile(r"^\[Message Time: [^\]]+\]\n?")
 _LOCAL_IMAGE_BREADCRUMB_RE = re.compile(r"^\[image: (?:/|~)[^\]]+\]\s*$")
 _TOOL_CALL_ECHO_RE = re.compile(r'^\s*(?:generate_image|message)\([^)]*\)\s*$')
+_SESSION_DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SESSION_PREVIEW_MAX_CHARS = 120
 _SESSION_LIST_PREVIEW_MAX_RECORDS = 200
 _SESSION_LIST_PREVIEW_MAX_CHARS = 1_000_000
@@ -411,7 +412,10 @@ class SessionManager:
     """
     Manages conversation sessions.
 
-    Sessions are stored as JSONL files in the sessions directory.
+    Sessions are stored as JSONL files under date folders:
+    ``sessions/YYYY-MM-DD/<safe_key>.jsonl`` (local date at session start).
+    Legacy flat ``sessions/<safe_key>.jsonl`` files are migrated on init.
+    Non-session sidecars (prompt history, thinking dumps) stay at the root.
     """
 
     def __init__(self, workspace: Path):
@@ -419,19 +423,141 @@ class SessionManager:
         self.sessions_dir = ensure_dir(self.workspace / "sessions")
         self.legacy_sessions_dir = get_legacy_sessions_dir()
         self._cache: dict[str, Session] = {}
+        self._migrate_flat_sessions()
 
     @staticmethod
     def safe_key(key: str) -> str:
         """Public helper used by HTTP handlers to map an arbitrary key to a stable filename stem."""
         return safe_filename(key.replace(":", "_"))
 
-    def _get_session_path(self, key: str) -> Path:
-        """Get the file path for a session."""
-        return self.sessions_dir / f"{self.safe_key(key)}.jsonl"
+    @staticmethod
+    def _date_folder(dt: datetime | None = None) -> str:
+        """Local calendar date folder name (``YYYY-MM-DD``) for a session start."""
+        return (dt or datetime.now()).strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _is_date_dir(path: Path) -> bool:
+        return path.is_dir() and bool(_SESSION_DATE_DIR_RE.match(path.name))
+
+    def _iter_session_files(self) -> list[Path]:
+        """Session JSONL paths under date dirs plus any remaining flat legacy files."""
+        files: list[Path] = []
+        with suppress(OSError):
+            for child in self.sessions_dir.iterdir():
+                if self._is_date_dir(child):
+                    files.extend(sorted(child.glob("*.jsonl")))
+        files.extend(sorted(self.sessions_dir.glob("*.jsonl")))
+        return files
+
+    def _find_existing_session_path(self, key: str) -> Path | None:
+        """Locate an on-disk session file for *key* (dated or legacy flat)."""
+        name = f"{self.safe_key(key)}.jsonl"
+        candidates: list[Path] = []
+        flat = self.sessions_dir / name
+        if flat.is_file():
+            candidates.append(flat)
+        with suppress(OSError):
+            for child in self.sessions_dir.iterdir():
+                if not self._is_date_dir(child):
+                    continue
+                path = child / name
+                if path.is_file():
+                    candidates.append(path)
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        # Prefer dated copy over flat; among dated, newest mtime wins.
+        candidates.sort(
+            key=lambda p: (
+                0 if p.parent == self.sessions_dir else 1,
+                p.stat().st_mtime,
+            )
+        )
+        return candidates[-1]
+
+    def _canonical_session_path(self, key: str, created_at: datetime | None = None) -> Path:
+        """Target path under ``YYYY-MM-DD/`` for a new or relocated session."""
+        return (
+            self.sessions_dir
+            / self._date_folder(created_at)
+            / f"{self.safe_key(key)}.jsonl"
+        )
+
+    def _get_session_path(self, key: str, *, created_at: datetime | None = None) -> Path:
+        """Resolve the file path for a session (existing location, else dated target)."""
+        existing = self._find_existing_session_path(key)
+        if existing is not None:
+            return existing
+        return self._canonical_session_path(key, created_at)
 
     def _get_legacy_session_path(self, key: str) -> Path:
         """Legacy global session path (~/.nanobot/sessions/)."""
         return self.legacy_sessions_dir / f"{self.safe_key(key)}.jsonl"
+
+    def _infer_session_date(self, path: Path) -> str:
+        """Pick ``YYYY-MM-DD`` from metadata ``created_at``, else file mtime (local)."""
+        try:
+            with open(path, encoding="utf-8") as f:
+                first = f.readline().strip()
+            if first:
+                data = json.loads(first)
+                if data.get("_type") == "metadata" and data.get("created_at"):
+                    return datetime.fromisoformat(data["created_at"]).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+        try:
+            return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+        except OSError:
+            return self._date_folder()
+
+    def _migrate_flat_sessions(self) -> None:
+        """Move legacy flat ``*.jsonl`` session files into ``YYYY-MM-DD/`` folders."""
+        try:
+            flat_files = sorted(self.sessions_dir.glob("*.jsonl"))
+        except OSError:
+            return
+        for path in flat_files:
+            if path.name.endswith(".tmp"):
+                continue
+            date_str = self._infer_session_date(path)
+            dest_dir = ensure_dir(self.sessions_dir / date_str)
+            dest = dest_dir / path.name
+            if dest.resolve() == path.resolve():
+                continue
+            try:
+                if dest.exists():
+                    # Keep the newer file; drop the older duplicate.
+                    if path.stat().st_mtime > dest.stat().st_mtime:
+                        dest.unlink(missing_ok=True)
+                        shutil.move(str(path), str(dest))
+                    else:
+                        path.unlink(missing_ok=True)
+                else:
+                    shutil.move(str(path), str(dest))
+                logger.info("Migrated session file {} → {}/", path.name, date_str)
+            except Exception:
+                logger.exception("Failed to migrate session file {}", path.name)
+
+    def _remove_stale_session_copies(self, key: str, keep: Path) -> None:
+        """Delete other on-disk copies of *key* after a successful save/migrate."""
+        name = f"{self.safe_key(key)}.jsonl"
+        keep_resolved = keep.resolve()
+        stale: list[Path] = []
+        flat = self.sessions_dir / name
+        if flat.is_file():
+            stale.append(flat)
+        with suppress(OSError):
+            for child in self.sessions_dir.iterdir():
+                if not self._is_date_dir(child):
+                    continue
+                path = child / name
+                if path.is_file():
+                    stale.append(path)
+        for path in stale:
+            with suppress(OSError):
+                if path.resolve() != keep_resolved:
+                    path.unlink(missing_ok=True)
 
     def get_or_create(self, key: str) -> Session:
         """
@@ -460,6 +586,10 @@ class SessionManager:
             legacy_path = self._get_legacy_session_path(key)
             if legacy_path.exists():
                 try:
+                    # Prefer metadata date from the legacy file when placing it.
+                    date_str = self._infer_session_date(legacy_path)
+                    path = self.sessions_dir / date_str / f"{self.safe_key(key)}.jsonl"
+                    ensure_dir(path.parent)
                     shutil.move(str(legacy_path), str(path))
                     logger.info("Migrated session {} from legacy path", key)
                 except Exception:
@@ -580,8 +710,12 @@ class SessionManager:
         should be enabled during graceful shutdown so that filesystems with
         write-back caching (e.g. rclone VFS, NFS, FUSE mounts) do not lose
         the most recent writes.
+
+        Always writes under ``sessions/YYYY-MM-DD/`` using the session's
+        ``created_at`` local date, relocating legacy flat copies when needed.
         """
-        path = self._get_session_path(session.key)
+        path = self._canonical_session_path(session.key, session.created_at)
+        ensure_dir(path.parent)
         tmp_path = path.with_suffix(".jsonl.tmp")
 
         try:
@@ -602,6 +736,7 @@ class SessionManager:
                     os.fsync(f.fileno())
 
             os.replace(tmp_path, path)
+            self._remove_stale_session_copies(session.key, path)
 
             if fsync:
                 # fsync the directory so the rename is durable.
@@ -641,11 +776,16 @@ class SessionManager:
         self._cache.pop(key, None)
 
     def delete_session(self, key: str) -> bool:
-        """Remove a session from disk (both workspace and legacy locations) and cache.
+        """Remove a session from disk (workspace dated/flat and legacy) and cache.
 
         Returns True if at least one JSONL file was found and unlinked.
         """
-        paths = [self._get_session_path(key), self._get_legacy_session_path(key)]
+        name = f"{self.safe_key(key)}.jsonl"
+        paths = [self._get_legacy_session_path(key), self.sessions_dir / name]
+        with suppress(OSError):
+            for child in self.sessions_dir.iterdir():
+                if self._is_date_dir(child):
+                    paths.append(child / name)
         self.invalidate(key)
         deleted = False
         for path in paths:
@@ -804,8 +944,9 @@ class SessionManager:
             List of session info dicts.
         """
         sessions = []
+        seen_keys: set[str] = set()
 
-        for path in self.sessions_dir.glob("*.jsonl"):
+        for path in self._iter_session_files():
             fallback_key = path.stem.replace("_", ":", 1)
             try:
                 # Read the metadata line and a small preview for session lists.
@@ -815,6 +956,9 @@ class SessionManager:
                         data = json.loads(first_line)
                         if data.get("_type") == "metadata":
                             key = data.get("key") or path.stem.replace("_", ":", 1)
+                            if key in seen_keys:
+                                continue
+                            seen_keys.add(key)
                             metadata = data.get("metadata", {})
                             title = _metadata_title(metadata)
                             preview = ""
@@ -854,8 +998,11 @@ class SessionManager:
                                 }
                             )
             except Exception:
+                if fallback_key in seen_keys:
+                    continue
                 repaired = self._repair(fallback_key)
                 if repaired is not None:
+                    seen_keys.add(repaired.key)
                     sessions.append(
                         {
                             "key": repaired.key,

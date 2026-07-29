@@ -45,13 +45,18 @@ physical path = import path (no top-level facade).
 
 ## 2. Workspace: sessions vs long-term memory
 
+**Canonical store is `artifacts/`** (`workspace/sessions` and `workspace/memory`
+are symlinks only). Chinese detail: [`docs/MEMORY_AND_SESSIONS.zh.md`](docs/MEMORY_AND_SESSIONS.zh.md).
+
 Default workspace: `nanobot-bio/workspace/` (`NANOBOT_WORKSPACE`). Distinct from
 `~/.nanobot/workspace` unless you point the env there.
 
 | Store | Path | Purpose |
 |-------|------|---------|
-| Session transcript | `workspace/sessions/<key>.jsonl` | Per-chat turns. Here usually `workspace/sessions` → `artifacts/sessions/`. |
-| Long-term memory | `workspace/memory/` | `MEMORY.md`, append-only `history.jsonl`, Dream cursors; optional `SOUL.md` / `USER.md`. |
+| Session transcript | `artifacts/sessions/` (via `workspace/sessions` →) | Per-chat turns by local start date. |
+| PA long-term memory | `artifacts/memory/` (via `workspace/memory` →) | `MEMORY.md`, `history.jsonl`, Dream cursors; off in scientific_mode. |
+| Domain memory | `artifacts/cache/proxy_map.json` | Retrieval shortcuts (`lookup_proxy_cache`); not PA memory. |
+| Eval reports | `artifacts/reports/{json,md,csv}/` | Machine JSON, human Markdown, and CSV sheets (e.g. faithfulness). |
 | Skill link | `workspace/skills/rbp-agent/` | Must track in-repo SoT (`python -m app.sync_overlay`). |
 
 Do not confuse session JSONL (full trace) with `MEMORY.md` (consolidated facts).
@@ -96,7 +101,7 @@ proposal-only per-donor confidence factor is intentionally not implemented:
 delivery provides no such prediction field, so runtime code follows delivery.
 RNA peak-homology fusion stays `0` unless the BLAST peaks database is ready; promote must not
 use retrieval-only synthetic scores. Honesty SoT:
-`app/core/capability_matrix.py` (doctor → `artifacts/reports/model_capability_matrix.json`).
+`app/core/capability_matrix.py` (doctor → `artifacts/reports/json/model_capability_matrix.json`).
 
 ---
 
@@ -203,7 +208,7 @@ pytest tests/ -q --ignore=tests/science
 ```
 
 **Phase C accept:** one real chat (catalogue → predict → optional fuse) writing
-`artifacts/sessions/`; memory history still appends if Dream kept;
+`artifacts/sessions/<YYYY-MM-DD>/`; memory history still appends if Dream kept;
 `test_chat_ux` + layout/isolation green.
 
 **PR slicing:** never mix “delete zero-ref stubs” with “change loop message

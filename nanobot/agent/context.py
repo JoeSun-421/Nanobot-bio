@@ -144,6 +144,7 @@ class ContextBuilder:
             runtime=runtime,
             platform_policy=render_template("agent/platform_policy.md", system=system),
             channel=channel or "",
+            scientific_mode=self.scientific_mode,
         )
 
     @staticmethod

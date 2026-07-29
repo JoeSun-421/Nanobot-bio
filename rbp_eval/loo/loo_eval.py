@@ -383,12 +383,12 @@ def main() -> int:
             "loo_transfer_metrics": str(metrics_path),
         },
     }
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    md = out.with_suffix(".md")
-    if md.suffix == out.suffix:
-        md = Path(str(out) + ".md") if out.suffix != ".md" else out
-    # Prefer sibling .md next to .json
-    md = out.parent / (out.stem + ".md")
+    from app.core.paths import paired_md_path
+
+    md = paired_md_path(out)
+    md.parent.mkdir(parents=True, exist_ok=True)
     _write_markdown_summary(md, payload)
 
     print(f"wrote {out}")

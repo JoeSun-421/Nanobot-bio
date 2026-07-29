@@ -169,6 +169,7 @@ def test_verdict_prints_evidence_before_verdict():
             "score_disclaimer": (
                 "multi-donor weighted consensus; not a calibrated binding probability"
             ),
+            "mode": "multi_head",
             "score_provenance": {
                 "aggregation": {
                     "terms": [
@@ -190,7 +191,54 @@ def test_verdict_prints_evidence_before_verdict():
     assert shown.index("▸ evidence") < shown.index("▸ verdict")
     assert "FMR1" in shown
     assert "confidence=medium" in shown
-    assert "score=weighted_consensus" in shown
-    assert "calibrated binding probability" in shown
     assert "prior_missing" in shown
     assert '"p_hat": 0.61' in shown
+    # Engineering / provenance keys must not appear in user-facing chat output.
+    for banned in (
+        "score_source",
+        "score_kind",
+        "score_disclaimer",
+        '"mode"',
+        "weighted_consensus",
+        "delivery_similarity_weighted_vote",
+        "calibrated binding probability",
+        "multi_head",
+    ):
+        assert banned not in shown, f"public verdict leaked {banned!r}"
+    # Footer must not reintroduce score chrome.
+    assert "score=" not in shown
+    assert "disclaimer=" not in shown
+
+
+def test_format_verdict_display_omits_engineering_fields():
+    from types import SimpleNamespace
+
+    from app.core.chat_ux import format_verdict_display
+
+    result = SimpleNamespace(
+        content="",
+        verdict={
+            "label": "Likely",
+            "p_hat": 0.61,
+            "confidence": "medium",
+            "score_source": "delivery_similarity_weighted_vote",
+            "score_kind": "weighted_consensus",
+            "score_disclaimer": "multi-donor weighted consensus",
+            "mode": "multi_head",
+            "explanation": "Grounded transfer result.",
+            "supporting_rbps": [],
+            "caveats": ["literature_unavailable"],
+        },
+    )
+    shown = format_verdict_display(result)
+    for banned in (
+        "score_source",
+        "score_kind",
+        "score_disclaimer",
+        '"mode"',
+        "weighted_consensus",
+        "multi_head",
+    ):
+        assert banned not in shown
+    assert '"confidence": "medium"' in shown
+    assert "literature_unavailable" in shown

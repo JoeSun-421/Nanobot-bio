@@ -28,7 +28,7 @@ from typing import Any, Optional
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.core.paths import REPORTS, TRACES, ensure_artifact_dirs
+from app.core.paths import REPORTS_CSV, REPORTS_JSON, REPORTS_MD, TRACES, ensure_artifact_dirs
 from rbp_eval.loo.loo_eval import (
     DEFAULT_VAL,
     _fetch_domain_hits,
@@ -46,9 +46,9 @@ from rbp_eval.scoring.metrics import (
     roc_auc,
 )
 
-DEFAULT_OUT = REPORTS / "evaluation_plan_report.json"
-DEFAULT_MD = REPORTS / "evaluation_plan_report.md"
-DEFAULT_QUAL = REPORTS / "faithfulness_rating_sheet.csv"
+DEFAULT_OUT = REPORTS_JSON / "evaluation_plan_report.json"
+DEFAULT_MD = REPORTS_MD / "evaluation_plan_report.md"
+DEFAULT_QUAL = REPORTS_CSV / "faithfulness_rating_sheet.csv"
 N_CAND_GRID = (1, 3, 5, 10)
 
 # Acceptance strata tags (heuristic; used in reports / gate docs, not hard CI fail).

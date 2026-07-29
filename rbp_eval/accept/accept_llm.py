@@ -15,7 +15,7 @@ def run_accept_llm(
     strict: bool = True,
 ) -> dict[str, Any]:
     from app.backends.delivery.examples import own_head_prompt
-    from app.core.paths import REPORTS, SESSIONS, ensure_artifact_dirs
+    from app.core.paths import SESSIONS, ensure_artifact_dirs, report_path
     from app.integrate import RBPAgent
 
     ensure_artifact_dirs()
@@ -35,7 +35,11 @@ def run_accept_llm(
         fresh instead of short-circuiting on a cached prior verdict
         (``ephemeral=True`` does not discard pre-existing session memory)."""
         try:
-            for p in SESSIONS.glob(f"accept-llm_{case}*.jsonl"):
+            # Dated layout: sessions/YYYY-MM-DD/… plus any leftover flat files.
+            for p in (
+                *SESSIONS.glob(f"accept-llm_{case}*.jsonl"),
+                *SESSIONS.glob(f"*/accept-llm_{case}*.jsonl"),
+            ):
                 p.unlink(missing_ok=True)
         except Exception:
             pass
@@ -142,7 +146,8 @@ def run_accept_llm(
         "ok_nanobot_llm": modes_ok,
         "ok_touchpoints": tp_ok,
     }
-    out = REPORTS / "llm_touchpoints_accept.json"
+    out = report_path("llm_touchpoints_accept.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     report["path"] = str(out)
     return report

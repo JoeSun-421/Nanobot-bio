@@ -129,7 +129,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=ROOT / "artifacts" / "reports" / "release_metrics.json",
+        default=ROOT / "artifacts" / "reports" / "json" / "release_metrics.json",
     )
     args = parser.parse_args()
     report = reproduce(

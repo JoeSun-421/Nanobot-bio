@@ -19,6 +19,10 @@ ARTIFACTS = PACKAGE_ROOT / "artifacts"
 TRACES = ARTIFACTS / "traces"
 SESSIONS = ARTIFACTS / "sessions"
 REPORTS = ARTIFACTS / "reports"
+REPORTS_JSON = REPORTS / "json"
+REPORTS_MD = REPORTS / "md"
+REPORTS_CSV = REPORTS / "csv"
+MEMORY = ARTIFACTS / "memory"
 CACHE = ARTIFACTS / "cache"
 STRUCTURE_CACHE = CACHE / "structure"
 LITERATURE_CACHE = CACHE / "literature"
@@ -30,22 +34,74 @@ DIAG = ARTIFACTS / "diag"
 DEFAULT_AGENT_TRACE = TRACES / "nanobot_run.jsonl"
 DEFAULT_EVAL_TRACE = TRACES / "loo_val.jsonl"
 DEFAULT_CHAT_LOG = LOGS / "cli_chat.log"
-DEFAULT_LOO_REPORT = REPORTS / "eval_loo_report.json"
-DEFAULT_VAL_BATCH = REPORTS / "val_batch_results.json"
-DEFAULT_EVOLVE_REPORT = REPORTS / "self_evolution_report.json"
+DEFAULT_LOO_REPORT = REPORTS_JSON / "eval_loo_report.json"
+DEFAULT_VAL_BATCH = REPORTS_JSON / "val_batch_results.json"
+DEFAULT_EVOLVE_REPORT = REPORTS_JSON / "self_evolution_report.json"
 
-# Compat: legacy workspace sessions → artifacts/sessions
+# Compat: legacy workspace sessions/memory → artifacts/
 _LEGACY_SESSIONS_LINK = PACKAGE_ROOT / "workspace" / "sessions"
+_LEGACY_MEMORY_LINK = PACKAGE_ROOT / "workspace" / "memory"
+
+_REPORT_SUFFIX_DIRS = {
+    ".json": "json",
+    ".md": "md",
+    ".markdown": "md",
+    ".csv": "csv",
+}
+
+
+def report_path(name: str | Path, *, root: Path | None = None) -> Path:
+    """Return ``root/{json|md|csv}/<name>`` based on file suffix."""
+    root = root or REPORTS
+    p = Path(name)
+    sub = _REPORT_SUFFIX_DIRS.get(p.suffix.lower())
+    if sub is None:
+        return root / p.name
+    return root / sub / p.name
+
+
+def find_report(name: str | Path, *, root: Path | None = None) -> Path | None:
+    """Locate a report under format subdirs or legacy flat ``root/<name>``."""
+    root = root or REPORTS
+    p = Path(name)
+    for candidate in (report_path(p.name, root=root), root / p.name):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def paired_md_path(json_path: Path) -> Path:
+    """Markdown twin for a JSON report (``…/json/x.json`` → ``…/md/x.md``)."""
+    json_path = Path(json_path)
+    name = json_path.stem + ".md"
+    if json_path.parent.name == "json":
+        return json_path.parent.parent / "md" / name
+    return json_path.with_suffix(".md")
 
 
 def ensure_artifact_dirs() -> dict[str, Path]:
-    """Create artifact subdirs and maintain workspace/sessions compat symlink."""
-    for d in (TRACES, SESSIONS, REPORTS, CACHE, STRUCTURE_CACHE, LITERATURE_CACHE, LOGS, DIAG):
+    """Create artifact subdirs and maintain workspace sessions/memory symlinks."""
+    for d in (
+        TRACES,
+        SESSIONS,
+        REPORTS,
+        REPORTS_JSON,
+        REPORTS_MD,
+        REPORTS_CSV,
+        MEMORY,
+        CACHE,
+        STRUCTURE_CACHE,
+        LITERATURE_CACHE,
+        LOGS,
+        DIAG,
+    ):
         d.mkdir(parents=True, exist_ok=True)
 
     _ensure_symlink(_LEGACY_SESSIONS_LINK, SESSIONS)
+    _migrate_workspace_memory()
     # Migrate leftover rbp_eval/cache → artifacts/cache, then remove obsolete paths
     _migrate_legacy_proxy_cache()
+    migrate_reports_by_format()
     for obsolete in (
         PACKAGE_ROOT / "rbp_eval" / "traces",
         PACKAGE_ROOT / "rbp_eval" / "cache",
@@ -57,11 +113,113 @@ def ensure_artifact_dirs() -> dict[str, Path]:
         "traces": TRACES,
         "sessions": SESSIONS,
         "reports": REPORTS,
+        "reports_json": REPORTS_JSON,
+        "reports_md": REPORTS_MD,
+        "reports_csv": REPORTS_CSV,
+        "memory": MEMORY,
         "cache": CACHE,
         "structure_cache": STRUCTURE_CACHE,
         "logs": LOGS,
         "diag": DIAG,
+        "proxy_cache": PROXY_CACHE,
     }
+
+
+def describe_canonical_stores() -> dict[str, dict[str, object]]:
+    """Return layout status for sessions / PA memory / domain memory (proxy_cache).
+
+    Canonical data lives under ``artifacts/``. ``workspace/sessions`` and
+    ``workspace/memory`` are compatibility symlinks only.
+    """
+    ensure_artifact_dirs()
+
+    def _link_status(link: Path, target: Path) -> dict[str, object]:
+        ok = False
+        kind = "missing"
+        points_to: str | None = None
+        if link.is_symlink():
+            kind = "symlink"
+            try:
+                points_to = str(link.readlink())
+                ok = link.resolve() == target.resolve()
+            except OSError:
+                ok = False
+        elif link.is_dir():
+            kind = "directory"
+            try:
+                ok = link.resolve() == target.resolve()
+            except OSError:
+                ok = False
+        elif link.exists():
+            kind = "other"
+        return {
+            "path": str(link),
+            "kind": kind,
+            "points_to": points_to,
+            "canonical": str(target),
+            "ok": ok,
+        }
+
+    return {
+        "sessions": {
+            "canonical": str(SESSIONS),
+            "role": "chat_transcripts",
+            "workspace_link": _link_status(_LEGACY_SESSIONS_LINK, SESSIONS),
+        },
+        "pa_memory": {
+            "canonical": str(MEMORY),
+            "role": "personal_assistant_memory",
+            "files": ["MEMORY.md", "history.jsonl", ".dream_cursor"],
+            "workspace_link": _link_status(_LEGACY_MEMORY_LINK, MEMORY),
+            "note": "Disabled in scientific_mode (no MEMORY.md injection / Dream).",
+        },
+        "domain_memory": {
+            "canonical": str(PROXY_CACHE),
+            "role": "domain_memory",
+            "exists": PROXY_CACHE.is_file(),
+            "note": "proxy_map.json; promote_from_traces only. Not PA memory.",
+        },
+    }
+
+
+def _migrate_workspace_memory() -> None:
+    """Move ``workspace/memory`` into ``artifacts/memory/`` once; keep symlink."""
+    legacy = _LEGACY_MEMORY_LINK
+    MEMORY.mkdir(parents=True, exist_ok=True)
+    if legacy.is_symlink():
+        _ensure_symlink(legacy, MEMORY)
+        return
+    if legacy.is_dir():
+        for p in list(legacy.iterdir()):
+            dest = MEMORY / p.name
+            if dest.exists():
+                # Prefer artifacts copy; drop duplicate leftover under workspace.
+                try:
+                    if p.is_file() or p.is_symlink():
+                        p.unlink()
+                    elif p.is_dir() and not any(p.iterdir()):
+                        p.rmdir()
+                except OSError:
+                    pass
+                continue
+            try:
+                p.rename(dest)
+            except OSError:
+                continue
+        leftover = [p for p in legacy.iterdir() if p.name != ".gitkeep"]
+        if leftover:
+            # Do not leave a parallel real directory silently; doctor reports this.
+            return
+        try:
+            for p in list(legacy.iterdir()):
+                if p.is_file():
+                    p.unlink()
+            legacy.rmdir()
+        except OSError:
+            return
+    elif legacy.exists():
+        return
+    _ensure_symlink(legacy, MEMORY)
 
 
 def _migrate_legacy_proxy_cache() -> None:
@@ -128,8 +286,29 @@ def _ensure_symlink(link: Path, target: Path) -> None:
     link.symlink_to(target_rel, target_is_directory=True)
 
 
+def migrate_reports_by_format() -> list[str]:
+    """Move flat ``artifacts/reports/*.{json,md,csv}`` into format subdirs."""
+    moved: list[str] = []
+    if not REPORTS.is_dir():
+        return moved
+    for sub in (REPORTS_JSON, REPORTS_MD, REPORTS_CSV):
+        sub.mkdir(parents=True, exist_ok=True)
+    for p in list(REPORTS.iterdir()):
+        if not p.is_file():
+            continue
+        dest = report_path(p.name)
+        if dest.parent == REPORTS or dest.exists():
+            continue
+        try:
+            p.rename(dest)
+            moved.append(p.name)
+        except OSError:
+            continue
+    return moved
+
+
 def migrate_flat_artifacts() -> list[str]:
-    """Move legacy flat ``artifacts/*.json`` into ``artifacts/reports/``."""
+    """Move legacy flat ``artifacts/*.json`` into ``artifacts/reports/json/``."""
     ensure_artifact_dirs()
     moved: list[str] = []
     if not ARTIFACTS.is_dir():
@@ -139,9 +318,10 @@ def migrate_flat_artifacts() -> list[str]:
             continue
         if p.suffix.lower() not in {".json", ".jsonl"}:
             continue
-        dest = REPORTS / p.name
+        dest = report_path(p.name) if p.suffix.lower() == ".json" else REPORTS / p.name
         if dest.exists():
             continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
         p.rename(dest)
         moved.append(p.name)
     # af3_diag dir → diag/
@@ -151,6 +331,7 @@ def migrate_flat_artifacts() -> list[str]:
         if not dest_diag.exists():
             old_diag.rename(dest_diag)
             moved.append("af3_diag/")
+    moved.extend(migrate_reports_by_format())
     return moved
 
 

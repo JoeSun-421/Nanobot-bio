@@ -146,9 +146,9 @@ def cmd_evolve_eval(args: argparse.Namespace) -> int:
         # Infer from latest gate_report if present
         tier_a_ok = None
         try:
-            from app.core.paths import REPORTS
+            from app.core.paths import REPORTS_JSON, find_report
 
-            gp = REPORTS / "gate_report.json"
+            gp = find_report("gate_report.json") or (REPORTS_JSON / "gate_report.json")
             if gp.is_file():
                 tier_a_ok = bool(json.loads(gp.read_text(encoding="utf-8")).get("ok"))
         except Exception:
@@ -156,12 +156,14 @@ def cmd_evolve_eval(args: argparse.Namespace) -> int:
 
     out = Path(getattr(args, "out", None) or "")
     if not out.parts:
-        from app.core.paths import REPORTS
+        from app.core.paths import report_path
 
-        out = REPORTS / "evolve_eval_report.json"
+        out = report_path("evolve_eval_report.json")
     if not out.is_absolute():
         out = ROOT / out
-    md = Path(getattr(args, "md", None) or out.with_suffix(".md"))
+    from app.core.paths import paired_md_path
+
+    md = Path(getattr(args, "md", None) or paired_md_path(out))
     if not md.is_absolute():
         md = ROOT / md
 

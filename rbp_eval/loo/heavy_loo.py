@@ -225,7 +225,7 @@ def run_heavy_loo(
     max_seqs: int = 64,
     out: Optional[Path] = None,
 ) -> dict[str, Any]:
-    from app.core.paths import REPORTS, ensure_artifact_dirs
+    from app.core.paths import ensure_artifact_dirs, paired_md_path, report_path
 
     ensure_artifact_dirs()
     rows = [
@@ -264,11 +264,14 @@ def run_heavy_loo(
         },
         "ok": len(ok_rows) >= 1,
     }
-    out_path = out or (REPORTS / f"loo_heavy_{rbps[0] if len(rbps) == 1 else 'batch'}.json")
+    out_path = out or report_path(
+        f"loo_heavy_{rbps[0] if len(rbps) == 1 else 'batch'}.json"
+    )
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    md = out_path.with_suffix(".md")
+    md = paired_md_path(out_path)
+    md.parent.mkdir(parents=True, exist_ok=True)
     pm = report["summary"]["instance_metrics_pooled"]
 
     def _fmt(x: Any) -> str:

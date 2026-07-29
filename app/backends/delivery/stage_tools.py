@@ -66,7 +66,7 @@ def assert_full_axes_enabled(axes: Optional[dict] = None) -> list[str]:
 
 
 def axis_status_matrix(axes: Optional[dict] = None) -> dict[str, str]:
-    """Per-axis ready|off|degraded (AF3 reads ``.af3_status`` when enabled)."""
+    """Per-axis ready|off|degraded (AF3 reads host status file when enabled)."""
     if axes is None:
         try:
             from app.core.runtime_config import load_runtime_config
@@ -87,7 +87,7 @@ def axis_status_matrix(axes: Optional[dict] = None) -> dict[str, str]:
 
 
 def _af3_runtime_status() -> str:
-    """Map host ``.af3_status`` + AF3_PYTHON to ready|degraded|off."""
+    """Map host AF3 status file + AF3_PYTHON to ready|degraded|off."""
     from app.core.capability_matrix import af3_runtime_status
 
     return af3_runtime_status()
