@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Scan tracked files for obvious committed secrets. Fail on hit.
-# Usage: bash scripts/check_secrets.sh
+# Usage: bash scripts/ci/check_secrets.sh
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT"
 
 # Only tracked files (respects .gitignore / index)

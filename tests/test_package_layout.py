@@ -57,7 +57,6 @@ def test_no_old_flat_import_paths_in_repo():
     # Docs that must stay accurate after reorg
     extra_files = [
         ROOT / "ARCHITECTURE.md",
-        ROOT / "VENDOR.md",
         ROOT / "app" / "backends" / "delivery" / "mapping.yaml",
     ]
     offenders: list[str] = []

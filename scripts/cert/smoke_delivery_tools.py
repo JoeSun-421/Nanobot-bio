@@ -7,10 +7,10 @@ are reported separately from failures. A machine-readable report is always
 written under ``artifacts/reports/json`` by default.
 
 Usage:
-    python scripts/smoke_delivery_tools.py            # offline-safe subset + science
-    python scripts/smoke_delivery_tools.py --network  # also hit network tools
-    python scripts/smoke_delivery_tools.py --af3       # explicitly run AF3 (minutes, GPU)
-    python scripts/smoke_delivery_tools.py --report /tmp/delivery-smoke.json
+    python scripts/cert/smoke_delivery_tools.py            # offline-safe subset + science
+    python scripts/cert/smoke_delivery_tools.py --network  # also hit network tools
+    python scripts/cert/smoke_delivery_tools.py --af3       # explicitly run AF3 (minutes, GPU)
+    python scripts/cert/smoke_delivery_tools.py --report /tmp/delivery-smoke.json
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from app.backends.delivery.client import DEFAULT_CONDA_ENV, SCRIPT_MAP  # noqa: E402

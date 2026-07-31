@@ -404,14 +404,30 @@ def cmd_chat(args: argparse.Namespace) -> int:
         )
 
 
+def _doctor_print_table(rows: list[tuple[str, str, str]]) -> None:
+    """Print Feature / Status / Detail table; anomalies first."""
+    order = {"FAIL": 0, "WARN": 1, "SKIP": 2, "OK": 3, "INFO": 4}
+    ranked = sorted(rows, key=lambda r: (order.get(r[1], 9), r[0]))
+    w_f = max(len("Feature"), max((len(r[0]) for r in ranked), default=7))
+    w_s = max(len("Status"), max((len(r[1]) for r in ranked), default=6))
+    print(f"{'Feature':<{w_f}}  {'Status':<{w_s}}  Detail")
+    print(f"{'-' * w_f}  {'-' * w_s}  {'-' * 6}")
+    for feat, st, detail in ranked:
+        d = (detail or "").replace("\n", " ")
+        if len(d) > 96:
+            d = d[:93] + "..."
+        print(f"{feat:<{w_f}}  {st:<{w_s}}  {d}")
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     from datetime import datetime, timezone
 
     from app.backends.delivery.client import DeliveryToolClient, SCRIPT_MAP, tools_meta_by_name
-    from app.backends.delivery.env import apply_delivery_env, resolve_delivery_paths
+    from app.backends.delivery.env import apply_delivery_env, conda_env_python, resolve_delivery_paths
     from app.core.chat_ux import cgroup_memory_gb, memory_blocker_message
     from app.core.paths import ARTIFACTS, describe_canonical_stores, ensure_artifact_dirs
 
+    verbose = bool(getattr(args, "verbose", False))
     apply_delivery_env()
     sync_ok = False
     sync_err = None
@@ -424,96 +440,100 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     dirs = ensure_artifact_dirs()
     stores = describe_canonical_stores()
     paths = resolve_delivery_paths()
-    print("=== nanobot-bio doctor ===")
-    print(f"DELIVERY_ROOT={paths['delivery_root']}")
     path_status: dict[str, dict[str, object]] = {}
     for k in ("rbp_registry", "predict_api", "registry_json", "agent_db", "rhobind_release"):
         p = paths[k]
-        ok = p.exists()
-        path_status[k] = {"ok": ok, "path": str(p)}
-        print(f"  {k}: {'OK' if ok else 'MISSING'}  {p}")
-
-    print(f"artifacts root: {ARTIFACTS}")
-    for name, p in dirs.items():
-        if name == "proxy_cache":
-            print(f"  {name}: {'OK' if p.is_file() else 'absent'}  {p}")
-        else:
-            print(f"  {name}: {'OK' if p.exists() else 'MISSING'}  {p}")
-
-    # One-liner: canonical stores (sessions / PA memory / domain_memory)
-    sess = stores["sessions"]
-    pam = stores["pa_memory"]
-    dom = stores["domain_memory"]
-    print(
-        "canonical stores: "
-        f"sessions={sess['canonical']}  "
-        f"pa_memory={pam['canonical']}  "
-        f"domain_memory={dom['canonical']}"
-    )
-    for label, key in (
-        ("workspace/sessions", "sessions"),
-        ("workspace/memory", "pa_memory"),
-    ):
-        link = stores[key]["workspace_link"]
-        status = "OK" if link.get("ok") else "WARN"
-        kind = link.get("kind")
-        print(
-            f"  {label}: {status}  {kind}"
-            + (f" → {link.get('points_to')}" if link.get("points_to") else "")
-            + f"  (canonical {link.get('canonical')})"
-        )
-    print(
-        "  scientific_mode: PA long-term memory (MEMORY.md / Dream) disabled; "
-        "sessions + proxy_map domain_memory remain"
-    )
+        path_status[k] = {"ok": p.exists(), "path": str(p)}
 
     meta = tools_meta_by_name()
-    print(f"delivery registry tools: {len(meta)}")
     missing = [n for n in SCRIPT_MAP if not (paths["delivery_root"] / SCRIPT_MAP[n]).is_file()]
-    print(f"SCRIPT_MAP: {len(SCRIPT_MAP)}  missing: {len(missing)}")
-
     gb = cgroup_memory_gb()
-    print(f"cgroup memory.max: {'unlimited' if gb is None else f'{gb:.2f} GiB'}")
     mem_warn = memory_blocker_message()
-    if mem_warn:
-        print(mem_warn)
-
-    print(f"HF_HOME={os.environ.get('HF_HOME') or '(unset)'}")
-    print(f"HF_ENDPOINT={os.environ.get('HF_ENDPOINT') or '(unset — optional mirror e.g. https://hf-mirror.com)'}")
-    print(f"OMP_NUM_THREADS={os.environ.get('OMP_NUM_THREADS') or '(unset)'}")
 
     rhobind_py = None
     protein_embed_py = None
+    rna_py = None
+    rhobind_pkgs_ok = False
+    rhobind_pkgs_detail = ""
+    rhobind_cuda = False
     try:
         from app.backends.delivery.client import DeliveryToolClient as _DTC
 
-        for env_name, slot in (("rhobind", "rhobind"), ("protein_embed", "embed")):
+        for env_name, slot in (
+            ("rhobind", "rhobind"),
+            ("protein_embed", "embed"),
+            ("rna", "rna"),
+        ):
             pref = _DTC._conda_env_prefix(env_name)
             if pref is not None:
                 cand = pref / "bin" / "python"
                 if cand.is_file():
                     if slot == "rhobind":
                         rhobind_py = cand
-                    else:
+                    elif slot == "embed":
                         protein_embed_py = cand
+                    else:
+                        rna_py = cand
     except Exception:
         pass
-    print(
-        f"rhobind python: {'OK' if rhobind_py else 'MISSING'}  "
-        f"{rhobind_py or '(install via delivery setup_envs.sh)'}"
-    )
-    print(
-        f"protein_embed python: {'OK' if protein_embed_py else 'MISSING'}  "
-        f"{protein_embed_py or '(needed for ESM-C seq_similarity)'}"
-    )
+    if rhobind_py is not None:
+        try:
+            import subprocess as _sp_rh
+
+            probe = _sp_rh.run(
+                [
+                    str(rhobind_py),
+                    "-c",
+                    "import torch, transformers; "
+                    "print(torch.__version__, transformers.__version__, int(torch.cuda.is_available()))",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if probe.returncode == 0:
+                rhobind_pkgs_ok = True
+                parts = (probe.stdout or "").strip().split()
+                rhobind_pkgs_detail = " ".join(parts[:2]) if parts else (probe.stdout or "").strip()
+                if len(parts) >= 3 and parts[2] == "1":
+                    rhobind_cuda = True
+                    rhobind_pkgs_detail += " cuda=yes"
+                else:
+                    rhobind_pkgs_detail += " cuda=no"
+            else:
+                rhobind_pkgs_detail = (
+                    (probe.stderr or probe.stdout or "import failed").strip()[:200]
+                )
+        except Exception as e:
+            rhobind_pkgs_detail = f"{type(e).__name__}: {e}"[:200]
+    else:
+        rhobind_pkgs_detail = "no rhobind python — run: scripts/nbio setup"
+
+    mmseqs_ok = False
+    mmseqs_detail = ""
+    if rna_py is not None:
+        try:
+            import subprocess as _sp_mm
+
+            mm = _sp_mm.run(
+                [str(rna_py), "-c", "import shutil; print(shutil.which('mmseqs') or '')"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            path_mm = (mm.stdout or "").strip()
+            if mm.returncode == 0 and path_mm:
+                mmseqs_ok = True
+                mmseqs_detail = path_mm
+            else:
+                mmseqs_detail = "mmseqs not on PATH in rna env"
+        except Exception as e:
+            mmseqs_detail = f"{type(e).__name__}: {e}"[:160]
+    else:
+        mmseqs_detail = "no rna conda env"
 
     cli = DeliveryToolClient(offline=True, device="cpu", use_conda=False)
     r = cli.call("resolve_rbp", {"query": "PTBP1"})
-    print(f"resolve_rbp(PTBP1): matched={r.get('matched')} alias={r.get('alias')}")
-    print(
-        f"Stage-0 ready: in_panel={r.get('in_panel')} "
-        f"head_index={r.get('head_index')}"
-    )
     golden_ok = False
     golden_detail = ""
     try:
@@ -522,15 +542,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ex = load_example("pos")
         golden_ok = True
         golden_detail = f"rna_len={len(ex['rna'])} path={ex['rna_path']}"
-        print(f"golden example pos: {golden_detail}")
     except Exception as e:
         golden_detail = str(e)
-        print(f"golden example pos: MISSING ({e})")
 
     skill = ROOT / "nanobot" / "skills" / "rbp-agent" / "SKILL.md"
     skill_ok = skill.is_file() and "always: true" in skill.read_text(encoding="utf-8")
-    print(f"SKILL always-on: {'OK' if skill_ok else 'FAIL'}")
 
+    axes_detail = ""
+    axes_ok = True
     try:
         from app.backends.delivery.stage_tools import (
             assert_full_axes_enabled,
@@ -542,20 +561,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         _axes = _cfg.get("axes") or {}
         _off = assert_full_axes_enabled(_axes)
         _st = axis_status_matrix(_axes)
-        print(
-            "axes: "
-            + (
-                "OK (required on)"
-                if not _off
-                else f"REQUIRED_OFF={','.join(_off)}"
-            )
-            + f"  use_af3={_axes.get('use_af3')}  af3_runtime={_st.get('use_af3', 'n/a')}"
-        )
-        for k, v in _st.items():
-            if v != "ready":
-                print(f"  axis {k}: {v}")
+        if _off:
+            axes_ok = False
+            axes_detail = f"REQUIRED_OFF={','.join(_off)}"
+        else:
+            axes_detail = f"use_af3={_axes.get('use_af3')} af3={_st.get('use_af3', 'n/a')}"
     except Exception as e:
-        print(f"axes: FAIL ({type(e).__name__}: {e})")
+        axes_ok = False
+        axes_detail = f"{type(e).__name__}: {e}"
 
     matrix_path = None
     delivery_smoke_status: dict[str, object] = {}
@@ -570,20 +583,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         delivery_smoke_status = dict(feats.get("delivery_tool_smoke") or {})
         rna_feature_status = dict(feats.get("rna_blastn") or {})
         af3_feature_status = dict(feats.get("af3") or {})
-        print(f"model capability matrix: {matrix_path}")
-        print(
-            "features: "
-            f"delivery_smoke={delivery_smoke_status.get('status')} "
-            f"rna_blastn={((feats.get('rna_blastn') or {}).get('status'))} "
-            f"feature_attribution={((feats.get('feature_attribution') or {}).get('status'))} "
-            f"af3={((feats.get('af3') or {}).get('status'))} "
-            f"vote_drives_p_hat={feats.get('similarity_weighted_vote_drives_p_hat')} "
-            f"p_hat={((feats.get('p_hat_formula') or {}).get('source'))}"
-        )
     except Exception as e:
-        print(f"model capability matrix: FAIL ({type(e).__name__}: {e})")
+        delivery_smoke_status = {"status": "error", "detail": f"{type(e).__name__}: {e}"}
 
-    # Real ESM probe (not just import) — needs AA sequence; cgroup OOM → FAIL+hint
     esm_ok = False
     esm_detail = ""
     try:
@@ -621,14 +623,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 esm_detail = (err_s or "no hits")[:240]
     except Exception as e:
         esm_detail = f"{type(e).__name__}: {e}"[:240]
-    print(f"ESM probe (PTBP1): {'OK' if esm_ok else 'FAIL'}  {esm_detail}")
-    if not esm_ok:
-        print(
-            "  hint: set HF_HOME to local weights dir; optional HF_ENDPOINT=https://hf-mirror.com; "
-            "ensure protein_embed conda env; OMP_NUM_THREADS=1..8; ≥8 GiB RAM for ESM"
-        )
 
-    # AF3 interpreter probe: AF3_PYTHON must import alphafold3 (NOT the agent .venv).
     af3_ok = False
     af3_detail = ""
     try:
@@ -636,7 +631,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
         af3_py = os.environ.get("AF3_PYTHON") or ""
         if not af3_py or af3_py == "/bin/false" or not Path(af3_py).is_file():
-            af3_detail = f"AF3_PYTHON not set/executable: {af3_py or '(unset)'}"
+            # Portable rediscovery if activate skipped AF3
+            for name in ("af3_blackwell", "af3"):
+                cand = conda_env_python(name)
+                if cand is not None and cand.is_file():
+                    af3_py = str(cand)
+                    break
+        if not af3_py or af3_py == "/bin/false" or not Path(af3_py).is_file():
+            af3_detail = "AF3_PYTHON unset (optional; set AF3_PYTHON or install af3 conda env)"
         elif "/.venv/" in af3_py:
             af3_detail = f"AF3_PYTHON points at agent venv (wrong): {af3_py}"
         else:
@@ -656,40 +658,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 )
     except Exception as e:
         af3_detail = f"{type(e).__name__}: {e}"[:240]
-    print(f"AF3 probe: {'OK' if af3_ok else 'WARN'}  {af3_detail}")
-    if not af3_ok:
-        blackwell = False
-        try:
-            cc = _sp.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=compute_cap",
-                    "--format=csv,noheader",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            blackwell = cc.returncode == 0 and any(
-                line.strip().startswith("12.") for line in cc.stdout.splitlines()
-            )
-        except Exception:
-            pass
-        if blackwell:
-            print(
-                "  hint: Blackwell GPU detected; run scripts/setup_all.sh or "
-                "scripts/setup_af3_blackwell.sh, then use the isolated "
-                "af3_blackwell interpreter"
-            )
-        else:
-            print(
-                "  hint: AF3_PYTHON should be the af3 conda env python "
-                "(e.g. /root/autodl-tmp/conda/envs/af3/bin/python); AF3 is a fallback only, "
-                "so this is a WARN unless you need structure_predict_af3"
-            )
 
-    # Compact traffic-light summary. LLM readiness is informative only: all
-    # scientific certification commands are deliberately non-LLM.
     try:
         from app.core.onboard import llm_is_configured
 
@@ -700,8 +669,135 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             or os.environ.get("ANTHROPIC_API_KEY")
             or os.environ.get("DEEPSEEK_API_KEY")
         )
-    envs_ok = bool(rhobind_py and protein_embed_py and esm_ok)
+
+    delivery_root = Path(paths["delivery_root"])
+    delivery_ok = delivery_root.is_dir() and bool(path_status["rbp_registry"]["ok"])
+    venv_py = sys.executable
     peaks_ok = rna_feature_status.get("status") == "ready"
+    af3_feat = str(af3_feature_status.get("status") or "unknown")
+    if af3_ok and af3_feat == "ready":
+        af3_status, af3_row = "OK", af3_detail
+    elif af3_ok:
+        af3_status, af3_row = "WARN", f"{af3_detail} feature={af3_feat}"
+    elif af3_feat in {"off", "disabled", "skipped"}:
+        af3_status, af3_row = "SKIP", af3_detail or f"feature={af3_feat}"
+    else:
+        af3_status, af3_row = "WARN", af3_detail or "optional structure fallback"
+
+    rows: list[tuple[str, str, str]] = [
+        ("Agent venv / CLI", "OK" if Path(venv_py).is_file() else "FAIL", venv_py),
+        (
+            "Delivery pack",
+            "OK" if delivery_ok else "FAIL",
+            str(delivery_root) if delivery_ok else "set DELIVERY_ROOT / sibling pack",
+        ),
+        (
+            "Own-head predict (rhobind)",
+            "OK" if rhobind_pkgs_ok else "FAIL",
+            rhobind_pkgs_detail
+            + ("" if rhobind_pkgs_ok or rhobind_cuda else "; fix: scripts/nbio setup"),
+        ),
+        (
+            "Transfer ESM (protein_embed)",
+            "OK" if esm_ok else ("WARN" if protein_embed_py else "FAIL"),
+            esm_detail
+            or (
+                str(protein_embed_py)
+                if protein_embed_py
+                else "missing protein_embed env — scripts/nbio setup"
+            ),
+        ),
+        (
+            "RNA tools (mmseqs)",
+            "OK" if mmseqs_ok else "WARN",
+            mmseqs_detail,
+        ),
+        (
+            "PEAKS DB / rna_blastn",
+            "OK" if peaks_ok else "WARN",
+            str(rna_feature_status.get("status") or "not ready"),
+        ),
+        ("AF3 structure", af3_status, af3_row),
+        (
+            "LLM key",
+            "OK" if llm_key_ok else "WARN",
+            "configured" if llm_key_ok else "run: nanobot-bio onboard",
+        ),
+        (
+            "Registry / resolve PTBP1",
+            "OK" if r.get("matched") and r.get("in_panel") else "FAIL",
+            f"matched={r.get('matched')} in_panel={r.get('in_panel')} head={r.get('head_index')}",
+        ),
+        (
+            "Skill always-on",
+            "OK" if skill_ok else "FAIL",
+            str(skill),
+        ),
+        (
+            "Required axes",
+            "OK" if axes_ok else "FAIL",
+            axes_detail,
+        ),
+        (
+            "Golden example (pos)",
+            "OK" if golden_ok else "WARN",
+            golden_detail,
+        ),
+        (
+            "SCRIPT_MAP tools",
+            "OK" if not missing else "WARN",
+            f"{len(SCRIPT_MAP) - len(missing)}/{len(SCRIPT_MAP)} present"
+            + (f"; missing={missing[:5]}" if missing else ""),
+        ),
+        (
+            "cgroup memory",
+            "WARN" if mem_warn else "OK",
+            ("unlimited" if gb is None else f"{gb:.2f} GiB")
+            + ("; RhoBind may OOM" if mem_warn else ""),
+        ),
+    ]
+
+    print("=== nanobot-bio doctor ===")
+    print(f"DELIVERY_ROOT={paths['delivery_root']}")
+    _doctor_print_table(rows)
+
+    fix_hints: list[str] = []
+    if not rhobind_pkgs_ok:
+        fix_hints.append("Own-head FAIL → scripts/nbio setup  (hollow rhobind / missing torch)")
+    if not esm_ok:
+        fix_hints.append(
+            "Transfer ESM weak → HF_HOME + protein_embed env; ≥8 GiB RAM; scripts/nbio setup"
+        )
+    if not delivery_ok:
+        fix_hints.append("Delivery FAIL → place rhobind_agent_delivery sibling or export DELIVERY_ROOT")
+    if not llm_key_ok:
+        fix_hints.append("LLM WARN → nanobot-bio onboard")
+    if af3_status == "WARN" and not af3_ok:
+        fix_hints.append(
+            "AF3 optional → export AF3_PYTHON=…/envs/af3/bin/python or scripts/nbio setup"
+        )
+    if fix_hints:
+        print("\nFix hints:")
+        for h in fix_hints:
+            print(f"  • {h}")
+
+    if verbose:
+        print("\n--- verbose ---")
+        for k, st in path_status.items():
+            print(f"  {k}: {'OK' if st['ok'] else 'MISSING'}  {st['path']}")
+        print(f"artifacts root: {ARTIFACTS}")
+        for name, p in dirs.items():
+            if name == "proxy_cache":
+                print(f"  {name}: {'OK' if p.is_file() else 'absent'}  {p}")
+            else:
+                print(f"  {name}: {'OK' if p.exists() else 'MISSING'}  {p}")
+        print(f"registry tools: {len(meta)}")
+        print(f"HF_HOME={os.environ.get('HF_HOME') or '(unset)'}")
+        print(f"HF_ENDPOINT={os.environ.get('HF_ENDPOINT') or '(unset)'}")
+        print(f"capability matrix: {matrix_path or '(none)'}")
+        print(f"sync_overlay: {'OK' if sync_ok else 'WARN'} {sync_err or ''}")
+
+    envs_ok = bool(rhobind_py and rhobind_pkgs_ok and protein_embed_py and esm_ok)
     af3_real_ok = bool(af3_ok and af3_feature_status.get("status") == "ready")
     lights = {
         "science_envs": "GREEN" if envs_ok else "RED",
@@ -709,29 +805,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "AF3_real_smoke": "GREEN" if af3_real_ok else "RED",
         "LLM_key": "GREEN" if llm_key_ok else "YELLOW",
     }
-    print(
-        "traffic: "
-        + "  ".join(f"[{state}] {name}" for name, state in lights.items())
-    )
 
     ok_bridge = bool(r.get("matched") and r.get("in_panel") and skill_ok)
     status = "FAIL"
     rc = 1
-    if ok_bridge and (mem_warn or not esm_ok):
+    warn_bits: list[str] = []
+    if mem_warn:
+        warn_bits.append("RhoBind may OOM")
+    if not esm_ok:
+        warn_bits.append("ESM not usable — transfer quality will drop")
+    if not rhobind_pkgs_ok:
+        warn_bits.append(
+            "rhobind missing torch/transformers — own-head predict will fail; "
+            "run: scripts/nbio setup"
+        )
+    if ok_bridge and warn_bits:
         status = "WARN"
         rc = 0
-        print(
-            "doctor: WARN (Stage-0 wiring OK; "
-            + ("RhoBind may OOM; " if mem_warn else "")
-            + ("ESM not usable — transfer quality will drop" if not esm_ok else "")
-            + ")"
-        )
+        print("\ndoctor: WARN (Stage-0 wiring OK; " + "; ".join(warn_bits) + ")")
     elif ok_bridge:
         status = "OK"
         rc = 0
-        print("doctor: OK")
+        print("\ndoctor: OK")
     else:
-        print("doctor: FAIL")
+        print("\ndoctor: FAIL")
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -746,6 +843,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "cgroup_memory_gib": gb,
         "memory_warn": bool(mem_warn),
         "rhobind_python": str(rhobind_py) if rhobind_py else None,
+        "rhobind_torch_transformers": {
+            "ok": rhobind_pkgs_ok,
+            "detail": rhobind_pkgs_detail,
+            "cuda": rhobind_cuda,
+        },
         "protein_embed_python": str(protein_embed_py) if protein_embed_py else None,
         "resolve_rbp": {
             "matched": r.get("matched"),
@@ -760,6 +862,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "hf_endpoint": os.environ.get("HF_ENDPOINT"),
         "delivery_tool_smoke": delivery_smoke_status,
         "traffic_lights": lights,
+        "capability_rows": [
+            {"feature": f, "status": s, "detail": d} for f, s, d in rows
+        ],
     }
     try:
         from app.backends.delivery.stage_tools import (

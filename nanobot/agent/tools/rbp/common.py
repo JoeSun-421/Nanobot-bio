@@ -81,12 +81,34 @@ def _nvidia_visible() -> bool:
         return False
 
 
+def _rhobind_torch_cuda() -> Optional[bool]:
+    """Whether the rhobind conda env's torch can use CUDA (None if unknown)."""
+    try:
+        from app.backends.delivery.client import DeliveryToolClient
+
+        py = DeliveryToolClient._conda_python("rhobind")
+        if py is None:
+            return None
+        import subprocess
+
+        r = subprocess.run(
+            [str(py), "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)"],
+            capture_output=True,
+            timeout=30,
+        )
+        return r.returncode == 0
+    except Exception:
+        return None
+
+
 def cuda_available(*, force_refresh: bool = False, allow_torch: bool = False) -> bool:
-    """True when a CUDA device is visible (ideal GPU env for RhoBind / ESM).
+    """True when a CUDA device is usable for RhoBind / ESM delivery tools.
 
     Prefer ``nvidia-smi`` / ``/dev/nvidia0`` so agent startup does not pay for
-    ``import torch`` (~1.5s). Torch is only used when ``allow_torch=True`` and
-    the fast probe is inconclusive.
+    ``import torch`` (~1.5s). When a GPU is visible, also check the ``rhobind``
+    env's torch (CPU wheels report False) so ``auto`` does not force ``cuda``.
+    Torch in the *current* interpreter is only used when ``allow_torch=True``
+    and the fast probe is inconclusive.
 
     Result is cached for the process. Set ``RHOBIND_FORCE_CPU=1`` in tests.
     """
@@ -97,6 +119,10 @@ def cuda_available(*, force_refresh: bool = False, allow_torch: bool = False) ->
         return _CUDA_CACHE
 
     ok = _nvidia_visible()
+    if ok:
+        rh = _rhobind_torch_cuda()
+        if rh is False:
+            ok = False
     if not ok and allow_torch:
         try:
             import torch  # type: ignore

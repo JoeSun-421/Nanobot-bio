@@ -8,13 +8,13 @@
 #   delivery 钉死的 jax 0.4.34 无法在本机推理。
 #
 # 何时跑：
-#   - 单独补装 / 重装 Blackwell 栈时：bash scripts/setup_af3_blackwell.sh
+#   - 单独补装 / 重装 Blackwell 栈时：bash scripts/setup/setup_af3_blackwell.sh
 #   - 通常不必手跑：setup_all.sh 检测到 GPU CC 12.* 且栈缺失时会自动调用本脚本
 #   - 重跑默认幂等：若 af3_blackwell 已能 import alphafold3 且 jax/cuda 可用，
 #     则跳过耗时的 pip install -e / wheel 重建；CCD pickle 已存在则跳过 build_data
-#   - 强制重装：bash scripts/setup_af3_blackwell.sh --force-reinstall
+#   - 强制重装：bash scripts/setup/setup_af3_blackwell.sh --force-reinstall
 #                （别名 --rebuild）
-#   - 仅 smoke：bash scripts/setup_af3_blackwell.sh --smoke-only
+#   - 仅 smoke：bash scripts/setup/setup_af3_blackwell.sh --smoke-only
 #                （跳过 clone/env/pip/build_data，只跑 [4/4]）
 #
 # 不做什么：

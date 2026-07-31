@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+# nanobot-bio — single portable entry for Linux (activate / status / doctor / setup / chat)
+#
+# Daily:
+#   source scripts/nbio
+#   source scripts/nbio activate
+#   ./scripts/nbio doctor
+#   ./scripts/nbio chat
+#
+# First-time / repair (explicit; does NOT run on activate):
+#   ./scripts/nbio setup
+#   ./scripts/nbio setup --skip-conda
+#
+# Detect-only (no venv activate required for status when python available):
+#   ./scripts/nbio status
+#
+# Safe by design: activate never pip-installs CUDA/torch. Fix hollow envs via `setup`.
+
+_NBIO_SELF="${BASH_SOURCE[0]:-$0}"
+_NBIO_DIR="$(cd "$(dirname "$_NBIO_SELF")" && pwd)"
+_AGENT_ROOT="$(cd "$_NBIO_DIR/.." && pwd)"
+_BIO_ROOT="$(cd "${BIO_ROOT:-$_AGENT_ROOT/..}" && pwd)"
+_DELIVERY_ROOT="${DELIVERY_ROOT:-$_BIO_ROOT/rhobind_agent_delivery}"
+_NANOBOT_SRC_DEFAULT="$_AGENT_ROOT/nanobot"
+_SETUP_ALL="$_AGENT_ROOT/scripts/setup/setup_all.sh"
+
+_nbio_sourced=0
+if [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
+  _nbio_sourced=1
+else
+  set -euo pipefail
+fi
+
+_nbio_die() {
+  echo "[nbio] ERROR: $*" >&2
+  if [[ "$_nbio_sourced" == "1" ]]; then
+    return 2
+  fi
+  exit 2
+}
+
+_nbio_omp_sane() {
+  case "${1:-}" in
+    ''|0|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Portable AF3 interpreter discovery (no autodl hardcode).
+_nbio_discover_af3_python() {
+  if [[ -n "${AF3_PYTHON:-}" && "${AF3_PYTHON}" != "/bin/false" && -x "${AF3_PYTHON}" ]]; then
+    return 0
+  fi
+  local -a cands=()
+  local _d _base _py _n
+  if [[ -n "${CONDA_ENVS_PATH:-}" ]]; then
+    IFS=':' read -r -a _dirs <<< "$CONDA_ENVS_PATH"
+    for _d in "${_dirs[@]}"; do
+      [[ -n "$_d" ]] || continue
+      cands+=("${_d%/}/af3_blackwell/bin/python" "${_d%/}/af3/bin/python")
+    done
+  fi
+  for _base in \
+    "${CONDA_PREFIX:-}" \
+    "${MAMBA_ROOT_PREFIX:-}" \
+    "${HOME}/miniconda3" \
+    "${HOME}/miniforge3" \
+    "${HOME}/mambaforge" \
+    "${HOME}/anaconda3"
+  do
+    [[ -n "$_base" ]] || continue
+    cands+=("${_base%/}/envs/af3_blackwell/bin/python" "${_base%/}/envs/af3/bin/python")
+  done
+  if command -v conda >/dev/null 2>&1; then
+    _base="$(conda info --base 2>/dev/null || true)"
+    if [[ -n "$_base" ]]; then
+      cands+=("${_base%/}/envs/af3_blackwell/bin/python" "${_base%/}/envs/af3/bin/python")
+    fi
+  fi
+  for _py in "${cands[@]}"; do
+    if [[ -x "$_py" ]]; then
+      export AF3_PYTHON="$_py"
+      return 0
+    fi
+  done
+  if command -v conda >/dev/null 2>&1; then
+    for _n in af3_blackwell af3; do
+      if conda env list 2>/dev/null | awk '{print $1}' | grep -qx "$_n"; then
+        _py="$(conda run -n "$_n" which python 2>/dev/null || true)"
+        if [[ -n "$_py" && -x "$_py" ]]; then
+          export AF3_PYTHON="$_py"
+          return 0
+        fi
+      fi
+    done
+  fi
+  export AF3_PYTHON="${AF3_PYTHON:-/bin/false}"
+}
+
+_nbio_activate() {
+  local _heavy="${ACTIVATE_HEAVY:-0}"
+  local _verify="${ACTIVATE_VERIFY:-0}"
+
+  if [[ ! -f "$_AGENT_ROOT/.setup_complete" ]]; then
+    echo "[nbio] WARN: full setup not finished (missing $_AGENT_ROOT/.setup_complete)" >&2
+    echo "[nbio]        First time:  $_AGENT_ROOT/scripts/nbio setup" >&2
+  fi
+
+  _nbio_discover_af3_python
+
+  if [[ -f "$_DELIVERY_ROOT/agent/setup.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$_DELIVERY_ROOT/agent/setup.sh"
+  elif [[ ! -d "$_DELIVERY_ROOT" ]]; then
+    echo "[nbio] WARN: delivery pack missing: $_DELIVERY_ROOT" >&2
+    echo "[nbio]        Place rhobind_agent_delivery next to this repo, or set DELIVERY_ROOT" >&2
+  fi
+
+  if [[ ! -f "$_AGENT_ROOT/.venv/bin/activate" ]]; then
+    _nbio_die "missing $_AGENT_ROOT/.venv — run: $_AGENT_ROOT/scripts/nbio setup"
+    return $?
+  fi
+  # shellcheck disable=SC1091
+  source "$_AGENT_ROOT/.venv/bin/activate"
+
+  if ! _nbio_omp_sane "${OMP_NUM_THREADS:-}"; then
+    export OMP_NUM_THREADS=4
+  fi
+  _nbio_omp_sane "${MKL_NUM_THREADS:-}" || export MKL_NUM_THREADS="$OMP_NUM_THREADS"
+  _nbio_omp_sane "${OPENBLAS_NUM_THREADS:-}" || export OPENBLAS_NUM_THREADS="$OMP_NUM_THREADS"
+
+  export BIO_ROOT="$_BIO_ROOT"
+  export DELIVERY_ROOT="$_DELIVERY_ROOT"
+  export NANOBOT_BIO_ROOT="$_AGENT_ROOT"
+  export NANOBOT_WORKSPACE="${NANOBOT_WORKSPACE:-$_AGENT_ROOT/workspace}"
+  export AF3_PYTHON="${AF3_PYTHON:-/bin/false}"
+
+  export HF_HOME="${HF_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/huggingface}"
+  export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$HF_HOME/hub}"
+  export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
+  export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+  mkdir -p "$HF_HOME/hub" "$TRANSFORMERS_CACHE" 2>/dev/null || true
+
+  if [[ -f "$_AGENT_ROOT/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$_AGENT_ROOT/.env"
+    set +a
+  fi
+
+  local _src="${NANOBOT_SRC:-$_NANOBOT_SRC_DEFAULT}"
+  if [[ ! -f "$_src/nanobot.py" && ! -f "$_src/__init__.py" ]]; then
+    _src="$_NANOBOT_SRC_DEFAULT"
+  fi
+  export NANOBOT_SRC="$_src"
+  export PYTHONPATH="${_AGENT_ROOT}:${_BIO_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+
+  if [[ "$_heavy" == "1" ]]; then
+    pip install -e "$_AGENT_ROOT" -q 2>/dev/null \
+      || echo "[nbio] WARN: pip install -e nanobot-bio failed" >&2
+    python -m app.sync_overlay \
+      || echo "[nbio] WARN: sync_overlay failed" >&2
+    _verify=1
+  fi
+
+  echo "[nbio] BIO_ROOT=$BIO_ROOT DELIVERY_ROOT=$DELIVERY_ROOT"
+  echo "[nbio] NANOBOT_SRC=$NANOBOT_SRC"
+  echo "[nbio] $(python -V 2>/dev/null) $(command -v python 2>/dev/null)"
+
+  if [[ "$_verify" == "1" ]]; then
+    (
+      cd "$_AGENT_ROOT"
+      python - <<'PY'
+import nanobot
+from nanobot.agent.tools.core.base import Tool  # noqa: F401
+p = (nanobot.__file__ or "").replace("\\", "/")
+print("[nbio] nanobot OK", p)
+if "nanobot-bio" not in p and "Nanobot-bio" not in p and not p.endswith("/nanobot/__init__.py"):
+    raise SystemExit("[nbio] ERROR: expected in-repo nanobot package")
+PY
+    ) || echo "[nbio] WARN: nanobot import failed" >&2
+  fi
+
+  if command -v nanobot-bio >/dev/null 2>&1; then
+    echo "[nbio] nanobot-bio=$(command -v nanobot-bio)"
+  elif command -v rbp-agent >/dev/null 2>&1; then
+    echo "[nbio] rbp-agent=$(command -v rbp-agent)"
+  else
+    echo "[nbio] tip: ACTIVATE_HEAVY=1 source scripts/nbio  # or: pip install -e \$NANOBOT_BIO_ROOT"
+  fi
+}
+
+_nbio_status() {
+  # Lightweight detect table (no science probes). Works without activate when possible.
+  local venv_ok=FAIL delivery_ok=FAIL setup_ok=FAIL cli=FAIL
+  local detail_venv="missing .venv" detail_del="missing" detail_setup="no .setup_complete" detail_cli="not on PATH"
+
+  [[ -f "$_AGENT_ROOT/.venv/bin/activate" ]] && { venv_ok=OK; detail_venv="$_AGENT_ROOT/.venv"; }
+  if [[ -d "$_DELIVERY_ROOT" ]]; then
+    delivery_ok=OK
+    detail_del="$_DELIVERY_ROOT"
+  else
+    detail_del="set DELIVERY_ROOT or place sibling rhobind_agent_delivery"
+  fi
+  [[ -f "$_AGENT_ROOT/.setup_complete" ]] && { setup_ok=OK; detail_setup="present"; }
+  if [[ -x "$_AGENT_ROOT/.venv/bin/nanobot-bio" ]]; then
+    cli=OK
+    detail_cli="$_AGENT_ROOT/.venv/bin/nanobot-bio"
+  elif command -v nanobot-bio >/dev/null 2>&1; then
+    cli=OK
+    detail_cli="$(command -v nanobot-bio)"
+  fi
+
+  printf '%s\n' "=== nbio status ==="
+  printf '%-28s %-6s %s\n' "Feature" "Status" "Detail"
+  printf '%-28s %-6s %s\n' "----------------------------" "------" "------"
+  printf '%-28s %-6s %s\n' "Agent venv" "$venv_ok" "$detail_venv"
+  printf '%-28s %-6s %s\n' "Delivery pack" "$delivery_ok" "$detail_del"
+  printf '%-28s %-6s %s\n' "Setup marker" "$setup_ok" "$detail_setup"
+  printf '%-28s %-6s %s\n' "CLI (nanobot-bio)" "$cli" "$detail_cli"
+  printf '%-28s %-6s %s\n' "BIO_ROOT" "INFO" "$_BIO_ROOT"
+  if [[ "$venv_ok" != "OK" || "$delivery_ok" != "OK" ]]; then
+    echo "fix: $_AGENT_ROOT/scripts/nbio setup"
+    return 1
+  fi
+  return 0
+}
+
+_nbio_doctor() {
+  if [[ ! -f "$_AGENT_ROOT/.venv/bin/activate" ]]; then
+    _nbio_die "missing .venv — run: $_AGENT_ROOT/scripts/nbio setup"
+    return $?
+  fi
+  # shellcheck disable=SC1091
+  source "$_AGENT_ROOT/.venv/bin/activate"
+  export BIO_ROOT="$_BIO_ROOT"
+  export DELIVERY_ROOT="$_DELIVERY_ROOT"
+  export NANOBOT_BIO_ROOT="$_AGENT_ROOT"
+  _nbio_discover_af3_python
+  if [[ -f "$_DELIVERY_ROOT/agent/setup.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$_DELIVERY_ROOT/agent/setup.sh"
+  fi
+  cd "$_AGENT_ROOT"
+  if command -v nanobot-bio >/dev/null 2>&1; then
+    exec nanobot-bio doctor "$@"
+  fi
+  exec python -m app doctor "$@"
+}
+
+_nbio_setup() {
+  if [[ ! -x "$_SETUP_ALL" && ! -f "$_SETUP_ALL" ]]; then
+    _nbio_die "setup_all.sh not found: $_SETUP_ALL"
+    return $?
+  fi
+  bash "$_SETUP_ALL" "$@"
+}
+
+_nbio_chat() {
+  _nbio_activate || return $?
+  cd "$_AGENT_ROOT"
+  if command -v nanobot-bio >/dev/null 2>&1; then
+    exec nanobot-bio chat "$@"
+  fi
+  exec python -m app chat "$@"
+}
+
+_nbio_usage() {
+  cat <<EOF
+Usage:
+  source scripts/nbio [activate]     Activate agent .venv + export paths (daily)
+  ./scripts/nbio status              Detect layout / venv / delivery (table)
+  ./scripts/nbio doctor [--verbose]  Capability table (nanobot-bio doctor)
+  ./scripts/nbio setup [args...]     First-time / repair → setup_all.sh
+  ./scripts/nbio chat [args...]      Activate then nanobot-bio chat
+
+Environment overrides: BIO_ROOT, DELIVERY_ROOT, AF3_PYTHON, CONDA_ENVS_PATH,
+  ACTIVATE_HEAVY=1, ACTIVATE_VERIFY=1
+EOF
+}
+
+_nbio_main() {
+  local cmd="${1:-}"
+  if [[ -z "$cmd" ]]; then
+    if [[ "$_nbio_sourced" == "1" ]]; then
+      _nbio_activate
+      return $?
+    fi
+    _nbio_usage
+    exit 0
+  fi
+  shift || true
+  case "$cmd" in
+    activate|env)
+      _nbio_activate "$@"
+      ;;
+    status)
+      _nbio_status "$@"
+      ;;
+    doctor)
+      _nbio_doctor "$@"
+      ;;
+    setup)
+      _nbio_setup "$@"
+      ;;
+    chat)
+      if [[ "$_nbio_sourced" == "1" ]]; then
+        _nbio_activate || return $?
+        nanobot-bio chat "$@"
+        return $?
+      fi
+      _nbio_chat "$@"
+      ;;
+    -h|--help|help)
+      _nbio_usage
+      ;;
+    *)
+      echo "[nbio] unknown command: $cmd" >&2
+      _nbio_usage >&2
+      if [[ "$_nbio_sourced" == "1" ]]; then
+        return 2
+      fi
+      exit 2
+      ;;
+  esac
+}
+
+# When sourced with no args → activate. When sourced with args → dispatch.
+# When executed → dispatch (default: help).
+if [[ "$_nbio_sourced" == "1" ]]; then
+  # Do not enable `set -e` in the caller's shell.
+  _nbio_main "$@"
+  return $? 2>/dev/null || exit $?
+else
+  _nbio_main "$@"
+fi
