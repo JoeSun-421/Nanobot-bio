@@ -45,7 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # --- user ---
-    d = sub.add_parser("doctor", help="Check delivery paths + resolve_rbp smoke")
+    d = sub.add_parser("doctor", help="Capability table: paths, science envs, LLM")
+    d.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print detailed path/store dumps in addition to the capability table",
+    )
     d.set_defaults(func=cmd_doctor)
 
     o = sub.add_parser("onboard", help="Configure LLM provider + API key + model")

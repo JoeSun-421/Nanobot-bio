@@ -18,12 +18,12 @@
 #   → **不会**安装 / 切换到仓外 af3_blackwell 隔离栈
 #
 # 用法：
-#   bash scripts/setup_all_ampere_or_older.sh
-#   bash scripts/setup_all_ampere_or_older.sh --skip-smoke
+#   bash scripts/setup/setup_all_ampere_or_older.sh
+#   bash scripts/setup/setup_all_ampere_or_older.sh --skip-smoke
 #   # 其余参数原样转给 setup_all.sh（--skip-conda / --skip-af3 等）
 #
-# 不确定机型时：直接 bash scripts/setup_all.sh（auto 按 nvidia-smi CC 探测）
-# 仅补装 AF3 隔离栈（5090）：bash scripts/setup_af3_blackwell.sh
+# 不确定机型时：直接 bash scripts/setup/setup_all.sh（auto 按 nvidia-smi CC 探测）
+# 仅补装 AF3 隔离栈（5090）：bash scripts/setup/setup_af3_blackwell.sh
 # =============================================================================
 set -euo pipefail
 

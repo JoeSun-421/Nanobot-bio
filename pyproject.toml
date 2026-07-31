@@ -42,10 +42,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/JoeSun-421/rbp-nanobot-bio"
-Repository = "https://github.com/JoeSun-421/rbp-nanobot-bio"
-Changelog = "https://github.com/JoeSun-421/rbp-nanobot-bio/blob/main/CHANGELOG.md"
-Issues = "https://github.com/JoeSun-421/rbp-nanobot-bio/issues"
+Homepage = "https://github.com/JoeSun-421/Nanobot-bio"
+Repository = "https://github.com/JoeSun-421/Nanobot-bio"
+Changelog = "https://github.com/JoeSun-421/Nanobot-bio/blob/main/CHANGELOG.md"
+Issues = "https://github.com/JoeSun-421/Nanobot-bio/issues"
 
 [project.optional-dependencies]
 dev = [

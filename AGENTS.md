@@ -1,8 +1,9 @@
 # Agent / CI constraints (nanobot-bio)
 
-**Source of truth:** [`docs/工程指南.zh.md`](docs/工程指南.zh.md) §9 (local-only). Chat agreements do **not** override these rules. This file is the committed short gate for agents and CI.
-
-**Layout / memory / slim-vendor (single doc):** [`ARCHITECTURE.md`](ARCHITECTURE.md). Honesty matrix: [`docs/maturity_matrix.md`](docs/maturity_matrix.md).
+Committed short gate for agents and CI. Layout / memory / eval / slim-vendor /
+release: [`ARCHITECTURE.md`](ARCHITECTURE.md). Setup: [`INSTALL.md`](INSTALL.md).
+Local detail (git-ignored): `docs/工程指南.zh.md` §9. Chat agreements do **not**
+override these rules.
 
 ## MUST NOT
 
@@ -11,7 +12,7 @@
 - Change Table 3 defaults without eval evidence + `config/defaults.yaml` + `tests/test_proposal_compliance.py`.
 - Online weight writes / auto-edit delivery registry; promote evolved config without gate + nested-split (`delta_auprc > 0` or HOLD).
 - Add a third tools tree (edit `nanobot/` SoT only); give mock RNA-FM fusion weight; commit secrets / push `docs/`; import science torch into the nanobot process; add LangGraph/CrewAI/AutoGen as product deps.
-- Treat legacy PA stubs as product features; widen `NANOBOT_TOOL_ALLOW` / enable `NANOBOT_TOOL_PLUGINS` / restore channels·webui without maintainer approval (see ARCHITECTURE §6).
+- Treat legacy PA stubs as product features; widen `NANOBOT_TOOL_ALLOW` / enable `NANOBOT_TOOL_PLUGINS` / restore channels·webui without maintainer approval (ARCHITECTURE §6).
 - Blind-delete loop-wired leftovers or the session/memory stores (ARCHITECTURE §2 / §6).
 - Let the LLM or a diagnostic max/mean override delivery `similarity_weighted_vote`; promote on retrieval-only synthetic scores; claim capabilities the matrix marks unavailable.
 
@@ -29,5 +30,3 @@
 ```bash
 pytest tests/test_proposal_compliance.py tests/test_package_layout.py
 ```
-
-Full fidelity notes (AF3 / ESM-C / fuse / `p_hat` wording): 工程指南 §9 + proposal §4.

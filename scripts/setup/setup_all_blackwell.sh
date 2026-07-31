@@ -13,16 +13,16 @@
 #
 # 本脚本做什么：
 #   薄包装：调用 setup_all.sh，并强制 AF3_STACK=blackwell
-#   → 若隔离栈缺失，setup_all 会调用 scripts/setup_af3_blackwell.sh
+#   → 若隔离栈缺失，setup_all 会调用 scripts/setup/setup_af3_blackwell.sh
 #   → .env 中的 AF3_DIR / AF3_PYTHON 指向 af3_blackwell（权重仍用 delivery AF3_PARAMS）
 #
 # 用法：
-#   bash scripts/setup_all_blackwell.sh
-#   bash scripts/setup_all_blackwell.sh --skip-smoke
+#   bash scripts/setup/setup_all_blackwell.sh
+#   bash scripts/setup/setup_all_blackwell.sh --skip-smoke
 #   # 其余参数原样转给 setup_all.sh
 #
 # 仅重装 AF3 隔离栈（不动 agent venv / 其它 conda）：
-#   bash scripts/setup_af3_blackwell.sh
+#   bash scripts/setup/setup_af3_blackwell.sh
 #
 # 非 5090 机型：请用 setup_all_ampere_or_older.sh，或 auto 的 setup_all.sh
 # =============================================================================

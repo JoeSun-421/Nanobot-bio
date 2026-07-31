@@ -204,16 +204,42 @@ def apply_delivery_env() -> dict[str, str]:
         "HF_ENDPOINT": "https://hf-mirror.com",
     }
     # AF3_PYTHON must be a conda interpreter with alphafold3 — NOT the agent .venv.
-    # A complete isolated Blackwell stack wins over stale .env values unless the
-    # operator explicitly sets AF3_FORCE_CLASSIC=1.
-    bw_af3 = Path("/root/autodl-tmp/af3_blackwell/alphafold3")
+    # Isolated Blackwell stack wins over stale .env unless AF3_FORCE_CLASSIC=1.
+    # Discovery is portable: AF3_BLACKWELL_ROOT / AF3_DIR / BIO_ROOT / conda envs.
+    def _af3_blackwell_srcdir() -> Optional[Path]:
+        cands: list[Path] = []
+        for key in ("AF3_BLACKWELL_ROOT",):
+            raw = os.environ.get(key)
+            if raw:
+                cands.append(Path(raw).expanduser() / "alphafold3")
+                cands.append(Path(raw).expanduser())
+        af3_dir = os.environ.get("AF3_DIR")
+        if af3_dir:
+            cands.append(Path(af3_dir).expanduser())
+        bio = os.environ.get("BIO_ROOT")
+        if bio:
+            cands.append(Path(bio).expanduser() / "af3_blackwell" / "alphafold3")
+        home = Path.home()
+        cands.extend(
+            [
+                home / "af3_blackwell" / "alphafold3",
+                Path("/opt/af3_blackwell/alphafold3"),
+            ]
+        )
+        for p in cands:
+            if (p / "run_alphafold.py").is_file():
+                return p.resolve()
+        return None
+
+    bw_af3 = _af3_blackwell_srcdir()
     bw_py = conda_env_python("af3_blackwell")
     use_bw = (
         os.environ.get("AF3_FORCE_CLASSIC", "").strip().lower() not in {"1", "true", "yes"}
         and bw_py is not None
-        and (bw_af3 / "run_alphafold.py").is_file()
+        and bw_af3 is not None
     )
     if use_bw:
+        assert bw_af3 is not None and bw_py is not None
         os.environ["AF3_PYTHON"] = str(bw_py)
         os.environ["AF3_DIR"] = str(bw_af3)
         os.environ["AF3_CACHE"] = str(bw_af3.parent / "alphafold_cache")

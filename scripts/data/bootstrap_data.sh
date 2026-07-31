@@ -16,7 +16,7 @@
 #   - benchmark_cluster results dir reachable
 #
 # Usage:
-#   bash scripts/bootstrap_data.sh \
+#   bash scripts/data/bootstrap_data.sh \
 #     --rb /path/to/rbp_proteins_260417 \
 #     --benchmarks /path/to/results/benchmark_cluster \
 #     --head-index-dir /path/to/head_index_dir \
@@ -58,7 +58,7 @@ for v in RB BENCHMARKS HEAD_INDEX_DIR OUT; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+AGENT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BIO_ROOT="$(cd "${BIO_ROOT:-$AGENT_ROOT/..}" && pwd)"
 DELIVERY_ROOT="${DELIVERY_ROOT:-$BIO_ROOT/rhobind_agent_delivery}"
 BUILD_DIR="$DELIVERY_ROOT/agent/database/build"

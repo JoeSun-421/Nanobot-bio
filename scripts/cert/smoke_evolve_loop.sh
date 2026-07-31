@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke: fixture traces → self-evolution → candidate → promote dry-run gates.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT"
 # shellcheck disable=SC1091
 source .venv/bin/activate 2>/dev/null || true

@@ -65,8 +65,8 @@ RUN git clone --depth 1 "$NANOBOT_GIT" "$NANOBOT_SRC" && \
 
 # 2. Copy app sources
 COPY . "$NANOBOT_BIO_ROOT/"
-RUN chmod +x "$NANOBOT_BIO_ROOT/scripts/setup_all.sh" \
-             "$NANOBOT_BIO_ROOT/scripts/check_secrets.sh" 2>/dev/null || true
+RUN chmod +x "$NANOBOT_BIO_ROOT/scripts/setup/setup_all.sh" \
+             "$NANOBOT_BIO_ROOT/scripts/ci/check_secrets.sh" 2>/dev/null || true
 
 # 3. App venv (Python $PYTHON_VERSION) + pinned deps + nanobot .pth + overlay sync
 RUN micromamba create -y -n base python="$PYTHON_VERSION" pip && \
@@ -128,7 +128,7 @@ WORKDIR $NANOBOT_BIO_ROOT
 VOLUME ["/delivery", "/root/.nanobot", "/bio/nanobot-bio/artifacts", "/bio/nanobot-bio/workspace/sessions"]
 
 # Entrypoint: self-check (doctor) then exec user command (default: chat)
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY scripts/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

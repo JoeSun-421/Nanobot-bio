@@ -7,11 +7,11 @@
 #   - 其它（Ampere/Ada/Hopper 等）→ delivery 经典 conda env `af3`（jax 0.4.x）
 #
 # First-time (science conda + agent + optional AF3 hardening):
-#   bash scripts/setup_all.sh
+#   bash scripts/setup/setup_all.sh
 #
 # 明确机型入口（薄包装，推荐协作方按 GPU 选用）：
-#   bash scripts/setup_all_ampere_or_older.sh   # 经典 af3（A100/H100/4090…）
-#   bash scripts/setup_all_blackwell.sh         # 强制 Blackwell 隔离栈
+#   bash scripts/setup/setup_all_ampere_or_older.sh   # 经典 af3（A100/H100/4090…）
+#   bash scripts/setup/setup_all_blackwell.sh         # 强制 Blackwell 隔离栈
 #
 # Day-to-day (standard venv; CLI loads .env automatically):
 #   source $BIO_ROOT/nanobot-bio/.venv/bin/activate
@@ -25,6 +25,8 @@
 #                    AF3 栈选择（也可用环境变量 AF3_STACK；默认 auto）
 #   AF3_BUDGET_SEC=600  AF3 hardening timeout (then deferred)
 #
+# After delivery setup_envs, import/probe-verifies rhobind (torch+transformers),
+# protein_embed (transformers), rna (mmseqs), af3 (python) and heals hollow envs.
 # Does not modify rhobind_agent_delivery sources; read-only use of setup_envs / tools.
 # =============================================================================
 set -euo pipefail
@@ -54,7 +56,7 @@ esac
 export AF3_STACK
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+AGENT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BIO_ROOT="$(cd "${BIO_ROOT:-$AGENT_ROOT/..}" && pwd)"
 DELIVERY_ROOT="${DELIVERY_ROOT:-$BIO_ROOT/rhobind_agent_delivery}"
 NANOBOT_SRC="${NANOBOT_SRC:-$AGENT_ROOT/nanobot}"
@@ -178,8 +180,8 @@ _setup_af3() {
       echo "[af3] AF3_STACK=blackwell forced (GPU CC=${GPU_CC:-unknown}); preserving delivery af3 env"
     fi
     if [[ ! -x "$BW_ENV/bin/python" || ! -f "$BW_ROOT/alphafold3/run_alphafold.py" ]]; then
-      echo "[af3] installing isolated Blackwell stack via scripts/setup_af3_blackwell.sh"
-      timeout "$(_budget_left)" bash "$AGENT_ROOT/scripts/setup_af3_blackwell.sh" \
+      echo "[af3] installing isolated Blackwell stack via scripts/setup/setup_af3_blackwell.sh"
+      timeout "$(_budget_left)" bash "$SCRIPT_DIR/setup_af3_blackwell.sh" \
         || { _write_status deferred "blackwell_setup_timeout_or_fail"; return 0; }
     fi
     AF3_DIR="$BW_ROOT/alphafold3"
@@ -319,6 +321,169 @@ PY
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# Import-level science env verify + heal (name existence ≠ packages ready).
+# Delivery setup_envs.sh skips pip when the env name already exists, so a
+# hollow `conda create -n rhobind` would otherwise stay broken forever.
+# ---------------------------------------------------------------------------
+_conda_env_exists() {
+  conda env list 2>/dev/null | awk '{print $1}' | grep -qx "$1"
+}
+
+_verify_science_envs() {
+  local fail=0
+  local req="${RHOBIND_RELEASE}/requirements.txt"
+  local yml_pe="${DELIVERY_ROOT}/agent/envs/protein_embed.yml"
+  local yml_rna="${DELIVERY_ROOT}/agent/envs/rna.yml"
+  local _env
+
+  echo "[2a/6] verify science envs (import/probe; heal hollow envs) ..."
+
+  for _env in protein_embed rna rhobind af3; do
+    if _conda_env_exists "$_env"; then
+      echo "  [ok name] conda env $_env"
+    else
+      echo "  [FAIL] conda env $_env missing" >&2
+      fail=1
+    fi
+  done
+  if [[ "$fail" == "1" ]]; then
+    echo "ERROR: full science stack incomplete. Re-run setup_envs or fix conda." >&2
+    return 1
+  fi
+
+  # --- rhobind: torch + transformers (RhoBind predict) ---
+  # Prefer data-disk tmp/cache: root overlay is often ~30G and fills on CUDA wheels.
+  local _data_root="${BIO_ROOT:-${TMPDIR:-/tmp}}"
+  # Prefer BIO_ROOT (sibling layout) for pip tmp/cache so root overlay is not filled.
+  local _data_tmp="${_data_root}/tmp"
+  local _pip_cache="${_data_root}/pip-cache"
+  local _wheel_cpu="${_data_root}/wheels/torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl"
+  mkdir -p "$_data_tmp" "$_pip_cache" "$(dirname "$_wheel_cpu")"
+  export TMPDIR="$_data_tmp" TMP="$_data_tmp" PIP_CACHE_DIR="$_pip_cache"
+
+  if conda run -n rhobind python -c "import torch, transformers" >/dev/null 2>&1; then
+    echo "  [ok] rhobind: torch + transformers"
+  else
+    echo "  [heal] rhobind: missing torch/transformers — install to data-disk tmp/cache ..."
+    echo "  note: plain 'pip install -r requirements.txt' pulls CUDA torch (~GB) onto / and often hits ENOSPC"
+    local _healed=0
+    # 1) Local CPU wheel if present (fast, small enough for smoke / CPU predict)
+    if [[ -f "$_wheel_cpu" ]]; then
+      echo "  [heal] trying local CPU wheel: $_wheel_cpu"
+      if conda run -n rhobind env TMPDIR="$_data_tmp" PIP_CACHE_DIR="$_pip_cache" \
+          pip install "$_wheel_cpu" \
+          && conda run -n rhobind env TMPDIR="$_data_tmp" PIP_CACHE_DIR="$_pip_cache" \
+          pip install 'transformers>=4.44,<5.6' tokenizers 'numpy>=1.26' 'scikit-learn>=1.3' 'einops>=0.7' \
+            -i "${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}" \
+            --trusted-host "${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
+      then
+        _healed=1
+      fi
+    fi
+    # 2) PyTorch CPU index (no CUDA megapack)
+    if [[ "$_healed" != "1" ]]; then
+      echo "  [heal] trying torch CPU index + transformers (tuna) ..."
+      if conda run -n rhobind env TMPDIR="$_data_tmp" PIP_CACHE_DIR="$_pip_cache" \
+          pip install torch --index-url https://download.pytorch.org/whl/cpu \
+        && conda run -n rhobind env TMPDIR="$_data_tmp" PIP_CACHE_DIR="$_pip_cache" \
+          pip install 'transformers>=4.44,<5.6' tokenizers 'numpy>=1.26' 'scikit-learn>=1.3' 'einops>=0.7' \
+            -i "${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}" \
+            --trusted-host "${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
+      then
+        _healed=1
+      fi
+    fi
+    # 3) Full release requirements (CUDA) only if enough free space on /
+    if [[ "$_healed" != "1" && -f "$req" ]]; then
+      local _avail_kb
+      _avail_kb="$(df -Pk / | awk 'NR==2{print $4}')"
+      if [[ "${_avail_kb:-0}" -gt 8000000 ]]; then
+        echo "  [heal] fallback: pip install -r requirements.txt (CUDA; needs ≥8GiB free on /) ..."
+        conda run -n rhobind env TMPDIR="$_data_tmp" PIP_CACHE_DIR="$_pip_cache" \
+          pip install -r "$req" \
+          -i "${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}" \
+          --trusted-host "${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}" \
+          && _healed=1 || true
+      else
+        echo "  [heal] skip CUDA requirements.txt: only ~$((_avail_kb/1024))MiB free on / (need ≥8GiB)" >&2
+      fi
+    fi
+    if conda run -n rhobind python -c "import torch, transformers" >/dev/null 2>&1; then
+      echo "  [healed] rhobind: torch + transformers"
+    else
+      echo "  [FAIL] rhobind still cannot import torch + transformers after heal" >&2
+      echo "  hint: free space on / OR:" >&2
+      echo "    wget -c -O $_wheel_cpu 'https://download.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl'" >&2
+      echo "    conda run -n rhobind pip install $_wheel_cpu && conda run -n rhobind pip install transformers einops ..." >&2
+      return 1
+    fi
+  fi
+  conda run -n rhobind python -c \
+    "import transformers, torch; print('  rhobind OK transformers', transformers.__version__, 'torch', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+  # --- protein_embed: transformers (ESM path) ---
+  if conda run -n protein_embed python -c "import transformers" >/dev/null 2>&1; then
+    echo "  [ok] protein_embed: transformers"
+  else
+    echo "  [heal] protein_embed: missing transformers — conda env update from yml ..."
+    if [[ ! -f "$yml_pe" ]]; then
+      echo "  [FAIL] protein_embed yml not found: $yml_pe" >&2
+      return 1
+    fi
+    if ! conda env update -n protein_embed -f "$yml_pe"; then
+      echo "  [FAIL] protein_embed conda env update" >&2
+      return 1
+    fi
+    if conda run -n protein_embed python -c "import transformers" >/dev/null 2>&1; then
+      echo "  [healed] protein_embed: transformers"
+    else
+      echo "  [FAIL] protein_embed still cannot import transformers after heal" >&2
+      return 1
+    fi
+  fi
+  conda run -n protein_embed python -c \
+    "import transformers; print('  protein_embed (ESM) OK transformers', transformers.__version__)"
+
+  # --- rna: mmseqs on PATH inside env ---
+  if conda run -n rna bash -lc 'command -v mmseqs >/dev/null 2>&1'; then
+    echo "  [ok] rna: mmseqs"
+  else
+    echo "  [heal] rna: mmseqs missing — conda env update from yml ..."
+    if [[ ! -f "$yml_rna" ]]; then
+      echo "  [FAIL] rna yml not found: $yml_rna" >&2
+      return 1
+    fi
+    if ! conda env update -n rna -f "$yml_rna"; then
+      echo "  [FAIL] rna conda env update" >&2
+      return 1
+    fi
+    if conda run -n rna bash -lc 'command -v mmseqs >/dev/null 2>&1'; then
+      echo "  [healed] rna: mmseqs"
+    else
+      echo "  [FAIL] rna still has no mmseqs after heal" >&2
+      return 1
+    fi
+  fi
+
+  # --- af3: usable interpreter (AF3_PYTHON or conda env af3) ---
+  if [[ -x "${AF3_PYTHON:-}" && "${AF3_PYTHON}" != "/bin/false" ]]; then
+    echo "  [ok] af3: python=$AF3_PYTHON"
+  else
+    local _af3py
+    _af3py="$(conda run -n af3 which python 2>/dev/null || true)"
+    if [[ -n "$_af3py" && -x "$_af3py" ]]; then
+      export AF3_PYTHON="$_af3py"
+      echo "  [ok] af3: python=$AF3_PYTHON"
+    else
+      echo "  [FAIL] af3 env has no usable python" >&2
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
 # =============================================================================
 _ensure_nanobot
 NANOBOT_SRC="${NANOBOT_SRC}"
@@ -369,40 +534,7 @@ if [[ "$WITH_CONDA" == "1" ]]; then
   echo "[2/6] delivery setup_envs.sh (protein_embed=ESM / rna / rhobind / af3) ..."
   if command -v conda >/dev/null 2>&1; then
     bash "$DELIVERY_ROOT/agent/setup_envs.sh"
-    _missing=0
-    for _env in protein_embed rna rhobind af3; do
-      if conda env list 2>/dev/null | awk '{print $1}' | grep -qx "$_env"; then
-        echo "  [ok] conda env $_env"
-      else
-        echo "  [MISSING] conda env $_env" >&2
-        _missing=1
-      fi
-    done
-    if [[ "$_missing" == "1" ]]; then
-      echo "ERROR: full science stack incomplete. Re-run setup_envs or fix conda." >&2
-      exit 1
-    fi
-    if ! conda run -n rhobind python -c "import transformers" >/dev/null 2>&1; then
-      echo "  rhobind missing transformers — installing release requirements ..."
-      conda run -n rhobind pip install -r "$RHOBIND_RELEASE/requirements.txt"
-    fi
-    conda run -n rhobind python -c \
-      "import transformers, torch; print('  rhobind OK transformers', transformers.__version__, 'torch', torch.__version__, 'cuda', torch.cuda.is_available())"
-    conda run -n protein_embed python -c \
-      "import transformers; print('  protein_embed (ESM) OK transformers', transformers.__version__)" \
-      || echo "  WARN: protein_embed import check failed" >&2
-    if [[ -x "${AF3_PYTHON:-}" && "${AF3_PYTHON}" != "/bin/false" ]]; then
-      echo "  af3 OK python=$AF3_PYTHON"
-    else
-      _af3py="$(conda run -n af3 which python 2>/dev/null || true)"
-      if [[ -n "$_af3py" && -x "$_af3py" ]]; then
-        export AF3_PYTHON="$_af3py"
-        echo "  af3 OK python=$AF3_PYTHON"
-      else
-        echo "ERROR: af3 env has no usable python" >&2
-        exit 1
-      fi
-    fi
+    _verify_science_envs || exit 1
     if [[ "$SKIP_AF3" != "1" ]]; then
       echo "[2b/6] AF3 harden (budget ${AF3_BUDGET_SEC:-600}s; deferred ≠ setup fail) ..."
       AF3_BUDGET_SEC="${AF3_BUDGET_SEC:-600}" _setup_af3 \
@@ -528,14 +660,27 @@ if [[ "$_af3_py_ok" != "1" ]]; then
     classic) _prefer_bw=0 ;;
     auto) [[ "$_gpu_cc" == 12.* ]] && _prefer_bw=1 || _prefer_bw=0 ;;
   esac
+  _conda_base="$(conda info --base 2>/dev/null || true)"
+  if [[ -n "${CONDA_ENVS_PATH:-}" ]]; then
+    IFS=':' read -r -a _cep_dirs <<< "$CONDA_ENVS_PATH"
+  else
+    _cep_dirs=()
+  fi
   if [[ "$_prefer_bw" == "1" ]]; then
+    for _d in "${_cep_dirs[@]}"; do
+      [[ -n "$_d" ]] && _af3_cands+=("${_d%/}/af3_blackwell/bin/python")
+    done
+    [[ -n "$_conda_base" ]] && _af3_cands+=("${_conda_base%/}/envs/af3_blackwell/bin/python")
     _af3_cands+=(
-      "/root/autodl-tmp/conda/envs/af3_blackwell/bin/python"
       "$HOME/miniconda3/envs/af3_blackwell/bin/python"
+      "$HOME/miniforge3/envs/af3_blackwell/bin/python"
     )
   fi
+  for _d in "${_cep_dirs[@]}"; do
+    [[ -n "$_d" ]] && _af3_cands+=("${_d%/}/af3/bin/python")
+  done
+  [[ -n "$_conda_base" ]] && _af3_cands+=("${_conda_base%/}/envs/af3/bin/python")
   _af3_cands+=(
-    "/root/autodl-tmp/conda/envs/af3/bin/python"
     "$HOME/miniconda3/envs/af3/bin/python"
     "$HOME/miniforge3/envs/af3/bin/python"
     "$HOME/mambaforge/envs/af3/bin/python"
@@ -585,7 +730,7 @@ RHOBIND_DEVICE=${RHOBIND_DEVICE:-auto}
 RBP_BACKEND=delivery
 EOF
 
-chmod +x "$AGENT_ROOT/scripts/setup_all.sh" 2>/dev/null || true
+chmod +x "$SCRIPT_DIR/setup_all.sh" 2>/dev/null || true
 
 mkdir -p "$AGENT_ROOT/workspace/skills/rbp-agent" \
   "$AGENT_ROOT/workspace/memory"
@@ -642,8 +787,9 @@ echo "  wrote $_STAMP"
 echo
 echo " setup_all.sh done — full advanced env configured once."
 echo " Every later SSH session:"
-echo "   source $AGENT_ROOT/.venv/bin/activate"
+echo "   source $AGENT_ROOT/scripts/setup/activate_env.sh"
+echo "   # or: source $AGENT_ROOT/.venv/bin/activate"
 echo "   rbp-agent doctor && rbp-agent chat"
 echo " Re-run full setup after pulls / new GPU host:"
-echo "   bash $AGENT_ROOT/scripts/setup_all.sh"
-echo " Agent-only (no conda science): bash $AGENT_ROOT/scripts/setup_all.sh --skip-conda"
+echo "   bash $AGENT_ROOT/scripts/setup/setup_all.sh"
+echo " Agent-only (no conda science): bash $AGENT_ROOT/scripts/setup/setup_all.sh --skip-conda"

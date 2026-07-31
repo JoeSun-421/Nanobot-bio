@@ -9,9 +9,9 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 - **Capability matrix SoT:** `app/core/capability_matrix.py` drives doctor/layout honesty (AF3 real-smoke state, RNA peak-homology weights `0` without `PEAKS_DB`, `feature_attribution_source=unavailable`).
 - **Tool / eval layout:** `nanobot.agent.tools.{core,rbp,legacy}` and `rbp_eval.{scoring,loo,evolve,accept,runtime,rna,plans}` — physical path = import path; ToolLoader default allowlist `rbp` only.
 - **Vote / fuse guards:** delivery `similarity_weighted_vote` is the authoritative transfer score; deterministic fuse values cannot be replaced by LLM numbers; promote hard-fails nonzero RNA weight without a peaks DB; no retrieval-only synthetic promote path.
-- **Evolve loop:** real `rbp_eval.evolve.run_eval` + modality ablation; smoke script `scripts/smoke_evolve_loop.sh`.
+- **Evolve loop:** real `rbp_eval.evolve.run_eval` + modality ablation; smoke script `scripts/cert/smoke_evolve_loop.sh`.
 - **Chat UX:** tool-wait spinner shows active tool count / elapsed time.
-- **Docs:** session/memory, slim inventory, keep-vs-delete, and cleanup phases consolidated in [`ARCHITECTURE.md`](ARCHITECTURE.md) §2 / §6 (not a deletion authorization).
+- **Docs:** root docs slimmed — [`INSTALL.md`](INSTALL.md) (setup), [`ARCHITECTURE.md`](ARCHITECTURE.md) (layers / memory / eval-promote / slim vendor / release), [`AGENTS.md`](AGENTS.md) (gates). Removed standalone `RELEASE.md`, `VENDOR.md`, `SELF_EVOLUTION_ASSESSMENT.md` (content folded in).
 
 ### Changed — delivery-aligned transfer scoring
 
@@ -58,7 +58,7 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 - **C2 raw-delivery whitelist default:** `include_raw_delivery` default narrowed from `all` (37) to `whitelist`; opt into `all` via `RBP_RAW_TOOLS=all`.
 - **C3 acceptance-path unification:** `accept-golden` is the authoritative acceptance path; delivery `run_example.sh` left untouched (read-only) and documented as delivery-native smoke only.
 - **C5 app/dev ↔ rbp_eval boundary:** scientific `accept-*` (`accept_llm`, `own_head`/`accept-golden`) consolidated into `rbp_eval/`; `app/dev` retains engineering gates only.
-- **C6 evolved-config promote link:** tracked `config/evolved.candidate.yaml.example` seed + `promote-evolved --seed` bootstrap; flow documented in `RELEASE.md §9`.
+- **C6 evolved-config promote link:** tracked `config/evolved.candidate.yaml.example` seed + `promote-evolved --seed` bootstrap; flow documented in [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.
 
 ### Added — v0.5.0 review fixes (RBM20 trace)
 

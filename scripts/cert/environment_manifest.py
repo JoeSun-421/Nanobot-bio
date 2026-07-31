@@ -14,8 +14,35 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+
+
+def _default_conda_envs_root() -> Path:
+    """Portable conda envs root (no machine-specific hardcode)."""
+    raw = (os.environ.get("CONDA_ENVS_PATH") or os.environ.get("CONDA_ENVS_DIRS") or "").strip()
+    if raw:
+        return Path(raw.split(os.pathsep)[0]).expanduser()
+    try:
+        proc = subprocess.run(
+            ["conda", "info", "--base"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return Path(proc.stdout.strip()) / "envs"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    for base in (
+        Path.home() / "miniconda3" / "envs",
+        Path.home() / "miniforge3" / "envs",
+        Path.home() / "mambaforge" / "envs",
+        Path.home() / "anaconda3" / "envs",
+    ):
+        if base.is_dir():
+            return base
+    return Path.home() / "miniconda3" / "envs"
 
 
 def _run(argv: list[str], *, timeout: int = 120) -> dict[str, Any]:
@@ -70,7 +97,7 @@ def build_manifest() -> dict[str, Any]:
     apply_delivery_env()
     paths = resolve_delivery_paths()
     delivery = Path(paths["delivery_root"])
-    env_root = Path(os.environ.get("CONDA_ENVS_PATH") or "/root/autodl-tmp/conda/envs")
+    env_root = _default_conda_envs_root()
     registry = Path(paths["registry_json"])
     rbp_registry = Path(paths["rbp_registry"])
     release = Path(paths["rhobind_release"])

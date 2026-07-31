@@ -36,7 +36,7 @@ jobs:
           python -m app.sync_overlay
 
       - name: Secret scan
-        run: bash scripts/check_secrets.sh
+        run: bash scripts/ci/check_secrets.sh
 
       - name: Ruff
         run: ruff check app rbp_eval tests
@@ -57,7 +57,7 @@ jobs:
         run: |
           echo "own-head and light LOO/eval-plan require delivery + GPU/RAM."
           echo "Pytest auto-skips requires_delivery when DELIVERY_ROOT / sibling bundle is absent."
-          echo "Run locally: bash scripts/ci_gate.sh"
+          echo "Run locally: bash scripts/ci/ci_gate.sh"
           echo "Or: rbp-agent gate"
 
   science:

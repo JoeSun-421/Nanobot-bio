@@ -1,6 +1,6 @@
 # nanobot-bio — optional conda env (agent layer only)
 # =============================================================================
-# Secondary path. Prefer scripts/setup_all.sh or:
+# Secondary path. Prefer scripts/setup/setup_all.sh or:
 #   pip install -r requirements.lock && pip install -e ".[dev]"
 #
 # Science tools (ESM / mmseqs / rhobind / AF3) live in delivery conda envs.

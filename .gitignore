@@ -1,5 +1,7 @@
 # Runtime / local data
-artifacts/
+artifacts/**
+!artifacts/README.md
+!artifacts/README.zh.md
 workspace/sessions
 workspace/memory/*
 workspace/.nanobot/
