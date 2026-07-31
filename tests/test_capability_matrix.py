@@ -108,6 +108,8 @@ def test_af3_status_points_at_blackwell():
     from app.core.capability_matrix import read_af3_status
 
     st = read_af3_status()
+    if not st:
+        pytest.skip("AF3 status file not present (public CI / no local AF3 setup)")
     assert st.get("state")
     py = st.get("af3_python") or ""
     assert "af3_blackwell" in py or "af3" in py

@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts import smoke_delivery_tools as smoke
+from scripts.cert import smoke_delivery_tools as smoke
 
 
 class FakeClient:

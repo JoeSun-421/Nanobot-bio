@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -62,6 +64,7 @@ def test_aggregate_p_hat_with_transfer_and_quality():
     assert out["p_hat"] == 0.5857
 
 
+@pytest.mark.requires_delivery
 def test_aggregate_p_hat_contract_matches_delivery_vote():
     """Agent compatibility helper must numerically match immutable delivery."""
     import importlib.util

@@ -58,8 +58,9 @@ def test_run_eval_writes_reports(tmp_path):
     from rbp_eval.evolve.run_eval import run_eval
 
     report = run_eval(held_to_hit_lists=_held(), top_k=3, out_dir=tmp_path, write=True)
-    assert (tmp_path / "modality_ablation_report.json").is_file()
-    assert (tmp_path / "run_eval_report.json").is_file()
+    # report_path writes JSON under out_dir/json/ (format subdir layout)
+    assert (tmp_path / "json" / "modality_ablation_report.json").is_file()
+    assert (tmp_path / "json" / "run_eval_report.json").is_file()
     assert report.get("modality_ablation")
 
 
