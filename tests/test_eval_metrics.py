@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -85,6 +87,7 @@ def test_loo_eval_instance_level_with_labels(tmp_path):
     assert il["status"] == "ok" and il["ece"] is not None
 
 
+@pytest.mark.requires_delivery
 def test_stage3_no_llm_explanation_ablation_runs(tmp_path):
     """A4: evaluation_plan --no-llm-explanation records no_llm vs full_llm metrics."""
     import subprocess

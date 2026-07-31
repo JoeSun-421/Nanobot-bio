@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -261,6 +263,7 @@ def test_proposal_tool_names_registered():
     assert "resolve_rbp" in STAGE_RAW_WHITELIST
 
 
+@pytest.mark.requires_delivery
 def test_delivery_tree_untouched_marker():
     """Sanity: delivery package exists; science calls go through DeliveryToolClient."""
     delivery = ROOT.parent / "rhobind_agent_delivery"

@@ -11,9 +11,12 @@ from app.core import onboard
 from app.dotenv_util import read_dotenv_keys, upsert_dotenv
 
 
-def test_no_default_provider():
+def test_no_default_provider(monkeypatch):
     assert getattr(onboard, "DEFAULT_PROVIDER", None) is None
     assert getattr(onboard, "DEFAULT_MODEL", None) is None
+    # Hermetic: ignore shell / repo .env RBP_LLM_* so CI and local agree.
+    monkeypatch.delenv("RBP_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("RBP_LLM_MODEL", raising=False)
     # Product must not invent a vendor when unset.
     provider, model = onboard.active_provider_model({})
     assert provider == ""
