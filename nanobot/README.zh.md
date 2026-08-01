@@ -1,60 +1,77 @@
 # nanobot/
 
-仓内精简 Nanobot 运行时 **外加** RBP skill 与工具。SoT == 运行时：`import nanobot` 必须解析到这里。
+精简仓内 Nanobot 运行时 **加上** RBP skill 与工具。SoT == runtime：`import nanobot` 必须解析到这里。
 
 [English](README.md) · [中文]
 
-## 功能
+## 用途
 
-- 高阶 `Nanobot` API（`from_config` / `run` / `run_streamed`）供产品 CLI 使用
-- Agent loop、会话存储、LLM providers、内部 SDK 辅助
-- 产品 skill SoT：`skills/rbp-agent/SKILL.md`
-- 产品工具包：`agent/tools/rbp/`（retrieve / predict / structure / …）
-- Slim-vendor：去掉 PA 面（channels / webui 等），由 `rbp-agent layout` 断言
+本树是产品所用的 agent 框架：高层 `Nanobot` API、agent loop、会话存储、LLM providers，以及 RBP skill/工具包。打包（`pyproject.toml`）包含 `nanobot*`，editable install 暴露的是**本目录**——切勿同时安装 PyPI `nanobot-ai`。
 
-## 实现方法
+产品协作者通常经 [`app/`](../app/README.zh.md)（`nanobot-bio chat|agent`）进入。直接 `python -m nanobot` 偏框架，不是 RBP 产品 UX。阶段纪律与工具契约见 `skills/rbp-agent/SKILL.md` 与 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
+
+## 布局
 
 | 路径 | 角色 |
 |------|------|
-| `nanobot.py` | 对外高阶 API |
-| [`agent/`](agent/README.zh.md) | loop、memory、context、skills、**tools** |
+| `nanobot.py` | 公共高层 API（`Nanobot.from_config` / `run` / `run_streamed`） |
+| [`agent/`](agent/README.zh.md) | Loop、memory、context、skills、**tools** |
+| [`agent/tools/rbp/`](agent/tools/rbp/README.zh.md) | 产品工具包（retrieve / predict / structure / …） |
 | [`sdk/`](sdk/README.zh.md) | 内部 SDK 辅助（clients / streaming / types） |
-| `session/` | 会话存储与管理（规范数据在 `artifacts/sessions`） |
-| `skills/rbp-agent/` | Skill 源真相；同步到 `workspace/skills/` |
-| `providers/` | LLM provider 适配 |
-| `config/` · `bus/` · `command/` · `cron/` · `security/` · `utils/` | 框架支撑 |
-| `legacy/` · `templates/` | 遗留 / 模板；非主产品路径 |
+| [`session/`](session/README.zh.md) | 会话存储（规范数据在 `artifacts/sessions`） |
+| [`skills/`](skills/README.zh.md) | Skill SoT（`rbp-agent/SKILL.md`）；同步到 `workspace/skills/` |
+| [`providers/`](providers/README.zh.md) | LLM provider 适配 |
+| [`config/`](config/README.zh.md) · [`bus/`](bus/README.zh.md) · [`command/`](command/README.zh.md) · [`cron/`](cron/README.zh.md) · [`security/`](security/README.zh.md) · [`utils/`](utils/README.zh.md) | 框架支持 |
+| [`legacy/`](legacy/README.zh.md) · [`templates/`](templates/README.zh.md) | 遗留 / 模板；非主产品路径 |
 
-工具加载默认：`NANOBOT_TOOL_ALLOW=rbp`；`NANOBOT_TOOL_PLUGINS` 默认关。Chat 路径还会在 `app/agent.py` 注销嘈杂 PA 工具。
+默认：`NANOBOT_TOOL_ALLOW=rbp`；除非设置，否则关闭 `NANOBOT_TOOL_PLUGINS`。Chat 还会在 `app/agent.py` 中注销嘈杂 PA 工具。
 
-打包：`pyproject.toml` 通过 setuptools 包含 `nanobot*`，editable install 即暴露本树。
+## 入口
 
-## 怎么使用
-
-产品侧通常走 App CLI，而不是直接 `python -m nanobot`：
-
-```bash
-nanobot-bio chat|agent
-# App 内：Nanobot.from_config → run / run_streamed
-# MVP / eval 优先 ephemeral=True
+```python
+from nanobot import Nanobot, RunResult
 ```
 
-改完 skill 或 RBP tools 后：
-
 ```bash
-python -m app.sync_overlay
+nanobot-bio chat|agent          # 产品路径
+python -m app.sync_overlay      # 改完 skill / RBP tools 后
 nanobot-bio doctor
 ```
 
-**禁止**再 `pip install nanobot-ai`，否则会抢包名。
+## 代码示例
+
+**高层 Nanobot（框架）**
+
+```python
+from nanobot import Nanobot
+
+bot = Nanobot.from_config(workspace="workspace", scientific_mode=True)
+result = await bot.run("Summarize workspace AGENTS.md", ephemeral=True)
+print(result.content)
+```
+
+**产品组装（推荐）**
+
+```python
+from app.agent import RBPAgent
+
+agent = RBPAgent()
+result = agent.run_sync("Predict binding for PTBP1 on the sample RNA.")
+print(result.verdict)
+```
+
+## 依赖 / 环境
+
+- LLM 凭证经 `~/.nanobot/config.json` / `.env`（`nanobot-bio onboard`）。
+- 科学工具需要 delivery（`DELIVERY_ROOT`）——Nanobot 进程本身不承载 torch/jax 模型栈。
+- **不要** `pip install nanobot-ai`——会抢占 import 名。
 
 ## 设计思路
 
-- **SoT == 运行时** 避免第三套 tools 树与同步漂移（提案 / ARCHITECTURE §6）。
-- 重科学（torch / jax 模型）不进 Nanobot 进程；经 App delivery 桥出站。
-- 科学模式关闭自动 Dream / idle compaction / token consolidator，并在科学提示中排除 PA `MEMORY.md`（[`ARCHITECTURE.md`](../ARCHITECTURE.md) §2）。
-- 即便收紧 PA 默认行为，仍保留 session/memory 栈接线——勿盲目删除。
+- **SoT == runtime** 避免第三套 tools 树与同步漂移（[`ARCHITECTURE.md`](../ARCHITECTURE.md) §6）。
+- 科学模式关闭自动 Dream / idle compaction / token consolidator，并从科学 prompt 排除 PA `MEMORY.md`。
+- 即使产品默认收紧 PA 行为，会话/记忆栈仍保持接线——勿盲目删除。
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.zh.md`](../app/README.zh.md) · [`../workspace/README.zh.md`](../workspace/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.zh.md`](../app/README.zh.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../workspace/README.zh.md`](../workspace/README.zh.md)

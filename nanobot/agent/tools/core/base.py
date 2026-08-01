@@ -74,14 +74,16 @@ class Schema(ABC):
                 errors.append(f"{label} must be >= {schema['minimum']}")
             if "maximum" in schema and val > schema["maximum"]:
                 errors.append(f"{label} must be <= {schema['maximum']}")
-        if t == "string":
+        if t == "string" and isinstance(val, str):
             if "minLength" in schema and len(val) < schema["minLength"]:
                 errors.append(f"{label} must be at least {schema['minLength']} chars")
             if "maxLength" in schema and len(val) > schema["maxLength"]:
                 errors.append(f"{label} must be at most {schema['maxLength']} chars")
-        if t == "object":
+        if t == "object" and isinstance(val, dict):
             props = schema.get("properties", {})
-            for k in schema.get("required", []):
+            if not isinstance(props, dict):
+                props = {}
+            for k in schema.get("required", []) or []:
                 if k not in val:
                     errors.append(f"missing required {Schema.subpath(path, k)}")
             additional = schema.get("additionalProperties", True)
@@ -94,17 +96,19 @@ class Schema(ABC):
                     errors.extend(
                         Schema.validate_json_schema_value(v, additional, Schema.subpath(path, k))
                     )
-        if t == "array":
+        if t == "array" and isinstance(val, list):
             if "minItems" in schema and len(val) < schema["minItems"]:
                 errors.append(f"{label} must have at least {schema['minItems']} items")
             if "maxItems" in schema and len(val) > schema["maxItems"]:
                 errors.append(f"{label} must be at most {schema['maxItems']} items")
             if "items" in schema:
                 prefix = f"{path}[{{}}]" if path else "[{}]"
-                for i, item in enumerate(val):
-                    errors.extend(
-                        Schema.validate_json_schema_value(item, schema["items"], prefix.format(i))
-                    )
+                items_schema = schema["items"]
+                if isinstance(items_schema, dict):
+                    for i, item in enumerate(val):
+                        errors.extend(
+                            Schema.validate_json_schema_value(item, items_schema, prefix.format(i))
+                        )
         return errors
 
     @staticmethod
@@ -113,7 +117,10 @@ class Schema(ABC):
         # Try to_json_schema first: Schema instances must be distinguished from dicts that are already JSON Schema
         to_js = getattr(value, "to_json_schema", None)
         if callable(to_js):
-            return to_js()
+            result = to_js()
+            if isinstance(result, dict):
+                return result
+            raise TypeError(f"to_json_schema() must return dict, got {type(result).__name__}")
         if isinstance(value, dict):
             return value
         raise TypeError(f"Expected schema object or dict, got {type(value).__name__}")
@@ -153,10 +160,14 @@ class Tool(ABC):
         ...
 
     @property
-    @abstractmethod
     def parameters(self) -> dict[str, Any]:
-        """JSON Schema for tool parameters."""
-        ...
+        """JSON Schema for tool parameters.
+
+        Prefer :func:`tool_parameters` on subclasses. Not marked abstract so the
+        class decorator (which injects this property at runtime) remains
+        constructible under static checkers.
+        """
+        raise NotImplementedError(f"{type(self).__name__} must define parameters")
 
     @property
     def read_only(self) -> bool:

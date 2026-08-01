@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from loguru import logger
 
@@ -161,14 +162,14 @@ class GitStore:
 
             with Repo(str(self._workspace)) as repo:
                 try:
-                    sha = repo.refs[b"HEAD"]
+                    sha = cast(Any, repo.refs)[b"HEAD"]
                 except KeyError:
                     return None
 
                 while sha:
                     if sha.hex().startswith(short_sha):
                         return sha
-                    commit = repo[sha]
+                    commit = cast(Any, repo[sha])
                     if commit.type_name != b"commit":
                         break
                     sha = commit.parents[0] if commit.parents else None
@@ -220,13 +221,13 @@ class GitStore:
             entries: list[CommitInfo] = []
             with Repo(str(self._workspace)) as repo:
                 try:
-                    head = repo.refs[b"HEAD"]
+                    head = cast(Any, repo.refs)[b"HEAD"]
                 except KeyError:
                     return []
 
                 sha = head
                 while sha and len(entries) < max_entries:
-                    commit = repo[sha]
+                    commit = cast(Any, repo[sha])
                     if commit.type_name != b"commit":
                         break
                     ts = time.strftime(
@@ -340,7 +341,7 @@ class GitStore:
                 return None
 
             with Repo(str(self._workspace)) as repo:
-                commit_obj = repo[full_sha]
+                commit_obj = cast(Any, repo[full_sha])
                 if commit_obj.type_name != b"commit":
                     return None
 
@@ -349,7 +350,7 @@ class GitStore:
                     return None
 
                 # Use the parent's tree — this undoes the commit's changes
-                parent_obj = repo[commit_obj.parents[0]]
+                parent_obj = cast(Any, repo[commit_obj.parents[0]])
                 tree = repo[parent_obj.tree]
 
                 restored: list[str] = []

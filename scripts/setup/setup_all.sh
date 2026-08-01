@@ -172,23 +172,77 @@ _setup_af3() {
       ;;
   esac
   if (( use_blackwell )); then
-    local BW_ROOT="${AF3_BLACKWELL_ROOT:-/root/autodl-tmp/af3_blackwell}"
-    local BW_ENV="${AF3_BLACKWELL_ENV:-/root/autodl-tmp/conda/envs/af3_blackwell}"
+    # Portable discovery (AutoDL path is only one optional candidate).
+    local BW_ROOT="" BW_ENV="" _r _base _parent
+    _parent="$(cd "$BIO_ROOT/.." 2>/dev/null && pwd || true)"
+    for _r in \
+      "${AF3_BLACKWELL_ROOT:-}" \
+      "${AF3_ROOT:-}" \
+      "$BIO_ROOT/af3_blackwell" \
+      "${_parent}/af3_blackwell" \
+      "${HOME}/af3_blackwell" \
+      "/opt/af3_blackwell" \
+      "/root/autodl-tmp/af3_blackwell"
+    do
+      [[ -n "$_r" && -f "${_r%/}/alphafold3/run_alphafold.py" ]] || continue
+      BW_ROOT="${_r%/}"
+      break
+    done
+    if [[ -n "${AF3_BLACKWELL_ENV:-}" && -x "${AF3_BLACKWELL_ENV%/}/bin/python" ]]; then
+      BW_ENV="${AF3_BLACKWELL_ENV%/}"
+    elif [[ -n "${ENV_PREFIX:-}" && -x "${ENV_PREFIX%/}/bin/python" ]]; then
+      BW_ENV="${ENV_PREFIX%/}"
+    else
+      if command -v conda >/dev/null 2>&1; then
+        _base="$(conda info --base 2>/dev/null || true)"
+        [[ -n "$_base" && -x "${_base%/}/envs/af3_blackwell/bin/python" ]] \
+          && BW_ENV="${_base%/}/envs/af3_blackwell"
+      fi
+      if [[ -z "$BW_ENV" ]]; then
+        for _base in \
+          "${CONDA_PREFIX:-}" \
+          "${MAMBA_ROOT_PREFIX:-}" \
+          "${HOME}/miniconda3" \
+          "${HOME}/miniforge3" \
+          "${HOME}/mambaforge" \
+          "${HOME}/anaconda3" \
+          "/root/autodl-tmp/conda"
+        do
+          [[ -n "$_base" && -x "${_base%/}/envs/af3_blackwell/bin/python" ]] || continue
+          BW_ENV="${_base%/}/envs/af3_blackwell"
+          break
+        done
+      fi
+    fi
+    # Defaults for a fresh install when nothing exists yet.
+    BW_ROOT="${BW_ROOT:-${AF3_BLACKWELL_ROOT:-${_parent:-$BIO_ROOT}/af3_blackwell}}"
+    if [[ -z "$BW_ENV" ]]; then
+      if command -v conda >/dev/null 2>&1; then
+        _base="$(conda info --base 2>/dev/null || true)"
+        BW_ENV="${AF3_BLACKWELL_ENV:-${_base:+${_base%/}/envs/af3_blackwell}}"
+      fi
+      BW_ENV="${BW_ENV:-${HOME}/miniconda3/envs/af3_blackwell}"
+    fi
     if [[ "$GPU_CC" == 12.* ]]; then
       echo "[af3] Blackwell CC $GPU_CC detected; preserving delivery af3 env"
     else
       echo "[af3] AF3_STACK=blackwell forced (GPU CC=${GPU_CC:-unknown}); preserving delivery af3 env"
     fi
+    echo "[af3] discovered BW_ROOT=$BW_ROOT BW_ENV=$BW_ENV"
     if [[ ! -x "$BW_ENV/bin/python" || ! -f "$BW_ROOT/alphafold3/run_alphafold.py" ]]; then
       echo "[af3] installing isolated Blackwell stack via scripts/setup/setup_af3_blackwell.sh"
-      timeout "$(_budget_left)" bash "$SCRIPT_DIR/setup_af3_blackwell.sh" \
+      AF3_ROOT="$BW_ROOT" ENV_PREFIX="$BW_ENV" AF3_BLACKWELL_ROOT="$BW_ROOT" \
+        timeout "$(_budget_left)" bash "$SCRIPT_DIR/setup_af3_blackwell.sh" \
         || { _write_status deferred "blackwell_setup_timeout_or_fail"; return 0; }
+      # Re-read after install (script may resolve a slightly different prefix).
+      BW_ROOT="${AF3_BLACKWELL_ROOT:-$BW_ROOT}"
+      [[ -x "$BW_ENV/bin/python" ]] || BW_ENV="$(dirname "$(dirname "$BW_ENV")")/af3_blackwell"
     fi
     AF3_DIR="$BW_ROOT/alphafold3"
     AF3_PYTHON="$BW_ENV/bin/python"
     AF3_PARAMS="${AF3_PARAMS:-$DELIVERY_ROOT/af3_assets/alphafold_param}"
     AF3_CACHE="${AF3_CACHE:-$BW_ROOT/alphafold_cache}"
-    export AF3_DIR AF3_PYTHON AF3_PARAMS AF3_CACHE
+    export AF3_DIR AF3_PYTHON AF3_PARAMS AF3_CACHE AF3_BLACKWELL_ROOT="$BW_ROOT"
     mkdir -p "$AF3_CACHE"
     echo "[af3] real Blackwell inference smoke ..."
     set +e

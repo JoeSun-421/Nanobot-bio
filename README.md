@@ -46,14 +46,13 @@ cd Nanobot-bio
 #   parent/rhobind_agent_delivery
 
 ./scripts/nbio setup              # first-time: agent .venv + science conda
-source scripts/nbio               # daily: activate + export paths (detect-only, no reinstall)
 nanobot-bio onboard               # pick LLM provider + API key → .env + config refs
-nanobot-bio doctor                # capability table (FAIL/WARN first)
-nanobot-bio chat
-# or: ./scripts/nbio chat
+./scripts/nbio start              # daily one-shot: discover paths → heal AF3/.env → chat
+# ./scripts/nbio start --dry-run  # show GPU/AF3 candidates only (optional heal)
+# source scripts/nbio && nanobot-bio doctor   # step-wise activate + capability table
 ```
 
-Step-by-step install and path notes: [INSTALL.md](INSTALL.md).
+Step-by-step install and path notes: [INSTALL.md](INSTALL.md). Scripts entry and portable path discovery: [`scripts/README.md`](scripts/README.md). Delivery bridge: [`app/backends/delivery/README.md`](app/backends/delivery/README.md).
 
 One-shot prediction example:
 
@@ -67,10 +66,11 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 | Command | Purpose |
 |---------|---------|
+| `./scripts/nbio start` | Daily one-shot: path discovery → GPU/AF3 adapt → heal `.env` → chat (`up` alias) |
 | `nanobot-bio chat` | Multi-turn session; in-chat `/status`, `/help`, `/tools`, `/quit` |
 | `nanobot-bio agent --message "..."` | One-shot prediction (also `--query` / `--rna-file` / `--example`) |
 | `nanobot-bio doctor` | Capability table: paths, rhobind/ESM/RNA/AF3/LLM (`--verbose` for dumps) |
-| `source scripts/nbio` | Portable daily activate (also `status` / `setup` / `chat`) |
+| `source scripts/nbio` | Portable activate only (also `status` / `setup` / `chat`; thin wrappers under `scripts/setup/`) |
 | `nanobot-bio onboard` | Write LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden acceptance (no LLM; `own-head` is its alias) |
 | `nanobot-bio run-eval` | LOO ceiling comparison and modality ablation |
@@ -85,6 +85,8 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | Layout | `rhobind_agent_delivery/` **sibling** to this repo; override with `DELIVERY_ROOT` |
 | Agent env | `.venv` via `./scripts/nbio setup` (wraps `setup_all.sh`) |
 | Science conda | delivery: `protein_embed` / `rna` / `rhobind` / `af3` |
+| Paths | `nbio` discovers `BIO_ROOT` / `AF3_BLACKWELL_ROOT` / conda on the host; AutoDL layouts are candidates only |
+| Structure | Skill: AFDB `structure_fetch` first; AF3 `predict_structure` only on AFDB miss (sequence-only must call it) |
 | LLM | `nanobot-bio onboard` → pick provider (no default); key in `nanobot-bio/.env`, refs in `~/.nanobot/config.json` |
 | Device | `RHOBIND_DEVICE=auto\|cuda\|cpu`; `chat` / `agent` also support `--device` |
 | Memory | RhoBind / ESM prefer ample RAM and CUDA first; low cgroup memory limits risk OOM |
@@ -114,3 +116,7 @@ Each package has a separate English + Chinese README pair (`README.md` / `README
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, memory, bridge, eval/promote, slim vendor, release |
 | [AGENTS.md](AGENTS.md) | Agent / CI must / must-not |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [`docs/README.md`](docs/README.md) | Local docs map (`theory/` · `product/` · `guides/` · `eval/` · `reports/`) |
+| [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md) | Delivery-side theory (RNA-FM / RNA·protein LMs / biomedical agents) |
+| [`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md) | Feishu summary report (progress + Nanobot architecture + delivery bridge; local `docs/`) |
+| [`docs/eval/transfer_test_prompts.md`](docs/eval/transfer_test_prompts.md) | Transfer smoke prompts (20 cases) |

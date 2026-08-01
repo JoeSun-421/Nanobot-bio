@@ -554,6 +554,8 @@ class PredictStructureTool(Tool):
             except Exception:
                 pass
             return dumps(err(f"{detail} | structure_axis=unavailable", ms))
+        if not isinstance(out, dict):
+            return dumps(err("AF3 returned no payload | structure_axis=unavailable", ms))
         if out.get("error") or out.get("ok") is False:
             raw_err = str(out.get("error") or "AF3 failed")
             stderr = str(out.get("stderr") or "")
@@ -623,10 +625,12 @@ class PredictStructureTool(Tool):
                 # region_plddt may be a list of {region, plddt} or a scalar; check min.
                 try:
                     if isinstance(rpl, list):
-                        rvals = [
-                            float(x.get("plddt")) if isinstance(x, dict) else float(x)
-                            for x in rpl
-                        ]
+                        rvals: list[float] = []
+                        for x in rpl:
+                            raw = x.get("plddt") if isinstance(x, dict) else x
+                            if not isinstance(raw, (int, float, str)):
+                                continue
+                            rvals.append(float(raw))
                         rmin = min(rvals) if rvals else None
                     else:
                         rmin = float(rpl)

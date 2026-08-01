@@ -88,7 +88,8 @@ def tool_attribution(
                 except (TypeError, ValueError):
                     sim = 0.0
                 try:
-                    prob = float(s.get("prob")) if s.get("prob") is not None else None
+                    raw_prob = s.get("prob")
+                    prob = float(raw_prob) if raw_prob is not None else None
                 except (TypeError, ValueError):
                     prob = None
                 masses.append(max(sim, 0.0) * (prob if prob is not None else 1.0))
@@ -220,7 +221,11 @@ def propose_toolkit_expansions(
 
     n = max(len(results), 1)
     if n_null_phat / n >= 0.3:
-        top_reason = max(failure_reasons, key=failure_reasons.get) if failure_reasons else "p_hat_null"
+        top_reason = (
+            max(failure_reasons, key=lambda k: failure_reasons[k])
+            if failure_reasons
+            else "p_hat_null"
+        )
         proposals.append(
             {
                 "id": "cluster_null_phat",

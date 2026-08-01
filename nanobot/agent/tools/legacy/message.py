@@ -179,19 +179,15 @@ class MessageTool(Tool, ContextAware):
                 resolved.append(str(resolve_workspace_path(p, workspace, access.allowed_root)))
         return resolved
 
-    async def execute(
-        self,
-        content: str,
-        channel: str | None = None,
-        chat_id: str | None = None,
-        message_id: str | None = None,
-        media: list[str] | None = None,
-        buttons: list[list[str]] | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
         from nanobot.utils.helpers import strip_think
 
-        content = strip_think(content)
+        content = strip_think(str(kwargs.get("content") or ""))
+        channel = kwargs.get("channel")
+        chat_id = kwargs.get("chat_id")
+        message_id = kwargs.get("message_id")
+        media = kwargs.get("media")
+        buttons = kwargs.get("buttons")
 
         if buttons is not None:
             if not isinstance(buttons, list) or any(

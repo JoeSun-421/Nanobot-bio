@@ -136,9 +136,13 @@ def _find_donor_prob(
                 "type": "boolean",
                 "default": False,
                 "description": (
-                    "If true, treat target as unseen: refuse single-alias own-head; "
-                    "require rbps=[foreign donor aliases with panel heads]. "
-                    "Disables near-match own-head Fast Path (runtime stays multi_head)."
+                    "LOO / leave-one-out: treat target as unseen. Pass "
+                    "rbps=[foreign donor aliases with panel heads] — a single "
+                    "foreign donor is valid (weighted vote degenerates). "
+                    "Refuses rbps solely equal to the query/target alias. "
+                    "Also set on commit_proxy_candidates; sticky for the turn "
+                    "when the user requests LOO. Disables near-match own-head "
+                    "Fast Path (runtime stays multi_head)."
                 ),
             },
             "allow_unseen_own_head": {
@@ -171,7 +175,8 @@ class PredictInteractionTool(Tool):
             "RhoBind interaction classifier (delivery rhobind_predict). "
             "OWN-HEAD fast path: after resolve_rbp in_panel=true OR "
             "check_near_known near_match to a headed catalogue RBP, call once with "
-            "rbp_id=<matched alias> then STOP and emit JSON (do not transfer). "
+            "rbp_id=<matched alias> then STOP and emit JSON (do not transfer) — "
+            "unless operator LOO / force_transfer (sticky turn flag or tool arg). "
             "True unseen RBP: pass rbps=[donor aliases]. "
             "On error/OOM do NOT retry — p_hat=null."
         )
@@ -200,22 +205,34 @@ class PredictInteractionTool(Tool):
             return dumps(err("rna and rbps (or rbp_id) are required"))
         rbps_list = [str(x) for x in list(rbps)]
         cohort = kwargs.get("cohort") or "K562"
-        force_transfer = bool(kwargs.get("force_transfer"))
+        force_transfer_kw = bool(kwargs.get("force_transfer"))
         allow_unseen = bool(kwargs.get("allow_unseen_own_head"))
         near_match_promoted = False
         near_match_donor: str | None = None
 
-        if force_transfer:
-            try:
-                from nanobot.agent.tools.rbp.turn_guards import set_force_transfer_active
+        try:
+            from nanobot.agent.tools.rbp.turn_guards import (
+                effective_force_transfer,
+                loo_own_head_blocked_reason,
+                set_force_transfer_active,
+            )
 
-                set_force_transfer_active(True)
-            except Exception:
-                pass
+            if force_transfer_kw:
+                set_force_transfer_active(True, source="predict_arg")
+            force_transfer = effective_force_transfer(force_transfer_kw)
+            loo_block = loo_own_head_blocked_reason(
+                rbps_list=rbps_list,
+                cohort=str(cohort),
+                allow_unseen=allow_unseen,
+            )
+            if loo_block:
+                return dumps(err(loo_block))
+        except Exception:
+            force_transfer = force_transfer_kw
 
         # Proposal Stage 0 near-match Fast Path: if catalogue identity is already
         # established, use that headed RBP as own-head (do not pretend unknown).
-        # Explicit force_transfer=true keeps the multi-donor transfer path.
+        # LOO / force_transfer (sticky turn flag or tool arg) keeps multi_head.
         if not force_transfer:
             try:
                 from nanobot.agent.tools.rbp.turn_guards import (
@@ -239,20 +256,42 @@ class PredictInteractionTool(Tool):
                 near_match_promoted = False
 
         # Proposal §9.2: never call fθ on an unseen target without proxy donors.
+        # LOO force_transfer: a single *foreign* donor is valid (weighted vote
+        # degenerates). Refuse only true own-head disguised as transfer —
+        # rbps equals the query/target alias alone (or only self aliases).
         if not allow_unseen and (force_transfer or len(rbps_list) == 1):
             try:
-                from nanobot.agent.tools.rbp.turn_guards import alias_has_panel_head
+                from nanobot.agent.tools.rbp.turn_guards import (
+                    alias_has_panel_head,
+                    force_transfer_self_aliases,
+                    loo_own_head_blocked_reason,
+                )
 
-                if force_transfer and len(rbps_list) == 1 and not near_match_promoted:
-                    return dumps(
-                        err(
-                            "force_transfer=true: refuse own-head on a single target; "
-                            "pass rbps=[foreign donor aliases with panel heads] only. "
-                            "Explicit force_transfer disables near-match own-head Fast Path."
+                loo_block = loo_own_head_blocked_reason(
+                    rbps_list=rbps_list,
+                    cohort=str(cohort),
+                    allow_unseen=allow_unseen,
+                )
+                if loo_block:
+                    return dumps(err(loo_block))
+                if force_transfer and not near_match_promoted:
+                    self_keys = force_transfer_self_aliases()
+                    folded = [x.casefold() for x in rbps_list]
+                    if self_keys and folded and all(x in self_keys for x in folded):
+                        return dumps(
+                            err(
+                                "force_transfer=true: refuse own-head disguised as "
+                                "transfer — rbps must be foreign donor aliases with "
+                                "panel heads (single foreign donor OK for LOO). "
+                                "Do not pass the query/target alias alone. "
+                                "Explicit force_transfer disables near-match "
+                                "own-head Fast Path."
+                            )
                         )
-                    )
-                if len(rbps_list) == 1 and not alias_has_panel_head(
-                    rbps_list[0], cohort=str(cohort)
+                if (
+                    not force_transfer
+                    and len(rbps_list) == 1
+                    and not alias_has_panel_head(rbps_list[0], cohort=str(cohort))
                 ):
                     return dumps(
                         err(
@@ -297,7 +336,6 @@ class PredictInteractionTool(Tool):
                     alias_has_cohort_head,
                     canonical_request,
                     evidence_flags,
-                    query_target,
                     set_authoritative_score,
                 )
 
@@ -318,10 +356,13 @@ class PredictInteractionTool(Tool):
                             len(rbps_list) / len(requested_donors),
                         )
                     if force_transfer:
-                        exclude_self: set[str] = set()
-                        qt = query_target()
-                        if qt:
-                            exclude_self.add(str(qt).casefold())
+                        from nanobot.agent.tools.rbp.turn_guards import (
+                            force_transfer_self_aliases,
+                        )
+
+                        # Never use the query/target own head; also drop
+                        # near_match_donor so Fast Path cannot leak into LOO.
+                        exclude_self = set(force_transfer_self_aliases())
                         near_d = (evidence_flags() or {}).get("near_match_donor")
                         if near_d:
                             exclude_self.add(str(near_d).casefold())
@@ -461,6 +502,16 @@ class PredictInteractionTool(Tool):
             )
             PredictInteractionTool._cache[key] = result
             return result
+        if not isinstance(out, dict):
+            result = dumps(
+                err(
+                    "rhobind_predict returned no payload; "
+                    "do not retry — emit verdict with p_hat=null",
+                    ms,
+                )
+            )
+            PredictInteractionTool._cache[key] = result
+            return result
         if out.get("error") or out.get("ok") is False:
             result = dumps(
                 err(
@@ -477,11 +528,18 @@ class PredictInteractionTool(Tool):
         path = "own_head" if len(rbps_list) == 1 and not force_transfer else "multi_head"
         if near_match_promoted and len(rbps_list) == 1:
             path = "own_head"
-        probs = [
-            p.get("prob")
-            for p in preds
-            if isinstance(p, dict) and p.get("prob") is not None
-        ]
+        # Explicit loop: comprehension filters do not narrow .get() for basedpyright.
+        probs: list[float] = []
+        for p in preds:
+            if not isinstance(p, dict):
+                continue
+            raw = p.get("prob")
+            if raw is None:
+                continue
+            try:
+                probs.append(float(raw))
+            except (TypeError, ValueError):
+                continue
         if not probs:
             # e.g. unknown alias / no K562 head — not a successful own-head
             try:

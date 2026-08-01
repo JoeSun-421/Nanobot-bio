@@ -110,6 +110,23 @@ def test_own_head_single_alias_skips_abstain_gate(monkeypatch):
     )
 
 
+def test_user_message_loo_seeds_sticky_flag():
+    from nanobot.agent.tools.rbp.turn_guards import (
+        reset_stage_guards,
+        seed_loo_force_transfer_from_user_message,
+        force_transfer_active,
+        evidence_flags,
+    )
+
+    reset_stage_guards()
+    assert seed_loo_force_transfer_from_user_message(
+        "Please run leave-one-out on DROSHA; force transfer, no own-head"
+    )
+    assert force_transfer_active() is True
+    assert evidence_flags().get("loo_force_transfer") is True
+    assert evidence_flags().get("loo_force_transfer_source") == "user_message"
+
+
 def test_fuse_tool_hard_blocks_without_retrieve():
     from nanobot.agent.tools.rbp.evolve_tools import FuseSimilarityViewsTool
     from nanobot.agent.tools.rbp.turn_guards import reset_stage_guards
@@ -124,3 +141,70 @@ def test_fuse_tool_hard_blocks_without_retrieve():
     )
     assert result["status"] == "error"
     assert "retrieve tool" in result["reason"]
+
+
+def test_commit_loo_emits_near_match_loo_disclosed_not_no_head():
+    """LOO / force_transfer must not emit misleading near_match_donor_no_head."""
+    from nanobot.agent.tools.rbp.commit_proxies import CommitProxyCandidatesTool
+    from nanobot.agent.tools.rbp.turn_guards import (
+        add_evidence_flag,
+        evidence_flags,
+        reset_stage_guards,
+        set_fused_proxies,
+    )
+
+    reset_stage_guards()
+    set_fused_proxies(
+        [
+            {
+                "alias": "DROSHA",
+                "score": 1.0,
+                "vote_similarity": 1.0,
+                "sim_by_modality": {"esmc_cosine": 1.0},
+            },
+            {
+                "alias": "DGCR8",
+                "score": 0.88,
+                "vote_similarity": 0.92,
+                "sim_by_modality": {"esmc_cosine": 0.92},
+            },
+        ]
+    )
+    add_evidence_flag("near_match", True)
+    add_evidence_flag("near_match_donor", "DROSHA")
+    raw = json.loads(
+        asyncio.run(
+            CommitProxyCandidatesTool().execute(
+                candidates=[{"alias": "DGCR8"}],
+                tau_drop=0.30,
+                n_cand=5,
+                force_transfer=True,
+            )
+        )
+    )
+    assert raw["status"] == "ok"
+    flags = evidence_flags() or {}
+    assert flags.get("near_match_loo_disclosed") is True
+    assert "near_match_donor_no_head" not in flags
+
+
+def test_loo_path_contract_assertions_documented():
+    """Contract checklist for future accept-llm LOO (no GPU/API)."""
+    from nanobot.agent.tools.rbp.turn_guards import (
+        force_transfer_active,
+        reset_stage_guards,
+        seed_loo_force_transfer_from_user_message,
+        transfer_predict_blocked_reason,
+    )
+
+    reset_stage_guards()
+    assert seed_loo_force_transfer_from_user_message(
+        "LOO leave-one-out force_transfer=true treat as unseen"
+    )
+    assert force_transfer_active() is True
+    # Own-head on the query alone must stay refused under sticky LOO.
+    reason = transfer_predict_blocked_reason(
+        force_transfer=False, rbps=["DROSHA"], cohort="K562"
+    )
+    # Either own-head refuse or stage-order block — never a silent own-head pass.
+    assert reason is not None

@@ -133,19 +133,15 @@ class CronTool(Tool, ContextAware):
             errors.append("job_id is required when action='remove'")
         return errors
 
-    async def execute(
-        self,
-        action: str,
-        name: str | None = None,
-        message: str = "",
-        every_seconds: int | None = None,
-        cron_expr: str | None = None,
-        tz: str | None = None,
-        at: str | None = None,
-        job_id: str | None = None,
-        deliver: bool = True,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        action = str(kwargs.get("action") or "")
+        name = kwargs.get("name")
+        message = str(kwargs.get("message") or "")
+        every_seconds = kwargs.get("every_seconds")
+        cron_expr = kwargs.get("cron_expr")
+        tz = kwargs.get("tz")
+        at = kwargs.get("at")
+        job_id = kwargs.get("job_id")
         if action == "add":
             if self._in_cron_context.get():
                 return "Error: cannot schedule new jobs from within a cron job execution"

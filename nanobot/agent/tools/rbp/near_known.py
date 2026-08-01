@@ -29,6 +29,45 @@ def _near_threshold() -> float:
         return 0.95
 
 
+def _near_match_own_head_hint(*, donor_placeholder: str = "<donor_alias>") -> str:
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import force_transfer_active
+
+        if force_transfer_active():
+            return (
+                "near_match under LOO / force_transfer: disclose near_match in "
+                "caveats; do NOT own-head on the query/target. Continue Stage 1–3 "
+                "retrieve → fuse → commit(force_transfer=true) → abstain → "
+                "predict(force_transfer=true, rbps=[foreign donors only]). "
+                "Stage 0 own-head STOP is overridden."
+            )
+    except Exception:
+        pass
+    return (
+        f"near_match own-head Fast Path: call predict_interaction once "
+        f"with rbp_id={donor_placeholder} (no force_transfer), disclose "
+        "near_match, then STOP. force_transfer=true disables own-head Fast Path."
+    )
+
+
+def _not_near_known_hint() -> str:
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import force_transfer_active
+
+        if force_transfer_active():
+            return (
+                "not near-known; LOO / force_transfer active — continue Stage 1 "
+                "retrieve → fuse → commit(force_transfer=true) → abstain → "
+                "predict on foreign donors only (exclude query/target)."
+            )
+    except Exception:
+        pass
+    return (
+        "not near-known; continue characterize → parallel retrieve → "
+        "fuse → abstain → predict"
+    )
+
+
 def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
     """Normalize hit score to [0,1] identity when metric looks like identity."""
     try:
@@ -57,7 +96,7 @@ def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
         if s > 1.0 + 1e-9:
             return s / 100.0
         # Ambiguous 0–1: treat as identity only if already near threshold helper agrees
-        if is_near_match_score and is_near_match_score(s, 0.90):
+        if is_near_match_score and is_near_match_score(s, threshold=0.90):
             return s if s <= 1.0 else s / 100.0
     return None
 
@@ -166,12 +205,8 @@ class CheckNearKnownTool(Tool):
                         "hits": [],
                         "sequence_source": src,
                         "match_basis": "resolve_exact_catalogue_identifier",
-                        "hint": (
-                            "near_match own-head Fast Path: exact resolved "
-                            "catalogue identity; call predict_interaction once "
-                            "on donor_alias (no force_transfer), disclose "
-                            "near_match, then STOP. "
-                            "force_transfer=true disables own-head Fast Path."
+                        "hint": _near_match_own_head_hint(
+                            donor_placeholder=str(exact_alias or exact_id)
                         ),
                     }
                     try:
@@ -203,13 +238,8 @@ class CheckNearKnownTool(Tool):
                             "hits": [],
                             "sequence_source": src,
                             "match_basis": "exact_catalogue_sequence",
-                            "hint": (
-                                "near_match own-head Fast Path: query AA exactly "
-                                "matches catalogue FASTA for donor_alias (MMseqs "
-                                "may under-report on low-complexity regions); "
-                                "call predict_interaction once on donor_alias "
-                                "(no force_transfer), disclose near_match, then STOP. "
-                                "force_transfer=true disables own-head Fast Path."
+                            "hint": _near_match_own_head_hint(
+                                donor_placeholder=donor
                             ),
                         }
                         try:
@@ -280,12 +310,9 @@ class CheckNearKnownTool(Tool):
                 "hits": hits[:5],
                 "sequence_source": src,
                 "hint": (
-                    "near_match own-head Fast Path: call predict_interaction once "
-                    "with rbp_id=<donor_alias> (no force_transfer), disclose "
-                    "near_match in the explanation, then STOP. "
-                    "force_transfer=true disables own-head Fast Path."
+                    _near_match_own_head_hint(donor_placeholder="<donor_alias>")
                     if near
-                    else "not near-known; continue characterize → parallel retrieve → fuse → abstain → predict"
+                    else _not_near_known_hint()
                 ),
             }
             if near:

@@ -47,6 +47,27 @@ class JsonlTraceHook:
     def log(self, event: dict[str, Any]) -> None:
         self.push_event(event)
 
+    def emit_query_end(
+        self,
+        *,
+        content: Optional[str] = None,
+        tools_used: Optional[list[str]] = None,
+        verdict: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """API-compatible with ``nanobot_hooks.RBPTraceHook.emit_query_end``."""
+        donors: list[Any] = []
+        if isinstance(verdict, dict):
+            donors = list(verdict.get("supporting_rbps") or [])
+        self.push_event(
+            {
+                "type": "query_end",
+                "verdict": verdict,
+                "donors": donors,
+                "tools_used": tools_used or [],
+                "content": content,
+            }
+        )
+
     def on_query_end(
         self,
         query: str,

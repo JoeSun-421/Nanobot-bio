@@ -80,16 +80,16 @@ def main() -> int:
     add("similarity_weighted_vote run", vote.get("score") is not None, str(vote.get("score")))
 
     tprior = cli.call("transfer_prior_lookup", {"target": "PTBP1", "donors": ["U2AF2", "QKI"]})
-    add("transfer_prior_lookup run", "priors" in tprior, tprior.get("error"))
+    add("transfer_prior_lookup run", "priors" in tprior, str(tprior.get("error") or ""))
 
     qual = cli.call("donor_quality_prior", {"donors": ["U2AF2"], "cohort": "K562"})
-    add("donor_quality_prior run", "quality" in qual, qual.get("error"))
+    add("donor_quality_prior run", "quality" in qual, str(qual.get("error") or ""))
 
     abst = cli.call(
         "confidence_abstain",
         {"hits": [{"alias": "U2AF2", "score": 0.96, "metric": "esmc_cosine"}]},
     )
-    add("confidence_abstain run", "confident" in abst, abst.get("error"))
+    add("confidence_abstain run", "confident" in abst, str(abst.get("error") or ""))
 
     # Fixed pipeline removed — Stage-0 wiring checked via resolve + examples
     from app.backends.delivery.examples import load_example

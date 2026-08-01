@@ -20,7 +20,7 @@ Nanobot 工作区根：同步的 skill 与（符号链接的）session/memory �
 | `memory` → `../artifacts/memory` | PA 长期记忆符号链接（科学提示中排除） |
 | `AGENTS.md` | 工作区级短提示（阶段 0 own-head 等） |
 
-规范存储与辅助：`app.core.paths.ensure_artifact_dirs()`。细节见 [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2（若有本地 `docs/MEMORY_AND_SESSIONS.zh.md`）。
+规范存储与辅助：`app.core.paths.ensure_artifact_dirs()`。细节见 [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2（若有本地 `docs/guides/MEMORY_AND_SESSIONS.zh.md`）。
 
 环境变量：
 

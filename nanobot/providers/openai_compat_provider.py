@@ -420,7 +420,7 @@ class OpenAICompatProvider(LLMProvider):
             http_client=http_client,
         )
 
-    async def _ensure_client(self):
+    async def _ensure_client(self) -> Any:
         """Return the shared OpenAI client, creating it on first call."""
         if self._client is not None:
             return self._client
@@ -430,7 +430,7 @@ class OpenAICompatProvider(LLMProvider):
             global AsyncOpenAI
             if AsyncOpenAI is None:
                 if os.environ.get("LANGFUSE_SECRET_KEY") and importlib.util.find_spec("langfuse"):
-                    from langfuse.openai import AsyncOpenAI as _AsyncOpenAI
+                    _AsyncOpenAI = importlib.import_module("langfuse.openai").AsyncOpenAI
                 else:
                     if os.environ.get("LANGFUSE_SECRET_KEY"):
                         logger.warning(
@@ -441,6 +441,8 @@ class OpenAICompatProvider(LLMProvider):
                 AsyncOpenAI = _AsyncOpenAI
 
             self._build_client()
+            if self._client is None:
+                raise RuntimeError("OpenAI client failed to initialize")
             return self._client
 
     def _setup_env(self, api_key: str, api_base: str | None) -> None:
@@ -1156,11 +1158,11 @@ class OpenAICompatProvider(LLMProvider):
         content = msg.content
         finish_reason = choice.finish_reason
 
-        raw_tool_calls: list[Any] = []
+        sdk_raw_tool_calls: list[Any] = []
         for ch in response.choices:
             m = ch.message
             if hasattr(m, "tool_calls") and m.tool_calls:
-                raw_tool_calls.extend(m.tool_calls)
+                sdk_raw_tool_calls.extend(m.tool_calls)
                 if ch.finish_reason in ("tool_calls", "stop"):
                     finish_reason = ch.finish_reason
             if not content and m.content:
@@ -1169,7 +1171,7 @@ class OpenAICompatProvider(LLMProvider):
                 content = m.reasoning
 
         tool_calls = []
-        for tc in raw_tool_calls:
+        for tc in sdk_raw_tool_calls:
             args = parse_tool_arguments(tc.function.arguments)
             ec, prov, fn_prov = _extract_tc_extras(tc)
             tool_calls.append(ToolCallRequest(
@@ -1431,7 +1433,7 @@ class OpenAICompatProvider(LLMProvider):
         reasoning_effort: str | None = None,
         tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
-        await self._ensure_client()
+        client = await self._ensure_client()
         try:
             if self._should_use_responses_api(model, reasoning_effort):
                 try:
@@ -1439,7 +1441,7 @@ class OpenAICompatProvider(LLMProvider):
                         messages, tools, model, max_tokens, temperature,
                         reasoning_effort, tool_choice,
                     )
-                    result = parse_response_output(await self._client.responses.create(**body))
+                    result = parse_response_output(await client.responses.create(**body))
                     self._record_responses_success(model, reasoning_effort)
                     return result
                 except Exception as responses_error:
@@ -1458,7 +1460,7 @@ class OpenAICompatProvider(LLMProvider):
                 messages, tools, model, max_tokens, temperature,
                 reasoning_effort, tool_choice,
             )
-            return self._parse(await self._client.chat.completions.create(**kwargs))
+            return self._parse(await client.chat.completions.create(**kwargs))
         except Exception as e:
             return self._handle_error(e, spec=self._spec, api_base=self.api_base)
 
@@ -1475,7 +1477,7 @@ class OpenAICompatProvider(LLMProvider):
         on_thinking_delta: Callable[[str], Awaitable[None]] | None = None,
         on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> LLMResponse:
-        await self._ensure_client()
+        client = await self._ensure_client()
         idle_timeout_s = resolve_stream_idle_timeout_s()
         try:
             if self._should_use_responses_api(model, reasoning_effort):
@@ -1485,7 +1487,7 @@ class OpenAICompatProvider(LLMProvider):
                         reasoning_effort, tool_choice,
                     )
                     body["stream"] = True
-                    stream = await self._client.responses.create(**body)
+                    stream = await client.responses.create(**body)
 
                     async def _timed_stream():
                         stream_iter = stream.__aiter__()
@@ -1541,7 +1543,7 @@ class OpenAICompatProvider(LLMProvider):
                 kwargs.setdefault("extra_body", {})["tool_stream"] = True
             kwargs["stream"] = True
             kwargs["stream_options"] = {"include_usage": True}
-            stream = await self._client.chat.completions.create(**kwargs)
+            stream = await client.chat.completions.create(**kwargs)
             chunks: list[Any] = []
             stream_iter = stream.__aiter__()
             while True:

@@ -11,21 +11,21 @@ from nanobot.agent.tools.rbp import register_all as register_proposal_tools
 
 RawMode = Union[bool, str]
 
-# Product default: whitelist (curated P0-P2 + Stage extras). Set env RBP_RAW_TOOLS=all
-# to opt into the full 37-tool set for debugging / exhaustive delivery coverage.
-DEFAULT_RAW_MODE = "whitelist"
+# Product default: full delivery surface (curated P0–P2 + every SCRIPT_MAP tool).
+# Narrow MVP: RBP_RAW_TOOLS=whitelist (or include_raw_delivery="whitelist"/"mvp").
+DEFAULT_RAW_MODE = "all"
 
 
 def _normalize_raw_mode(include_raw_delivery: RawMode) -> str:
-    """Map API → none | whitelist | all. Default for True / all_ready is all."""
+    """Map API → none | whitelist | all. Default for True / all_ready / unknown is all."""
     if include_raw_delivery is False or include_raw_delivery in ("none", "false", 0):
         return "none"
     if include_raw_delivery in ("whitelist", "mvp"):
         return "whitelist"
     if include_raw_delivery in (True, "all", "all_ready", "ready"):
         return "all"
-    # Unknown strings → whitelist (product default), not full-open
-    return "whitelist"
+    # Unknown strings → product default (full surface)
+    return DEFAULT_RAW_MODE
 
 
 def register_rbp_tools(
@@ -37,8 +37,8 @@ def register_rbp_tools(
     Register RBP tools onto a Nanobot ToolRegistry.
 
     ``include_raw_delivery``:
-      - ``"all"`` / ``"all_ready"`` / ``True`` — every delivery SCRIPT_MAP tool (final)
-      - ``"whitelist"`` / ``"mvp"`` — Stage extras only (narrow MVP)
+      - ``"all"`` / ``"all_ready"`` / ``True`` — every delivery SCRIPT_MAP tool (product default)
+      - ``"whitelist"`` / ``"mvp"`` — Stage extras only (narrow MVP opt-out)
       - ``False`` / ``"none"`` — curated P0–P2 tools only
 
     Returns (registry, registered_names).

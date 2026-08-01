@@ -103,13 +103,43 @@ def conda_env_python(name: str) -> Optional[Path]:
 
     Standalone resolver (no import of client.py, to avoid a circular import).
     Mirrors ``DeliveryToolClient._conda_env_prefix`` fast path + ``conda env list``.
+
+    Search order is portable: ``ENV_PREFIX``, ``conda info --base``, common
+    home installs, then host-specific layouts (e.g. AutoDL) as last resorts.
     """
+    env_prefix = os.environ.get("ENV_PREFIX")
+    if env_prefix:
+        p = Path(env_prefix).expanduser()
+        if p.name == name:
+            py = p / "bin" / "python"
+            if py.is_file():
+                return py
+    if name == "af3_blackwell":
+        bw_env = os.environ.get("AF3_BLACKWELL_ENV")
+        if bw_env:
+            py = Path(bw_env).expanduser() / "bin" / "python"
+            if py.is_file():
+                return py
+
     envs_roots: list[Path] = []
     for key in ("CONDA_ENVS_PATH", "CONDA_ENVS_DIRS"):
         raw = os.environ.get(key) or ""
         for part in raw.split(os.pathsep):
             if part.strip():
                 envs_roots.append(Path(part.strip()))
+    try:
+        r = subprocess.run(
+            ["conda", "info", "--base"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if r.returncode == 0:
+            base = (r.stdout or "").strip()
+            if base:
+                envs_roots.append(Path(base) / "envs")
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
     for base in (
         os.environ.get("CONDA_PREFIX"),
         os.environ.get("MAMBA_ROOT_PREFIX"),
@@ -117,13 +147,20 @@ def conda_env_python(name: str) -> Optional[Path]:
         os.path.expanduser("~/anaconda3"),
         os.path.expanduser("~/mambaforge"),
         os.path.expanduser("~/miniforge3"),
+        # Host-specific data-disk layouts (optional; not required).
+        "/root/autodl-tmp/conda",
     ):
         if base:
             envs_roots.append(Path(base) / "envs")
             p = Path(base)
             if p.name != "envs" and (p.parent / "envs").is_dir():
                 envs_roots.append(p.parent / "envs")
+    seen: set[str] = set()
     for root in envs_roots:
+        key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
         py = root / name / "bin" / "python"
         if py.is_file():
             return py
@@ -204,48 +241,105 @@ def apply_delivery_env() -> dict[str, str]:
         "HF_ENDPOINT": "https://hf-mirror.com",
     }
     # AF3_PYTHON must be a conda interpreter with alphafold3 — NOT the agent .venv.
-    # Isolated Blackwell stack wins over stale .env unless AF3_FORCE_CLASSIC=1.
-    # Discovery is portable: AF3_BLACKWELL_ROOT / AF3_DIR / BIO_ROOT / conda envs.
+    # Isolated Blackwell stack wins over stale .env unless AF3_FORCE_CLASSIC=1
+    # (ignored on compute_cap 12.* — classic jax cannot run on Blackwell).
+    # Discovery is portable: AF3_BLACKWELL_ROOT → adjacent to BIO_ROOT / checkout →
+    # ~/af3_blackwell → /opt → host-specific (e.g. AutoDL) last.
+    # Never treat delivery classic AF3_DIR (…/third_party/alphafold3) as blackwell.
+    def _gpu_compute_cap() -> Optional[str]:
+        try:
+            r = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=compute_cap",
+                    "--format=csv,noheader",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if r.returncode == 0:
+                for line in r.stdout.splitlines():
+                    line = line.strip()
+                    if line:
+                        return line
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return None
+        return None
+
+    def _looks_blackwell_af3(path: Path) -> bool:
+        s = str(path).replace("\\", "/")
+        return "af3_blackwell" in s
+
     def _af3_blackwell_srcdir() -> Optional[Path]:
         cands: list[Path] = []
-        for key in ("AF3_BLACKWELL_ROOT",):
-            raw = os.environ.get(key)
-            if raw:
-                cands.append(Path(raw).expanduser() / "alphafold3")
-                cands.append(Path(raw).expanduser())
+        raw = os.environ.get("AF3_BLACKWELL_ROOT") or os.environ.get("AF3_ROOT")
+        if raw:
+            root = Path(raw).expanduser()
+            cands.append(root / "alphafold3")
+            cands.append(root)
+        # Stale .env often sets AF3_DIR=delivery classic while AF3_PYTHON=blackwell.
+        # Only trust AF3_DIR when the path itself is clearly the blackwell tree.
         af3_dir = os.environ.get("AF3_DIR")
         if af3_dir:
-            cands.append(Path(af3_dir).expanduser())
+            p = Path(af3_dir).expanduser()
+            if _looks_blackwell_af3(p):
+                cands.append(p)
+        # Checkout-relative: …/nanobot-bio/app/backends/delivery/env.py → bio parent
+        here = Path(__file__).resolve()
+        try:
+            bio_agent = here.parents[4]  # …/bio_agent (sibling of nanobot-bio)
+            cands.append(bio_agent / "af3_blackwell" / "alphafold3")
+            cands.append(bio_agent.parent / "af3_blackwell" / "alphafold3")
+        except IndexError:
+            pass
         bio = os.environ.get("BIO_ROOT")
         if bio:
-            cands.append(Path(bio).expanduser() / "af3_blackwell" / "alphafold3")
+            bp = Path(bio).expanduser()
+            cands.append(bp / "af3_blackwell" / "alphafold3")
+            cands.append(bp.parent / "af3_blackwell" / "alphafold3")
         home = Path.home()
         cands.extend(
             [
                 home / "af3_blackwell" / "alphafold3",
                 Path("/opt/af3_blackwell/alphafold3"),
+                # Optional host-specific layout (not authoritative).
+                Path("/root/autodl-tmp/af3_blackwell/alphafold3"),
             ]
         )
+        seen: set[str] = set()
         for p in cands:
-            if (p / "run_alphafold.py").is_file():
+            key = str(p)
+            if key in seen:
+                continue
+            seen.add(key)
+            if (p / "run_alphafold.py").is_file() and _looks_blackwell_af3(p):
                 return p.resolve()
         return None
 
     bw_af3 = _af3_blackwell_srcdir()
     bw_py = conda_env_python("af3_blackwell")
-    use_bw = (
-        os.environ.get("AF3_FORCE_CLASSIC", "").strip().lower() not in {"1", "true", "yes"}
-        and bw_py is not None
-        and bw_af3 is not None
-    )
+    gpu_cc = _gpu_compute_cap()
+    force_classic = os.environ.get("AF3_FORCE_CLASSIC", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if force_classic and gpu_cc and gpu_cc.startswith("12"):
+        # Classic AF3 jax cannot execute on Blackwell; ignore mistaken override.
+        force_classic = False
+        os.environ.pop("AF3_FORCE_CLASSIC", None)
+    use_bw = (not force_classic) and bw_py is not None and bw_af3 is not None
     if use_bw:
         assert bw_af3 is not None and bw_py is not None
         os.environ["AF3_PYTHON"] = str(bw_py)
         os.environ["AF3_DIR"] = str(bw_af3)
         os.environ["AF3_CACHE"] = str(bw_af3.parent / "alphafold_cache")
+        os.environ["AF3_BLACKWELL_ROOT"] = str(bw_af3.parent)
         defaults["AF3_PYTHON"] = str(bw_py)
         defaults["AF3_DIR"] = str(bw_af3)
         defaults["AF3_CACHE"] = str(bw_af3.parent / "alphafold_cache")
+        defaults["AF3_BLACKWELL_ROOT"] = str(bw_af3.parent)
     elif "AF3_PYTHON" not in os.environ:
         af3_py = conda_env_python("af3")
         if af3_py is not None:

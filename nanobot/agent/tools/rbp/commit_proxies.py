@@ -15,6 +15,15 @@ from nanobot.agent.tools.core.base import Tool, tool_parameters
 from nanobot.agent.tools.rbp.common import dumps, err, ok
 
 
+def _as_float(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _candidate_id(row: dict[str, Any]) -> str | None:
     rid = (
         row.get("rbp_id")
@@ -32,10 +41,7 @@ def _row_similarity(row: dict[str, Any]) -> float | None:
         raw = row.get("similarity_score")
     if raw is None:
         raw = row.get("score")
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
+    return _as_float(raw)
 
 
 def _normalize_candidate(row: dict[str, Any], *, tau_drop: float) -> dict[str, Any] | None:
@@ -78,10 +84,11 @@ def _normalize_candidate(row: dict[str, Any], *, tau_drop: float) -> dict[str, A
         "rationale": rationale
         or "deterministic multi-view fusion",
     }
-    if row.get("fused_score") is not None or row.get("score") is not None:
-        out["fused_score"] = round(
-            float(row.get("fused_score", row.get("score"))), 4
-        )
+    fused = _as_float(row.get("fused_score"))
+    if fused is None:
+        fused = _as_float(row.get("score"))
+    if fused is not None:
+        out["fused_score"] = round(fused, 4)
     if isinstance(row.get("sim_by_modality"), dict):
         out["sim_by_modality"] = dict(row["sim_by_modality"])
     if row.get("uniprot"):
@@ -115,8 +122,9 @@ def _normalize_candidate(row: dict[str, Any], *, tau_drop: float) -> dict[str, A
                 "type": "boolean",
                 "default": False,
                 "description": (
-                    "If true, treat target as unseen for this turn: do not inject "
-                    "near_match_donor into the commit pool (runtime keeps transfer path)."
+                    "LOO / leave-one-out: treat target as unseen. Do not inject "
+                    "near_match_donor; exclude query/target self from the commit "
+                    "pool (foreign donors only; runtime keeps transfer path)."
                 ),
             },
         },
@@ -168,7 +176,7 @@ class CommitProxyCandidatesTool(Tool):
             try:
                 from nanobot.agent.tools.rbp.turn_guards import set_force_transfer_active
 
-                set_force_transfer_active(True)
+                set_force_transfer_active(True, source="commit_arg")
             except Exception:
                 pass
 
@@ -176,14 +184,20 @@ class CommitProxyCandidatesTool(Tool):
             from nanobot.agent.tools.rbp.turn_guards import (
                 evidence_flags,
                 force_transfer_active,
+                force_transfer_self_aliases,
             )
 
             near_donor = evidence_flags().get("near_match_donor")
             skip_near_inject = force_transfer_active()
+            exclude_self_keys = (
+                set(force_transfer_self_aliases()) if skip_near_inject else set()
+            )
+            if skip_near_inject and near_donor:
+                exclude_self_keys.add(str(near_donor).casefold())
         except Exception:
             near_donor = None
             skip_near_inject = False
-        near_donor_key = str(near_donor or "").casefold()
+            exclude_self_keys = set()
 
         raw = kwargs.get("candidates")
         if not isinstance(raw, list) or not raw:
@@ -195,13 +209,14 @@ class CommitProxyCandidatesTool(Tool):
             cfg = get_runtime_config()
         except Exception:
             cfg = {}
-        tau = kwargs.get("tau_drop")
-        tau_f = float(tau) if tau is not None else float(cfg.get("tau_drop") or 0.30)
+        tau_f = _as_float(kwargs.get("tau_drop"))
+        if tau_f is None:
+            tau_f = _as_float(cfg.get("tau_drop")) or 0.30
         n_cand = kwargs.get("n_cand")
         n_max = int(n_cand) if n_cand is not None else int(cfg.get("n_cand") or 5)
         integrate = cfg.get("integrate") or {}
         require_cohort_head = integrate.get("require_cohort_head", True) is not False
-        min_vote_similarity = float(integrate.get("min_vote_similarity", 0.35))
+        min_vote_similarity = _as_float(integrate.get("min_vote_similarity")) or 0.35
         try:
             from nanobot.agent.tools.rbp.turn_guards import canonical_request
 
@@ -293,8 +308,7 @@ class CommitProxyCandidatesTool(Tool):
                 and (_row_similarity(row) or 0.0) >= min_vote_similarity
                 and not (
                     skip_near_inject
-                    and near_donor_key
-                    and str(_candidate_id(row) or "").casefold() == near_donor_key
+                    and str(_candidate_id(row) or "").casefold() in exclude_self_keys
                 )
             ),
             key=lambda row: float(row["sim_by_modality"]["esmc_cosine"]),
@@ -336,6 +350,25 @@ class CommitProxyCandidatesTool(Tool):
             reverse=True,
         )
         kept = (required_esm + remainder)[:n_max]
+        # LOO / force_transfer: never keep the query/target (or near_match-to-self
+        # / near_match_donor) in the commit pool — foreign donors only.
+        if skip_near_inject and exclude_self_keys:
+            before_n = len(kept)
+            kept = [
+                row
+                for row in kept
+                if str(_candidate_id(row) or "").casefold() not in exclude_self_keys
+            ]
+            if len(kept) < before_n:
+                try:
+                    from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                    add_evidence_flag(
+                        "force_transfer_excluded_self",
+                        sorted(exclude_self_keys),
+                    )
+                except Exception:
+                    pass
         # Near-match donor must be present for dominant-head aggregation even if
         # the LLM omitted it from the selection payload — unless force_transfer
         # explicitly keeps the multi-donor transfer path.
@@ -369,6 +402,15 @@ class CommitProxyCandidatesTool(Tool):
                         or "near_match_donor forced into commit pool"
                     )
                 kept = ([near_item] + kept)[:n_max]
+        elif near_donor and skip_near_inject:
+            # LOO / force_transfer: near_match is disclosed but own-head inject
+            # is intentionally skipped — not a missing-head failure.
+            try:
+                from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+                add_evidence_flag("near_match_loo_disclosed", True)
+            except Exception:
+                pass
         elif near_donor:
             try:
                 from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag

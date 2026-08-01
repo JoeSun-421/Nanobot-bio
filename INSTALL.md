@@ -38,14 +38,15 @@ cd Nanobot-bio
 # 或仅 agent 层（无 conda）：
 # ./scripts/nbio setup --skip-conda
 
-source scripts/nbio                   # 日常：探测 + 激活 .venv（不重装）
 nanobot-bio onboard                   # 显式选择 LLM 厂商 + key（写入 .env）
-nanobot-bio doctor                    # 功能能力表（异常优先）；明细加 --verbose
+./scripts/nbio start                  # 日常万能一键：纠偏 AF3 → chat
+# ./scripts/nbio start --dry-run      # 只看路径/GPU 适配（可顺带 heal .env）
+# source scripts/nbio && nanobot-bio doctor   # 分步：激活 + 能力表
 ```
 
-`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio`](scripts/nbio)。
+`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio`](scripts/nbio)。
 
-**环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常只需 `source scripts/nbio` + `nanobot-bio chat`，**不必每次** setup。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
+**环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常用 `./scripts/nbio start`（或 `source scripts/nbio` + `nanobot-bio chat`），**不必每次** setup。`start` 在本机**自动搜寻** AF3 / conda 路径（`$AF3_BLACKWELL_ROOT`、BIO 旁 `af3_blackwell`、`~/af3_blackwell`、`conda info --base` 等；AutoDL 布局只是候选之一），CC12 上纠偏 classic→blackwell，默认备份后改写 `.env`。用 `start --dry-run` 可只看候选列表。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
 
 ### 路径 B：Docker（隔离环境，推荐给只跑不开发的协作方）
 
@@ -143,19 +144,22 @@ bash scripts/setup/setup_all_blackwell.sh    # = setup_all.sh --af3-stack=blackw
 # bash scripts/setup/setup_af3_blackwell.sh
 ```
 
-然后在 `.env` 指向仓外树（权重仍用 delivery 的 `AF3_PARAMS`）：
+然后让本机路径写入 `.env`（权重仍用 delivery 的 `AF3_PARAMS`）。**不要**手抄试验机 AutoDL 绝对路径；用发现结果：
 
 ```bash
-AF3_DIR=/root/autodl-tmp/af3_blackwell/alphafold3
-AF3_PYTHON=/root/autodl-tmp/conda/envs/af3_blackwell/bin/python
-AF3_PARAMS=$DELIVERY_ROOT/af3_assets/alphafold_param
-AF3_CACHE=/root/autodl-tmp/af3_blackwell/alphafold_cache
+./scripts/nbio start --dry-run    # 查看本机 AF3_BLACKWELL_ROOT / AF3_PYTHON 候选
+./scripts/nbio start --heal       # 将本机探测路径写入 .env（先备份）
+# 或手动（示例占位，换成 dry-run 打印的路径）：
+# AF3_DIR=$AF3_BLACKWELL_ROOT/alphafold3
+# AF3_PYTHON=$(conda info --base)/envs/af3_blackwell/bin/python
+# AF3_PARAMS=$DELIVERY_ROOT/af3_assets/alphafold_param
+# AF3_CACHE=$AF3_BLACKWELL_ROOT/alphafold_cache
 ```
 
 成功后 AF3 状态文件（默认 `~/.cache/nanobot-bio/af3_status`，可用 `AF3_STATUS_FILE` 覆盖；不再写入仓内）应为 `state=ok`（否则 agent 会把结构轴标成 deferred）。
 `setup_all.sh`（`AF3_STACK=auto`）会检测 CC 12 并自动选择这个隔离环境；非 5090 机用 `setup_all_ampere_or_older.sh` 强制经典 `af3`。均不覆盖 delivery 的官方 `af3` 环境。
 
-版本矩阵、ColabFold MSA 限制与发行改进清单见 [docs/AF3_RUNTIME_AND_RELEASE.zh.md](docs/AF3_RUNTIME_AND_RELEASE.zh.md)。
+版本矩阵、ColabFold MSA 限制与发行改进清单见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md)。
 
 ---
 
@@ -195,7 +199,7 @@ nanobot-bio gate             # 5. 工程门（ruff + pytest + layout + 可选 LO
 
 delivery 原生 `agent/examples/run_example.sh` 仅用于**无 app 层时的回归**（直接调 delivery 脚本），协作方验收请走 `nanobot-bio accept-golden`。
 
-报告输出到 `artifacts/reports/{json,md,csv}/`（或 `~/.nanobot-bio/artifacts/reports/` 当 env 覆盖时）。会话 / PA 记忆 / 领域记忆（proxy_map）规范路径见 [`docs/MEMORY_AND_SESSIONS.zh.md`](docs/MEMORY_AND_SESSIONS.zh.md)（`workspace/sessions|memory` 仅为 symlink）。
+报告输出到 `artifacts/reports/{json,md,csv}/`（或 `~/.nanobot-bio/artifacts/reports/` 当 env 覆盖时）。会话 / PA 记忆 / 领域记忆（proxy_map）规范路径见 [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md)（`workspace/sessions|memory` 仅为 symlink）。
 
 ### 4.1 CI 与 self-hosted runner
 
@@ -216,8 +220,8 @@ delivery 原生 `agent/examples/run_example.sh` 仅用于**无 app 层时的回�
 ## 5. 常见问题
 
 - **`predict_interaction` / doctor 报缺 `torch`（rhobind hollow）**：conda 环境名在，但未装 release requirements（常见于手搓 `conda create -n rhobind`）。`doctor` 会显示 `rhobind torch+transformers: MISSING` 且 `[RED] science_envs`。修复：`bash scripts/setup/setup_all.sh`（会 heal），勿只跑 delivery `setup_envs.sh`。
-- **`doctor` 报 AF3 deferred/broken**：常见。无 AFDB 时仍会尝试 `predict_structure` 一次（`use_af3_fallback=true`）；失败则 caveat，序列/功能轴继续。重跑 `bash scripts/setup/setup_all.sh`（AF3 harden 10 分钟预算）可改善探针。
+- **`doctor` 报 AF3 deferred/broken**：常见。Skill 规则：先 AFDB `structure_fetch`，**仅 AFDB miss** 时调 `predict_structure`（`use_af3_fallback=true`）；仅序列 / 无 accession 目标必须走 AF3 一次。失败则 caveat，序列/功能轴继续；**勿**把结构 miss 当成相似度 `0`。重跑 `bash scripts/setup/setup_all.sh`（AF3 harden 10 分钟预算）可改善探针。
 - **`onboard` 后 chat 仍报 no key**：确认已显式选择厂商；密钥在 `nanobot-bio/.env`（如 `OPENAI_API_KEY=` / `DEEPSEEK_API_KEY=`），`~/.nanobot/config.json` 里是 `${…_API_KEY}` 引用而非明文；检查 `NANOBOT_CONFIG` 路径。
 - **CI 跳过 own-head/LOO**：public CI 无 GPU/delivery bundle。本地跑 `bash scripts/ci/ci_gate.sh` 或 `rbp-agent gate`。
 - **CI 跳过 delivery 依赖测试**：公开 `test` job 无同级 `rhobind_agent_delivery`。`tests/conftest.py` 在 `delivery_root()` 不可用时 **skip**（非整批 fail）；标记 `@pytest.mark.requires_delivery` 的用例在收集阶段也会 skip。有 bundle 时设 `DELIVERY_ROOT` 或保持同级目录即可照常跑。
-- **docs/ 不在 GitHub 上**：整个 `docs/`（含 `proposal.md` / `proposal.zh.md`）本地保留、不推远程；缺省时权威文档相关测试会 skip。需要提案/清单时从协作方单独拷贝；架构与 slim 政策见根目录 [ARCHITECTURE.md](ARCHITECTURE.md)。
+- **docs/ 不在 GitHub 上**：整个 `docs/`（含 `product/proposal.md` / `product/proposal.zh.md`）本地保留、不推远程；缺省时权威文档相关测试会 skip。需要提案/清单时从协作方单独拷贝；架构与 slim 政策见根目录 [ARCHITECTURE.md](ARCHITECTURE.md)。

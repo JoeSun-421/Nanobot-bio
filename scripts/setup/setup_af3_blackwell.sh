@@ -23,25 +23,112 @@
 #   - 不创建、不修改经典 conda env `af3`（delivery 官方栈保持不动）
 #
 # 关键产出：
-#   - AF3_DIR  → $AF3_ROOT/alphafold3（默认 /root/autodl-tmp/af3_blackwell/alphafold3）
-#   - conda    → env 前缀 $ENV_PREFIX（默认 .../conda/envs/af3_blackwell）
+#   - AF3_DIR  → $AF3_ROOT/alphafold3（路径可移植发现，非绑定 AutoDL）
+#   - conda    → env 前缀 $ENV_PREFIX（conda info --base / ENV_PREFIX / 常见根）
 #   - smoke    → /tmp/af3_blackwell_smoke.json（须含 "ok": true）
 #   - status   → 本脚本只做 smoke；setup_all 成功时写
 #                ~/.cache/nanobot-bio/af3_status（可用 AF3_STATUS_FILE 覆盖）
 #
-# 跑完后请在 nanobot-bio/.env 指向本栈：
-#   AF3_DIR=/root/autodl-tmp/af3_blackwell/alphafold3
-#   AF3_PYTHON=/root/autodl-tmp/conda/envs/af3_blackwell/bin/python
-#   AF3_PARAMS=$DELIVERY_ROOT/af3_assets/alphafold_param   # 复用 delivery 权重
-#   AF3_CACHE=/root/autodl-tmp/af3_blackwell/alphafold_cache
+# 覆盖变量：AF3_ROOT / AF3_BLACKWELL_ROOT、ENV_PREFIX / AF3_BLACKWELL_ENV、DELIVERY_ROOT
+# 跑完后可用 ./scripts/nbio start --heal 把本机探测路径写入 .env。
 # =============================================================================
 set -euo pipefail
 
-AF3_ROOT="${AF3_ROOT:-/root/autodl-tmp/af3_blackwell}"
-ENV_PREFIX="${ENV_PREFIX:-/root/autodl-tmp/conda/envs/af3_blackwell}"
-DELIVERY_ROOT="${DELIVERY_ROOT:-/root/autodl-tmp/bio_agent/rhobind_agent_delivery}"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_AGENT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_BIO_ROOT="$(cd "${BIO_ROOT:-$_AGENT_ROOT/..}" && pwd)"
+
+_discover_af3_root() {
+  local r parent
+  parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
+  for r in \
+    "${AF3_ROOT:-}" \
+    "${AF3_BLACKWELL_ROOT:-}" \
+    "$_BIO_ROOT/af3_blackwell" \
+    "${parent}/af3_blackwell" \
+    "${HOME}/af3_blackwell" \
+    "/opt/af3_blackwell" \
+    "/root/autodl-tmp/af3_blackwell"
+  do
+    [[ -n "$r" ]] || continue
+    if [[ -f "${r%/}/alphafold3/run_alphafold.py" ]]; then
+      printf '%s\n' "${r%/}"
+      return 0
+    fi
+  done
+  # New install default: sibling of BIO_ROOT (portable), not AutoDL-only.
+  if [[ -n "${AF3_ROOT:-}" ]]; then
+    printf '%s\n' "${AF3_ROOT%/}"
+  elif [[ -n "${AF3_BLACKWELL_ROOT:-}" ]]; then
+    printf '%s\n' "${AF3_BLACKWELL_ROOT%/}"
+  else
+    printf '%s\n' "${parent:-$_BIO_ROOT}/af3_blackwell"
+  fi
+}
+
+_discover_env_prefix() {
+  local name="af3_blackwell"
+  local _base _py
+  if [[ -n "${ENV_PREFIX:-}" ]]; then
+    printf '%s\n' "${ENV_PREFIX%/}"
+    return 0
+  fi
+  if [[ -n "${AF3_BLACKWELL_ENV:-}" ]]; then
+    printf '%s\n' "${AF3_BLACKWELL_ENV%/}"
+    return 0
+  fi
+  if command -v conda >/dev/null 2>&1; then
+    _base="$(conda info --base 2>/dev/null || true)"
+    if [[ -n "$_base" && -x "${_base%/}/envs/${name}/bin/python" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  fi
+  for _base in \
+    "${CONDA_PREFIX:-}" \
+    "${MAMBA_ROOT_PREFIX:-}" \
+    "${HOME}/miniconda3" \
+    "${HOME}/miniforge3" \
+    "${HOME}/mambaforge" \
+    "${HOME}/anaconda3" \
+    "/root/autodl-tmp/conda"
+  do
+    [[ -n "$_base" ]] || continue
+    if [[ -x "${_base%/}/envs/${name}/bin/python" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  done
+  # Default create location under conda base (or home miniconda).
+  if command -v conda >/dev/null 2>&1; then
+    _base="$(conda info --base 2>/dev/null || true)"
+    if [[ -n "$_base" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  fi
+  printf '%s\n' "${HOME}/miniconda3/envs/${name}"
+}
+
+AF3_ROOT="$(_discover_af3_root)"
+ENV_PREFIX="$(_discover_env_prefix)"
+DELIVERY_ROOT="${DELIVERY_ROOT:-$_BIO_ROOT/rhobind_agent_delivery}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-export PIP_INDEX_URL CONDA_PKGS_DIRS="${CONDA_PKGS_DIRS:-/root/autodl-tmp/conda/pkgs}"
+# pkgs cache: prefer existing Autodl disk if present, else conda base/pkgs or XDG cache.
+if [[ -z "${CONDA_PKGS_DIRS:-}" ]]; then
+  if [[ -d /root/autodl-tmp/conda/pkgs ]]; then
+    CONDA_PKGS_DIRS=/root/autodl-tmp/conda/pkgs
+  elif command -v conda >/dev/null 2>&1; then
+    CONDA_PKGS_DIRS="$(conda info --base 2>/dev/null)/pkgs"
+  else
+    CONDA_PKGS_DIRS="${XDG_CACHE_HOME:-$HOME/.cache}/conda/pkgs"
+  fi
+fi
+export PIP_INDEX_URL CONDA_PKGS_DIRS
+export AF3_BLACKWELL_ROOT="$AF3_ROOT"
+echo "[setup_af3_blackwell] AF3_ROOT=$AF3_ROOT"
+echo "[setup_af3_blackwell] ENV_PREFIX=$ENV_PREFIX"
+echo "[setup_af3_blackwell] DELIVERY_ROOT=$DELIVERY_ROOT"
 
 FORCE_REINSTALL=0
 SMOKE_ONLY=0

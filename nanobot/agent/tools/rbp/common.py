@@ -15,6 +15,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, Optional
 
 
@@ -642,7 +643,7 @@ def err(reason: str, latency_ms: float = 0.0) -> dict[str, Any]:
     return {"status": "error", "reason": str(reason), "latency_ms": round(float(latency_ms), 3)}
 
 
-def timed_call(fn):
+def timed_call(fn: Callable[[], Any]) -> tuple[Any, float, str | None]:
     t0 = time.perf_counter()
     try:
         v = fn()

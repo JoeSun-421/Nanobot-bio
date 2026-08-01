@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import AliasChoices, ConfigDict, Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nanobot.config_base import Base
 from nanobot.cron.types import CronSchedule
@@ -549,7 +549,7 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
 
-    model_config = ConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
+    model_config = SettingsConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
 
 
 def _resolve_tool_config_refs() -> None:

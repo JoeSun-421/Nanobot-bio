@@ -37,15 +37,28 @@ After a successful in-panel resolve, do **not** call:
    - Emit final JSON and **STOP** — do not run multi-donor retrieve/fuse/vote
 3. Else continue Stage 1 (true unseen).
 
+### LOO / leave-one-out (`force_transfer=true`)
+
+When the user asks for 留一法 / LOO / forced transfer on an in-panel or near-match target:
+
+**Stage 0 own-head STOP is overridden** — still resolve (and optionally `check_near_known` to disclose identity), then continue retrieve → fuse → commit → abstain → predict on **foreign donors only**.
+
+1. Set `force_transfer=true` on `commit_proxy_candidates` and `predict_interaction` (runtime also seeds sticky `loo_force_transfer` from user LOO language or prior commit).
+2. Commit / predict **foreign donor** aliases only (single foreign donor is valid LOO).
+3. Do **not** pass the query/target alias alone; runtime refuses own-head disguised as transfer and never promotes near-match-to-self own-head.
+4. `path=multi_head`; `p_hat` from delivery weighted vote (one donor → that donor’s weighted contrib).
+
 ---
 
 ## 5. Stage 1 — Retrieve (unseen / cache miss)
 
 **Goal:** Find up to **5** donor RBPs that have heads, via multi-view similarity.
 
-**Canonical order:** characterize → **parallel** retrieve → deterministic fuse
-(authoritative numeric `s_i`) → **`commit_proxy_candidates`** (selection/text only)
-→ **`confidence_abstain`** → Stage 2 predict.
+**Recommended scientific gates** (not a fixed shortlist — use any registered
+retrieve/structure/annotation tools that help): characterize → **parallel**
+retrieve → deterministic fuse (authoritative numeric `s_i`) →
+**`commit_proxy_candidates`** (selection/text only) → **`confidence_abstain`**
+→ Stage 2 predict. Extra delivery tools are welcome; do not invent scores.
 
 ### 5.1 Cache first
 
@@ -77,7 +90,9 @@ Run **in parallel intent** (batch tool calls in one turn when possible):
 | `structure_consensus` | Structure | When multiple PDBs |
 | `literature_search` | Function context | Unseen: **≤ 1** precise CLIP/eCLIP query |
 
-Raw delivery tools (`esm_embed`, `colabfold_msa`, `pymol_util`, `function_category`, …) are registered when useful — prefer curated wrappers above.
+Raw delivery tools (`esm_embed`, `colabfold_msa`, `pymol_util`, `function_category`, …)
+are on the default full surface (`RBP_RAW_TOOLS=all`); prefer curated wrappers when
+they cover the same science path, but call extras when they add evidence.
 
 ### 5.4 Deterministic donor fusion + Checkpoint 1 selection
 
@@ -121,11 +136,20 @@ confidence_abstain(hits=<hits_emb or fused embedding hits>)
 
 ### 5.6 Structure axis order
 
-1. `structure_fetch` (AFDB / cache)
+Mandatory order — **AF3 only on AFDB miss**:
+
+1. `structure_fetch` (AFDB / cache) for the **QUERY**
 2. `struct_similarity` (Foldseek; US-align refine when enabled)
 3. Optional `structure_consensus`
-4. On AFDB miss: `predict_structure` (AF3) **≤ 1** — pass `regions=[[start,end],…]` from domain/RBD when known
-5. Else `structure_axis=unavailable` → continue without structure zeros; force **low confidence**
+4. On **AFDB miss** → `predict_structure` (AF3) **≤ 1** with `sequence=` (optional name); pass `regions=[[start,end],…]` from domain/RBD when known
+5. After AF3: if a structure path is returned → MAY `struct_similarity` on that path; if AF3 soft-fails → `structure_axis_unavailable` caveat → continue without structure zeros; force **low confidence**
+6. AFDB present → skip AF3 (`skipped AF3` is correct). Catalogue coverage ≠ AF3 unused forever — AF3 is for novel / no-AFDB sequences
+
+**AFDB miss includes:** no UniProt/alias for the QUERY; `structure_fetch` error/unavailable; no local/catalogue PDB.
+
+**Do not:** invent UniProt to avoid AF3; pass a catalogue uniprot/alias on the QUERY that would load AFDB and skip AF3; use a nearest homolog's UniProt as the query for `structure_fetch` / `predict_structure` just to skip AF3.
+
+**Sequence-only / anonymous targets** (no accession): skip tools that require UniProt (or call only with clear **donor/homolog** attribution); structure path = AFDB miss → `predict_structure` ≤ 1. Do not thrash `get_func_annotation` / `literature_search` on homolog IDs without labeling them as donor/homolog annotations.
 
 **Critical:** structure failure is **not** similarity `0`. Omit that axis.
 
@@ -156,18 +180,19 @@ predict_interaction(rna, rbps=[donor aliases…])   # batch preferred; aggregate
 
 **Goal:** Ground the verdict; `p_hat` is already tool-sourced from Stage 2 weighted aggregation.
 
-### 7.1 Tool order
+### 7.1 Integrate tools (call when useful)
 
-Call when useful (skip if required inputs are missing):
+Skip if required inputs are missing. Order is a recommendation, not a rigid sequence:
 
-| # | Tool | Purpose |
-| --- | --- | --- |
-| 1 | `transfer_prior_lookup` | LOO / transfer prior for the method |
-| 2 | `donor_quality_prior` | Down-weight weak donors (context for explanation) |
-| 3 | `similarity_weighted_vote` | Same formula as Stage-2 `predict_interaction` aggregation; use `contributions` for evidence table |
-| 4 | *(no tool)* Evidence critic | Checklist below → may force low confidence |
+| Tool | Purpose |
+| --- | --- |
+| `transfer_prior_lookup` | LOO / transfer prior for the method |
+| `donor_quality_prior` | Down-weight weak donors (context for explanation) |
+| `similarity_weighted_vote` | Same formula as Stage-2 `predict_interaction` aggregation; use `contributions` for evidence table |
+| *(no tool)* Evidence critic | Checklist below → may force low confidence |
 
 > Note: `confidence_abstain` is **Stage 1.5** (post-commit, pre-predict), not Stage 3.
+> `p_hat` remains tool-sourced — never replace with LLM numbers.
 
 ### 7.2 `supporting_rbps`
 

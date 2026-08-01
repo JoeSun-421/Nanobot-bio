@@ -121,9 +121,10 @@ def sync_overlay(*, quiet: bool = False) -> int:
         expected_pkg = (bio / "nanobot").resolve()
         already = sys.modules.get("nanobot")
         need_reimport = True
-        if already is not None and getattr(already, "__file__", None):
+        already_file = getattr(already, "__file__", None) if already is not None else None
+        if already_file:
             try:
-                if Path(already.__file__).resolve().parent == expected_pkg:
+                if Path(already_file).resolve().parent == expected_pkg:
                     need_reimport = False
             except OSError:
                 need_reimport = True

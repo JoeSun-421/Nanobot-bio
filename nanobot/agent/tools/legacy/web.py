@@ -24,11 +24,15 @@ class _WebStub(Tool):
 
 
 class WebSearchTool(_WebStub):
-    name = "web_search"
+    @property
+    def name(self) -> str:
+        return "web_search"
 
 
 class WebFetchTool(_WebStub):
-    name = "web_fetch"
+    @property
+    def name(self) -> str:
+        return "web_fetch"
 
 
 __all__ = [

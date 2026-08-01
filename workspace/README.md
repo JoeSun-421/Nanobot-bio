@@ -20,7 +20,7 @@ Nanobot workspace root: synced skills and symlinked session/memory views.
 | `memory` → `../artifacts/memory` | PA long-term memory symlink (excluded from scientific prompts) |
 | `AGENTS.md` | Workspace-level short cues (Stage 0 own-head, …) |
 
-Canonical stores and helpers: `app.core.paths.ensure_artifact_dirs()`. Detail: [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2 (local `docs/MEMORY_AND_SESSIONS.zh.md` if present).
+Canonical stores and helpers: `app.core.paths.ensure_artifact_dirs()`. Detail: [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2 (local `docs/guides/MEMORY_AND_SESSIONS.zh.md` if present).
 
 Env:
 

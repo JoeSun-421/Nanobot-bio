@@ -166,9 +166,10 @@ def main() -> int:
         c.fail(str(e))
 
     # ----- B: delivery bridge -----
+    from app.backends.delivery.client import DeliveryToolClient
+
     c = add("B", "delivery env + resolve_rbp")
     try:
-        from app.backends.delivery.client import DeliveryToolClient
         from app.backends.delivery.env import apply_delivery_env, delivery_root
 
         apply_delivery_env()

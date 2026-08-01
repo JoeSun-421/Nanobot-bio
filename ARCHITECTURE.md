@@ -8,6 +8,9 @@ Per-package README pairs (`README.md` + `README.zh.md`): see the package map in
 [`nanobot/`](nanobot/README.md), [`rbp_eval/`](rbp_eval/README.md),
 [`scripts/`](scripts/README.md)).
 Local proposal / maturity detail stays under git-ignored `docs/`.
+Chinese Feishu summary (progress + Nanobot-based layout + delivery bridge):
+[`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md).
+Delivery-side theory notes (RNA-FM / RNA·protein LMs / biomedical agents): [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md).
 
 ---
 
@@ -43,7 +46,7 @@ physical path = import path (no top-level facade).
 ## 2. Workspace: sessions vs long-term memory
 
 **Canonical store is `artifacts/`** (`workspace/sessions` and `workspace/memory`
-are symlinks only). Chinese detail: [`docs/MEMORY_AND_SESSIONS.zh.md`](docs/MEMORY_AND_SESSIONS.zh.md).
+are symlinks only). Chinese detail: [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md).
 
 | Store | Path | Purpose |
 |-------|------|---------|
@@ -58,9 +61,12 @@ scientific prompt. Recent-history injection is allowed only for the exact,
 nonempty current session key. Automatic Dream, idle compaction, and
 token-triggered Consolidator runs are disabled for the RBP agent.
 
-For `accept-llm` / eval, use `ephemeral=True` or clear the matching session file —
-editing `MEMORY.md` alone will not reset chat reuse. An ephemeral turn may read
-the existing session as context, but does not append messages or write memory.
+For `accept-llm` / eval / `nanobot-bio chat|agent`, use `ephemeral=True` (product
+default on `RBPAgent.run` / `run_streamed`). Editing `MEMORY.md` alone will not
+reset chat reuse. In **scientific mode**, an ephemeral turn does **not** replay
+prior session tool/verdict transcripts into the LLM context (avoids skipping
+Stage 0–3); it also does not append messages or write memory. Non-scientific
+ephemeral turns may still read the current session for context.
 
 Implementation: `nanobot/session/manager.py`, `nanobot/agent/memory.py`.
 Do not remove the `session` / `memory` stacks casually.
@@ -101,7 +107,7 @@ against delivery `agent/tools/registry.json` and fails closed on stale bindings.
 `apply_delivery_env()` resolves paths, AF3 interpreter, USalign→Foldseek
 fallback, `OMP_NUM_THREADS`.
 
-Where delivery and `docs/proposal.md` conflict on transfer aggregation, code
+Where delivery and `docs/product/proposal.md` conflict on transfer aggregation, code
 follows delivery. Prediction rows keep the delivery shape
 (`alias`, `prob`, `head_index`, `cohort`); agent provenance is stored separately.
 

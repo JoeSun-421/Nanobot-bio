@@ -1,5 +1,7 @@
 """slim vendor stub."""
 
+from __future__ import annotations
+
 from typing import Any
 
 from nanobot.agent.tools.core.base import Tool
@@ -16,6 +18,10 @@ class ExecTool(Tool):
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
         return False
+
+    @classmethod
+    async def _spawn(cls, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Shell execution is disabled in the slim vendor.")
 
     @property
     def name(self) -> str:

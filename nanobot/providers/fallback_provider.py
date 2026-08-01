@@ -83,20 +83,15 @@ class FallbackProvider(LLMProvider):
         fallback_presets: list[Any],
         provider_factory: Callable[[Any], LLMProvider],
     ):
+        super().__init__()
         self._primary = primary
         self._fallback_presets = list(fallback_presets)
         self._provider_factory = provider_factory
         self._has_fallbacks = bool(fallback_presets)
         self._primary_failures = 0
         self._primary_tripped_at: float | None = None
-
-    @property
-    def generation(self):
-        return self._primary.generation
-
-    @generation.setter
-    def generation(self, value):
-        self._primary.generation = value
+        # Share the primary's settings object so callers mutate one place.
+        self.generation = primary.generation
 
     def get_default_model(self) -> str:
         return self._primary.get_default_model()
@@ -114,15 +109,59 @@ class FallbackProvider(LLMProvider):
             return True
         return False
 
-    async def chat(self, **kwargs: Any) -> LLMResponse:
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        kwargs: dict[str, Any] = {
+            "messages": messages,
+            "tools": tools,
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "reasoning_effort": reasoning_effort,
+            "tool_choice": tool_choice,
+        }
         if not self._has_fallbacks:
             return await self._primary.chat(**kwargs)
         return await self._try_with_fallback(
             lambda p, kw: p.chat(**kw), kwargs, has_streamed=None
         )
 
-    async def chat_stream(self, **kwargs: Any) -> LLMResponse:
-        on_stream_recover = kwargs.pop("on_stream_recover", None)
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        on_content_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_thinking_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        **extra: Any,
+    ) -> LLMResponse:
+        on_stream_recover = extra.pop("on_stream_recover", None)
+        kwargs: dict[str, Any] = {
+            "messages": messages,
+            "tools": tools,
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "reasoning_effort": reasoning_effort,
+            "tool_choice": tool_choice,
+            "on_content_delta": on_content_delta,
+            "on_thinking_delta": on_thinking_delta,
+            "on_tool_call_delta": on_tool_call_delta,
+            **extra,
+        }
         if not self._has_fallbacks:
             return await self._primary.chat_stream(**kwargs)
 

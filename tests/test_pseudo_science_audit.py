@@ -47,7 +47,7 @@ def test_authority_docs_exist():
 
     if not PROPOSAL_MD.is_file() or not PROPOSAL_ZH_MD.is_file():
         pytest.skip(
-            "docs/proposal.md and/or proposal.zh.md missing "
+            "docs/product/proposal.md and/or proposal.zh.md missing "
             "(docs/ is local-only / optional; skipped when absent)"
         )
     assert PROPOSAL_MD.is_file()
@@ -90,7 +90,7 @@ def test_no_rna_similarity_tool_registered():
 
     names = {cls().name for cls in ALL_RBP_TOOL_CLASSES}
     assert "rna_similarity" not in names
-    assert "rna_blastn" not in names  # raw delivery; registered via whitelist
+    assert "rna_blastn" not in names  # raw delivery; mounted via RBP_RAW_TOOLS (default all)
 
 
 def test_vote_aligns_with_predict_p_hat():

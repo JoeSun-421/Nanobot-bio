@@ -116,7 +116,7 @@ async def _request_json_with_retry(
     url: str,
     *,
     provider_label: str,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> dict[str, Any] | None:
     for attempt in range(_MAX_RETRIES + 1):
         try:

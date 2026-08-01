@@ -214,9 +214,12 @@ class Session:
                     name = str(item.get("name") or "").strip().lower()
                     if not name:
                         continue
-                    entry = str(item.get("entry_point") or "unknown").strip() or "unknown"
+                    entry_point = (
+                        str(item.get("entry_point") or "unknown").strip() or "unknown"
+                    )
                     cli_lines.append(
-                        f"[CLI App Attachment: @{name}; tool=run_cli_app; entry_point={entry}; "
+                        f"[CLI App Attachment: @{name}; tool=run_cli_app; "
+                        f"entry_point={entry_point}; "
                         f"skill=skills/cli-app-{name}/SKILL.md]"
                     )
                 if cli_lines:

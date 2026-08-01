@@ -325,19 +325,18 @@ class DeliveryToolClient:
                 out = self._call_subprocess(name, payload)
                 invocation = "subprocess_json"
 
-            if not isinstance(out, dict):
-                out = {"value": out}
+            result: dict[str, Any] = dict(out) if isinstance(out, dict) else {"value": out}
             # Preserve delivery ``ok`` semantics; default True only if absent
-            out.setdefault("ok", True)
-            out["_tool"] = name
-            out["_script"] = str(self.script_path(name))
-            out["_invocation"] = invocation
-            out["_args_hash"] = ah
-            out["_latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
-            self._recent_calls[ah] = (now, dict(out))
-            if name == "esm_similarity" and out.get("ok", True) and not out.get("skipped"):
-                self._esm_disk_put(payload, out)
-            return out
+            result.setdefault("ok", True)
+            result["_tool"] = name
+            result["_script"] = str(self.script_path(name))
+            result["_invocation"] = invocation
+            result["_args_hash"] = ah
+            result["_latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
+            self._recent_calls[ah] = (now, dict(result))
+            if name == "esm_similarity" and result.get("ok", True) and not result.get("skipped"):
+                self._esm_disk_put(payload, result)
+            return result
 
         except Exception as e:  # noqa: BLE001 — return envelope, do not crash agent
             err = {
@@ -383,7 +382,8 @@ class DeliveryToolClient:
         spec.loader.exec_module(mod)
 
         if hasattr(mod, "run") and callable(mod.run):
-            return mod.run(payload)
+            ran = mod.run(payload)
+            return ran if isinstance(ran, dict) else {"value": ran}
         # Some delivery tools expose no run(payload) and a non-JSON CLI (e.g.
         # colabfold_msa uses get_msa()/--seq). Adapt those without editing delivery.
         adapter = _IMPORT_ADAPTERS.get(name)
@@ -528,13 +528,26 @@ class DeliveryToolClient:
 
     @staticmethod
     def _conda_env_prefix(name: str) -> Optional[Path]:
-        # Fast path: CONDA_ENVS_PATH / common local layouts (no host-specific paths)
+        # Portable: CONDA_ENVS_* / conda info --base / home installs; host-specific last.
         envs_roots: list[Path] = []
         for key in ("CONDA_ENVS_PATH", "CONDA_ENVS_DIRS"):
             raw = os.environ.get(key) or ""
             for part in raw.split(os.pathsep):
                 if part.strip():
                     envs_roots.append(Path(part.strip()))
+        try:
+            r_base = subprocess.run(
+                ["conda", "info", "--base"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if r_base.returncode == 0:
+                base = (r_base.stdout or "").strip()
+                if base:
+                    envs_roots.append(Path(base) / "envs")
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
         for base in (
             os.environ.get("CONDA_PREFIX"),
             os.environ.get("MAMBA_ROOT_PREFIX"),
@@ -542,6 +555,7 @@ class DeliveryToolClient:
             os.path.expanduser("~/anaconda3"),
             os.path.expanduser("~/mambaforge"),
             os.path.expanduser("~/miniforge3"),
+            "/root/autodl-tmp/conda",  # optional host layout
         ):
             if base:
                 envs_roots.append(Path(base) / "envs")
@@ -549,7 +563,12 @@ class DeliveryToolClient:
                 p = Path(base)
                 if p.name != "envs" and (p.parent / "envs").is_dir():
                     envs_roots.append(p.parent / "envs")
+        seen: set[str] = set()
         for root in envs_roots:
+            key = str(root)
+            if key in seen:
+                continue
+            seen.add(key)
             cand = root / name
             if (cand / "bin" / "python").is_file():
                 return cand

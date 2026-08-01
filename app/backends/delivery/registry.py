@@ -195,7 +195,7 @@ class DeliveryBackedTool(Tool):
         tool_name: str,
         description: str,
         parameters: dict[str, Any],
-        client: DeliveryToolClient,
+        client: Optional[DeliveryToolClient],
         delivery_name: Optional[str] = None,
         read_only: bool = True,
     ):
@@ -305,8 +305,12 @@ class DeliveryBackedTool(Tool):
         payload = {k: v for k, v in kwargs.items() if v is not None}
         payload = _normalize_delivery_payload(self._delivery_name, payload)
 
+        client = self._client
+        if client is None:
+            return _dumps(_envelope_err("delivery client is not configured"))
+
         def _run() -> dict[str, Any]:
-            return self._client.call(self._delivery_name, payload)
+            return client.call(self._delivery_name, payload)
 
         try:
             out = await asyncio.to_thread(_run)

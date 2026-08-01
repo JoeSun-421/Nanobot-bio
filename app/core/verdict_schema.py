@@ -441,6 +441,7 @@ def normalize_verdict(
         "single_donor_transfer",
         "no_headed_donors",
         "near_match_donor_no_head",
+        "near_match_loo_disclosed",
         "ood",
         "selective_abstain",
     )
@@ -497,9 +498,12 @@ def confidence_from_evidence(
 
     flags = dict(evidence_flags or {})
     prov = dict(provenance or {})
-    aggregation = prov.get("aggregation") if isinstance(prov.get("aggregation"), dict) else {}
-    terms = aggregation.get("terms") if isinstance(aggregation.get("terms"), list) else []
-    predictions = prov.get("predictions") if isinstance(prov.get("predictions"), list) else []
+    raw_agg = prov.get("aggregation")
+    aggregation: dict[str, Any] = raw_agg if isinstance(raw_agg, dict) else {}
+    raw_terms = aggregation.get("terms")
+    terms: list[Any] = raw_terms if isinstance(raw_terms, list) else []
+    raw_preds = prov.get("predictions")
+    predictions: list[Any] = raw_preds if isinstance(raw_preds, list) else []
     n_donors = len(terms) or sum(
         1 for row in predictions if isinstance(row, dict) and row.get("prob") is not None
     )

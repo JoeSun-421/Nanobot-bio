@@ -139,12 +139,13 @@ CHAT_HELP = """\
   /help       Show this help
   /status     LLM, tools, session, paths
   /tools      List registered tool names
-  /new        Start a fresh session (clears conversation memory)
-  /clear      Clear the terminal screen (keeps session)
+  /new        Start a fresh session key (optional; each query already recomputes)
+  /clear      Clear the terminal screen (keeps session key)
   /thinking   Toggle expanded thinking (RBP_SHOW_THINKING)
   /onboard    Reconfigure LLM provider / API key
   /quit       Exit chat
 
+  Each binding question re-runs Stage 0–3 tools (ephemeral; no transcript reuse).
   Input       Esc+Enter = multiline · ↑ history · Ctrl+C cancel line · Ctrl+D exit
 """
 
@@ -205,10 +206,16 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     evidence = []
     caveats: list[str] = []
     confidence = None
+    path_mode: str | None = None
     if parsed is not None:
         evidence = list(parsed.pop("evidence_table", []) or [])
+        # Surface path/mode in the chrome line, not the public JSON body.
+        raw_mode = parsed.get("mode") or parsed.get("path")
+        if raw_mode is not None and str(raw_mode).strip():
+            path_mode = str(raw_mode).strip()
         for key in _PUBLIC_VERDICT_STRIP:
             parsed.pop(key, None)
+        parsed.pop("path", None)
         caveats = [str(x) for x in (parsed.get("caveats") or [])]
         confidence = parsed.get("confidence")
         body = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
@@ -233,15 +240,22 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     if label:
         colored = _color_label(label, s)
         title = f"▸ verdict  {colored}"
+    if path_mode:
+        title = f"{title}  ·  {s.yellow(path_mode)}"
     stream.write("\n")
     stream.write(s.bold(title) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
     stream.write(body if body.endswith("\n") else body + "\n")
-    if confidence or caveats:
-        detail = f"confidence={confidence or 'unknown'}"
-        if caveats:
-            detail += " · caveats=" + ", ".join(caveats)
-        stream.write(s.dim(detail) + "\n")
+    if confidence or caveats or path_mode:
+        detail_parts: list[str] = []
+        if confidence or caveats:
+            detail = f"confidence={confidence or 'unknown'}"
+            if caveats:
+                detail += " · caveats=" + ", ".join(caveats)
+            detail_parts.append(detail)
+        if path_mode:
+            detail_parts.append(f"path={path_mode}")
+        stream.write(s.dim(" · ".join(detail_parts)) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
     stream.flush()
 
@@ -993,6 +1007,10 @@ def format_verdict_display(result: Any) -> str:
         "supporting_rbps": verdict.get("supporting_rbps") or [],
         "caveats": verdict.get("caveats") or [],
     }
+    # path/mode for print_verdict_block chrome (stripped from public JSON there).
+    path_mode = verdict.get("mode") or verdict.get("path")
+    if path_mode is not None and str(path_mode).strip():
+        display["mode"] = str(path_mode).strip()
     display = {k: v for k, v in display.items() if v is not None}
     # Internal provenance stays on the turn verdict; only donor terms surface
     # as evidence_table above the public JSON (then stripped from the body).
@@ -1051,11 +1069,15 @@ def run_agent_turn_streamed_sync(
     session_key: str,
     extra_hooks: Optional[list[Any]] = None,
     bot_name: str = "rbp-agent",
+    ephemeral: bool = True,
 ) -> Any:
     """Sync helper: streamed run + phase spinner + folded thought + tool steps.
 
     Final JSON is not printed here — caller uses ``print_verdict_block``.
     Answer tokens are not Live-rendered (JSON contract → verdict box only).
+
+    Defaults to ``ephemeral=True`` so chat/agent turns do not replay prior
+    scientific tool transcripts into the next LLM context.
     """
     import asyncio
 
@@ -1069,6 +1091,7 @@ def run_agent_turn_streamed_sync(
                 session_key=session_key,
                 extra_hooks=hooks,
                 renderer=None,
+                ephemeral=ephemeral,
             )
         )
     try:

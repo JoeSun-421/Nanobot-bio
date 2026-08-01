@@ -38,6 +38,22 @@ def reset_tool_turn_guards() -> None:
         pass
 
 
+def prepare_tool_turn_guards(user_message: str = "") -> None:
+    """Reset per-turn guards and seed sticky LOO / force_transfer from the user turn."""
+    reset_tool_turn_guards()
+    text = (user_message or "").strip()
+    if not text:
+        return
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import (
+            seed_loo_force_transfer_from_user_message,
+        )
+
+        seed_loo_force_transfer_from_user_message(text)
+    except Exception:
+        pass
+
+
 @tool_parameters(
     {
         "type": "object",

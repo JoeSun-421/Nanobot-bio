@@ -372,12 +372,46 @@ def test_mvp_tool_whitelist_excludes_literature_raw():
     from nanobot.agent.tools.core.registry import ToolRegistry
     from nanobot.agent.tools.rbp.register import register_rbp_tools
 
+    # Opt-out path: RBP_RAW_TOOLS=whitelist / include_raw_delivery="whitelist"
     _reg, names = register_rbp_tools(ToolRegistry(), include_raw_delivery="whitelist")
     assert "literature_retrieval" not in names
     assert "resolve_rbp" in names
     assert "predict_interaction" in names
-    # Curated P0–P2 + Stage 0/3 whitelist (count drifts with registry; keep bounded)
+    # Curated P0–P2 + Stage extras (count drifts with registry; keep bounded)
     assert 15 <= len(names) <= 40
+
+
+def test_raw_tools_default_is_all_not_whitelist():
+    """Product default mounts full delivery surface; whitelist is opt-out only."""
+    from nanobot.agent.tools.rbp.register import DEFAULT_RAW_MODE, _normalize_raw_mode
+    from app.agent import _raw_mode
+
+    assert DEFAULT_RAW_MODE == "all"
+    assert _normalize_raw_mode("all") == "all"
+    assert _normalize_raw_mode("whitelist") == "whitelist"
+    assert _normalize_raw_mode("unknown_mode") == "all"
+    # Env unset → product default all (test process should not force whitelist)
+    import os
+
+    prev = os.environ.pop("RBP_RAW_TOOLS", None)
+    try:
+        assert _raw_mode() == "all"
+    finally:
+        if prev is not None:
+            os.environ["RBP_RAW_TOOLS"] = prev
+
+
+def test_skill_opens_full_tool_surface_not_fixed_pipeline():
+    skill = ROOT / "nanobot" / "skills" / "rbp-agent" / "SKILL.md"
+    src = skill.read_text(encoding="utf-8")
+    assert "RBP_RAW_TOOLS=all" in src
+    assert "Narrow MVP opt-out" in src or "RBP_RAW_TOOLS=whitelist" in src
+    assert "Prefer ≤ 15" not in src and "Prefer ≤15" not in src
+    assert "fixed ~12-tool" in src or "not a fixed" in src.lower()
+    # Science invariants retained
+    assert "p_hat" in src and "predict" in src.lower()
+    assert "Checkpoint 1" in src
+    assert "Fail closed" in src or "fail-closed" in src.lower()
 
 
 def test_skill_playbook_locks_proposal_defaults_and_paths():

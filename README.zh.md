@@ -46,14 +46,13 @@ cd Nanobot-bio
 #   parent/rhobind_agent_delivery
 
 ./scripts/nbio setup              # 首次：agent .venv + 科学 conda
-source scripts/nbio               # 日常：激活并导出路径（只探测，不重装）
 nanobot-bio onboard               # 选择 LLM 厂商 + API key → .env
-nanobot-bio doctor                # 功能能力表（异常行优先）
-nanobot-bio chat
-# 或: ./scripts/nbio chat
+./scripts/nbio start              # 日常万能一键：路径发现 → 纠偏 AF3/.env → chat
+# ./scripts/nbio start --dry-run  # 只看 GPU/AF3 候选（可顺带 heal）
+# source scripts/nbio && nanobot-bio doctor   # 分步：激活 + 能力表
 ```
 
-逐步安装与路径说明见 [INSTALL.md](INSTALL.md)。
+逐步安装与路径说明见 [INSTALL.md](INSTALL.md)。脚本入口与可移植路径发现见 [`scripts/README.zh.md`](scripts/README.zh.md)。Delivery 桥见 [`app/backends/delivery/README.zh.md`](app/backends/delivery/README.zh.md)。
 
 一次性预测示例：
 
@@ -67,10 +66,11 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 | 命令 | 用途 |
 |------|------|
+| `./scripts/nbio start` | 日常万能一键：路径发现 → GPU/AF3 适配 → heal `.env` → chat（`up` 别名） |
 | `nanobot-bio chat` | 多轮交互；会话内 `/status`、`/help`、`/tools`、`/quit` |
 | `nanobot-bio agent --message "..."` | 一次性预测（亦支持 `--query` / `--rna-file` / `--example`） |
 | `nanobot-bio doctor` | 功能能力表：路径 / rhobind / ESM / RNA / AF3 / LLM（`--verbose` 看明细） |
-| `source scripts/nbio` | 可移植日常激活（另有 `status` / `setup` / `chat`） |
+| `source scripts/nbio` | 仅可移植激活（另有 `status` / `setup` / `chat`；`scripts/setup/` 下为兼容薄包装） |
 | `nanobot-bio onboard` | 写入 LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden 验收（无 LLM；`own-head` 为其别名） |
 | `nanobot-bio run-eval` | LOO 上限对照与模态消融评估 |
@@ -85,6 +85,8 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | 目录布局 | `rhobind_agent_delivery/` 与本仓库**同级**；可用 `DELIVERY_ROOT` 覆盖 |
 | Agent 环境 | `.venv`，经 `./scripts/nbio setup`（内部调用 `setup_all.sh`） |
 | 科学 conda | delivery：`protein_embed` / `rna` / `rhobind` / `af3` |
+| 路径 | `nbio` 在本机发现 `BIO_ROOT` / `AF3_BLACKWELL_ROOT` / conda；AutoDL 布局仅为候选之一 |
+| 结构轴 | Skill：先 AFDB `structure_fetch`；仅 AFDB miss 时 AF3 `predict_structure`（仅序列目标必须调用） |
 | LLM | `nanobot-bio onboard` → 必须显式选择厂商（无默认）；密钥在 `nanobot-bio/.env`，`~/.nanobot/config.json` 仅存 `${…_API_KEY}` 引用 |
 | 设备 | `RHOBIND_DEVICE=auto\|cuda\|cpu`；`chat` / `agent` 亦支持 `--device` |
 | 内存 | RhoBind / ESM 建议充足 RAM，并优先 CUDA；cgroup 内存过小易 OOM |
@@ -114,3 +116,7 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层、记忆、桥接、eval/promote、slim vendor、发版 |
 | [AGENTS.md](AGENTS.md) | Agent / CI 约束 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本历史 |
+| [`docs/README.md`](docs/README.md) | 本地 docs 地图（`theory/` · `product/` · `guides/` · `eval/` · `reports/`） |
+| [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md) | Delivery 理论依据（RNA-FM / RNA·蛋白 LM / 生物医学 agent） |
+| [`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md) | 飞书汇总汇报（进度 + Nanobot 架构 + Delivery 桥；本地 `docs/`） |
+| [`docs/eval/transfer_test_prompts.md`](docs/eval/transfer_test_prompts.md) | Transfer 冒烟 prompts（20 例） |

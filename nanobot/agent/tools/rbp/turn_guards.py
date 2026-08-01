@@ -12,6 +12,7 @@ out of order (B2: dependency declaration, not just post-hoc blocking).
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from nanobot.agent.tools.rbp.stage_contract import (
@@ -45,8 +46,22 @@ _CANONICAL_REQUEST: Optional[dict[str, Any]] = None
 # Numeric verdict authority for this turn. Only deterministic tools may set this;
 # the LLM can explain it but cannot supply or override it.
 _AUTHORITATIVE_SCORE: Optional[dict[str, Any]] = None
-# Explicit force_transfer=true disables near-match own-head Fast Path for this turn.
+# Explicit force_transfer=true (tool arg / commit / user LOO intent) disables
+# near-match own-head Fast Path for this turn and overrides Stage 0 STOP.
 _FORCE_TRANSFER_ACTIVE: bool = False
+
+# Conservative user-message LOO cues (secondary to tool args / commit state).
+_LOO_USER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bforce[_\s-]?transfer\b", re.I),
+    re.compile(r"\bleave[\s-]?one[\s-]?out\b", re.I),
+    re.compile(r"\bLOO\b"),
+    re.compile(r"留一法"),
+    re.compile(r"\btreat[\s-]?as[\s-]?unseen\b", re.I),
+    re.compile(r"\btreat[\s-]?.*\s+as[\s-]?(?:unseen|unknown)\b", re.I),
+    re.compile(r"\bno[\s-]?own[\s-]?head\b", re.I),
+    re.compile(r"\bdo[\s-]?not[\s-]?own[\s-]?head\b", re.I),
+    re.compile(r"\bout[\s-]?of[\s-]?panel[\s-]?force[\s-]?transfer\b", re.I),
+)
 
 # Tools blocked after own-head success (Stage 0 STOP) — declared in stage_contract.
 RETRIEVE_AFTER_OWN_HEAD: frozenset[str] = OWN_HEAD_STOP_BLOCKED
@@ -266,16 +281,106 @@ def evidence_flags() -> dict[str, Any]:
     return dict(_EVIDENCE_FLAGS)
 
 
-def set_force_transfer_active(active: bool = True) -> None:
-    """Record explicit force_transfer for this turn (disables near-match own-head)."""
+def set_force_transfer_active(active: bool = True, *, source: str = "tool_arg") -> None:
+    """Record explicit LOO / force_transfer for this turn.
+
+    Disables near-match own-head and overrides Stage 0 STOP so retrieve → fuse →
+    predict on foreign donors can proceed.
+    """
     global _FORCE_TRANSFER_ACTIVE
     _FORCE_TRANSFER_ACTIVE = bool(active)
     if active:
         add_evidence_flag("force_transfer_active", True)
+        add_evidence_flag("loo_force_transfer", True)
+        if source:
+            add_evidence_flag("loo_force_transfer_source", str(source))
 
 
 def force_transfer_active() -> bool:
     return bool(_FORCE_TRANSFER_ACTIVE)
+
+
+def effective_force_transfer(explicit: bool = False) -> bool:
+    """True when this turn is pinned to LOO / foreign-donor transfer."""
+    return bool(explicit or _FORCE_TRANSFER_ACTIVE)
+
+
+def user_message_requests_loo(text: str) -> bool:
+    """Best-effort LOO intent from the user message (tool args take precedence)."""
+    blob = (text or "").strip()
+    if not blob:
+        return False
+    return any(p.search(blob) for p in _LOO_USER_PATTERNS)
+
+
+def seed_loo_force_transfer_from_user_message(text: str) -> bool:
+    """Sticky turn flag: operator LOO / force_transfer overrides Stage 0 own-head."""
+    if user_message_requests_loo(text):
+        set_force_transfer_active(True, source="user_message")
+        return True
+    return False
+
+
+def loo_own_head_blocked_reason(
+    *,
+    rbps_list: list[str],
+    cohort: str = "K562",
+    allow_unseen: bool = False,
+) -> Optional[str]:
+    """Refuse predict on query/target alias alone when LOO is active."""
+    if allow_unseen or not force_transfer_active():
+        return None
+    folded = [str(x).casefold() for x in rbps_list if str(x).strip()]
+    if not folded:
+        return None
+    self_keys = force_transfer_self_aliases()
+    if self_keys and all(x in self_keys for x in folded):
+        return (
+            "loo_force_transfer / force_transfer active: refuse own-head on the "
+            "query/target alias — pass rbps=[foreign donor aliases with panel "
+            "heads] only (single foreign donor OK). Stage 0 own-head STOP is "
+            "overridden; continue retrieve → fuse → commit → abstain → predict."
+        )
+    if len(folded) == 1:
+        try:
+            qt = query_target()
+            if qt and folded[0] == str(qt).casefold() and alias_has_panel_head(
+                rbps_list[0], cohort=str(cohort)
+            ):
+                return (
+                    "loo_force_transfer active: refuse predict_interaction on "
+                    f"resolved target {rbps_list[0]!r} as own-head; use foreign "
+                    "donors only."
+                )
+        except Exception:
+            pass
+    return None
+
+
+def force_transfer_self_aliases() -> set[str]:
+    """Aliases that are the QUERY/target itself under force_transfer / LOO.
+
+    Used to refuse own-head disguised as transfer and to exclude the target's
+    catalogue head from the donor pool. Includes resolve alias / UniProt and,
+    when it matches those, near_match_donor (near-match-to-self).
+    """
+    keys: set[str] = set()
+    qt = query_target()
+    if qt:
+        keys.add(str(qt).casefold())
+    canon = canonical_request() or {}
+    for field in ("alias", "uniprot", "rbp_id"):
+        val = canon.get(field)
+        if val:
+            keys.add(str(val).casefold())
+    near_d = _EVIDENCE_FLAGS.get("near_match_donor")
+    if near_d:
+        near_key = str(near_d).casefold()
+        # near_match-to-self only — foreign near_match donors stay transferable
+        # except via the separate near_match exclusion in predict/commit.
+        if not keys or near_key in keys:
+            keys.add(near_key)
+    return keys
 
 
 def record_evidence(record: dict[str, Any]) -> None:
@@ -315,10 +420,14 @@ def _any_retrieve_done() -> bool:
 
 
 def retrieve_blocked_reason(tool_name: str) -> Optional[str]:
+    if force_transfer_active():
+        return None
     if _OWN_HEAD_STOP and tool_name in RETRIEVE_AFTER_OWN_HEAD:
         return (
             f"Stage 0 STOP: own-head predict_interaction already succeeded this turn; "
-            f"refusing {tool_name}. Emit JSON verdict now (do not retrieve/transfer)."
+            f"refusing {tool_name}. Emit JSON verdict now (do not retrieve/transfer). "
+            "Operator LOO / force_transfer overrides this STOP — set "
+            "force_transfer=true on commit/predict or restate LOO intent."
         )
     return None
 
@@ -335,12 +444,15 @@ def transfer_predict_blocked_reason(
     below surface the earliest unmet prerequisite in stage order so the LLM gets
     the same guidance the contract encodes.
     """
-    if _OWN_HEAD_STOP:
+    ft = effective_force_transfer(force_transfer)
+    if _OWN_HEAD_STOP and not ft:
         return None
     rbps_list = [str(x) for x in rbps]
-    # Own-head eligible single alias: no abstain gate
-    if not force_transfer and len(rbps_list) == 1 and alias_has_panel_head(
-        rbps_list[0], cohort=cohort
+    # Own-head eligible single alias: no abstain gate (never under LOO)
+    if (
+        not ft
+        and len(rbps_list) == 1
+        and alias_has_panel_head(rbps_list[0], cohort=cohort)
     ):
         return None
     # Transfer / multi-donor path
@@ -385,7 +497,7 @@ def transfer_predict_blocked_reason(
 
 def abstain_blocked_reason() -> Optional[str]:
     """Block confidence_abstain until fuse + commit on the unseen/transfer path."""
-    if _OWN_HEAD_STOP:
+    if _OWN_HEAD_STOP and not force_transfer_active():
         return (
             "Stage 0 STOP: own-head already succeeded; refuse confidence_abstain. "
             "Emit JSON verdict now."
@@ -406,7 +518,7 @@ def abstain_blocked_reason() -> Optional[str]:
 
 def commit_blocked_reason() -> Optional[str]:
     """Block commit_proxy_candidates until fuse on the unseen path."""
-    if _OWN_HEAD_STOP:
+    if _OWN_HEAD_STOP and not force_transfer_active():
         return (
             "Stage 0 STOP: own-head already succeeded; refuse commit_proxy_candidates. "
             "Emit JSON verdict now."
@@ -469,7 +581,7 @@ def fuse_blocked_reason() -> Optional[str]:
     ``domain_empty``, axis-skipped flags) satisfy the sentinel without inventing
     sim=0 hits.
     """
-    if _OWN_HEAD_STOP:
+    if _OWN_HEAD_STOP and not force_transfer_active():
         return (
             "Stage 0 STOP: own-head already succeeded; refuse fuse_similarity_views. "
             "Emit JSON verdict now."
@@ -595,6 +707,11 @@ __all__ = [
     "evidence_flags",
     "set_force_transfer_active",
     "force_transfer_active",
+    "effective_force_transfer",
+    "user_message_requests_loo",
+    "seed_loo_force_transfer_from_user_message",
+    "loo_own_head_blocked_reason",
+    "force_transfer_self_aliases",
     "record_evidence",
     "evidence_records",
     "retrieve_blocked_reason",

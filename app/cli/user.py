@@ -512,23 +512,39 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     mmseqs_ok = False
     mmseqs_detail = ""
     if rna_py is not None:
-        try:
-            import subprocess as _sp_mm
+        # Direct env python does not put env bin on PATH (same caveat as
+        # DeliveryToolClient). Prefer the sibling binary next to rna python —
+        # that is how tools set MMSEQS / prepend PATH for rna_blastn etc.
+        sibling_mm = rna_py.parent / "mmseqs"
+        if sibling_mm.is_file():
+            mmseqs_ok = True
+            mmseqs_detail = str(sibling_mm)
+        else:
+            try:
+                import os as _os_mm
+                import subprocess as _sp_mm
 
-            mm = _sp_mm.run(
-                [str(rna_py), "-c", "import shutil; print(shutil.which('mmseqs') or '')"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            path_mm = (mm.stdout or "").strip()
-            if mm.returncode == 0 and path_mm:
-                mmseqs_ok = True
-                mmseqs_detail = path_mm
-            else:
-                mmseqs_detail = "mmseqs not on PATH in rna env"
-        except Exception as e:
-            mmseqs_detail = f"{type(e).__name__}: {e}"[:160]
+                env_mm = _os_mm.environ.copy()
+                env_mm["PATH"] = f"{rna_py.parent}:{env_mm.get('PATH', '')}"
+                mm = _sp_mm.run(
+                    [
+                        str(rna_py),
+                        "-c",
+                        "import shutil; print(shutil.which('mmseqs') or '')",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env=env_mm,
+                )
+                path_mm = (mm.stdout or "").strip()
+                if mm.returncode == 0 and path_mm:
+                    mmseqs_ok = True
+                    mmseqs_detail = path_mm
+                else:
+                    mmseqs_detail = "mmseqs not installed in rna env bin"
+            except Exception as e:
+                mmseqs_detail = f"{type(e).__name__}: {e}"[:160]
     else:
         mmseqs_detail = "no rna conda env"
 

@@ -113,7 +113,7 @@ class AgentProgressHook(AgentHook):
                 thought = self._strip_think(context.response.content if context.response else None)
                 if thought:
                     await self._on_progress(thought)
-            tool_hint = self._strip_think(self._tool_hint(context.tool_calls))
+            tool_hint = self._strip_think(self._tool_hint(context.tool_calls)) or ""
             tool_events = [build_tool_event_start_payload(tc) for tc in context.tool_calls]
             await invoke_on_progress(
                 self._on_progress,

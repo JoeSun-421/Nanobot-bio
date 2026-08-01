@@ -353,7 +353,8 @@ class FuseSimilarityViewsTool(Tool):
             if isinstance(obj, dict) and obj.get("status") == "ok":
                 from nanobot.agent.tools.rbp.turn_guards import set_fused_proxies
 
-                value = obj.get("value") if isinstance(obj.get("value"), dict) else {}
+                raw_value = obj.get("value")
+                value = raw_value if isinstance(raw_value, dict) else {}
                 set_fused_proxies(list(value.get("donors") or []))
         except Exception:
             pass

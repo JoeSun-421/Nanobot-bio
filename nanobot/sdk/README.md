@@ -4,22 +4,19 @@ Internal helpers for the high-level Nanobot Python API surface.
 
 [English] · [中文](README.zh.md)
 
-## Features
+## Purpose
 
-- Support modules behind `nanobot.nanobot.Nanobot` (streaming events, clients, runtime types)
-- Not a second public API for product collaborators
+Supports `nanobot.nanobot.Nanobot` with streaming events, thin clients (session / memory / runtime), and shared types. This is **not** a second public API for product collaborators — prefer `from nanobot import Nanobot` or the App CLI.
 
-## Implementation
+## Layout
 
 | File | Role |
 |------|------|
-| `clients.py` | SDK client helpers |
-| `runtime.py` | Runtime glue |
-| `streaming.py` | Streaming event helpers |
-| `types.py` | Shared types |
+| `clients.py` | `SessionClient`, `MemoryClient`, `RuntimeClient` |
+| `runtime.py` | `SDKRuntimeController`, process kwargs helpers |
+| `streaming.py` | `RunStream`, `SDKStreamEmitter`, streaming hook |
+| `types.py` | `RunResult`, `StreamEvent`, stream event constants |
 | `__init__.py` | Package note (internal helpers) |
-
-Relationship:
 
 ```
 nanobot/nanobot.py  (public API)
@@ -27,24 +24,35 @@ nanobot/nanobot.py  (public API)
 app/agent.py        (product assembly → Nanobot)
 ```
 
-## How to use
-
-Prefer the product CLI or the high-level import:
-
-```bash
-nanobot-bio chat|agent
-```
+## Entry points
 
 ```python
-from nanobot import Nanobot  # or Nanobot.from_config
+from nanobot import Nanobot, RunResult, RunStream
+# Types also available via nanobot.sdk.types if needed internally:
+from nanobot.sdk.types import STREAM_EVENT_TOOL_COMPLETED
 ```
 
-Do not treat `nanobot.sdk.*` as a stable external contract.
+## Code examples
 
-## Design rationale
+```python
+from nanobot import Nanobot
 
-- Keep a small public surface (`Nanobot` + CLI) while allowing internal refactor of streaming/client details.
-- LLM credentials still flow through onboard / `.env` / `~/.nanobot/config.json` — never hardcoded here.
+bot = Nanobot.from_config(scientific_mode=True)
+# High-level clients hung off the facade:
+print(bot.sessions, bot.memory, bot.runtime)
+
+async for event in bot.run_streamed("Ping"):
+    print(event.type, getattr(event, "delta", None) or getattr(event, "content", None))
+```
+
+```bash
+nanobot-bio chat|agent   # product path — preferred over sdk imports
+```
+
+## Dependencies / env
+
+- Same LLM config as Nanobot (`~/.nanobot/config.json` / `.env`).
+- Do not treat `nanobot.sdk.*` as a stable external contract across releases.
 
 ## See also
 

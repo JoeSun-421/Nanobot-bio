@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from typing import Any
 
 import pytest
 import yaml
@@ -102,11 +103,16 @@ def test_ephemeral_scientific_turn_does_not_persist(tmp_path):
     loop = bot._loop
     session = loop.sessions.get_or_create("science:ephemeral")
     session.add_message("user", "persisted before")
-    session.add_message("assistant", "existing answer")
+    session.add_message(
+        "assistant",
+        '{"label":"Likely","p_hat":0.91,"explanation":"Identical held-out LOO"}',
+    )
     loop.sessions.save(session)
     before = [dict(message) for message in session.messages]
+    captured: dict[str, Any] = {}
 
     async def fake_run(*args, **kwargs):
+        captured["messages"] = list(args[0])
         return ("ephemeral answer", [], list(args[0]), "completed", False)
 
     loop._run_agent_loop = fake_run
@@ -121,6 +127,23 @@ def test_ephemeral_scientific_turn_does_not_persist(tmp_path):
     assert response.content == "ephemeral answer"
     after = loop.sessions.get_or_create("science:ephemeral")
     assert after.messages == before
+    # Prior scientific transcript must not enter LLM context (reuse bug).
+    blob = json.dumps(captured.get("messages") or [], ensure_ascii=False)
+    assert "Identical held-out LOO" not in blob
+    assert "persisted before" not in blob
+    assert "0.91" not in blob
+
+
+def test_rbp_agent_defaults_ephemeral_true():
+    """Product chat/agent path must default ephemeral so each query recomputes."""
+    import inspect
+
+    from app.agent import RBPAgent
+
+    run_sig = inspect.signature(RBPAgent.run)
+    streamed_sig = inspect.signature(RBPAgent.run_streamed)
+    assert run_sig.parameters["ephemeral"].default is True
+    assert streamed_sig.parameters["ephemeral"].default is True
 
 
 def test_proxy_cache_is_trace_promoted_domain_memory(tmp_path):

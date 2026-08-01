@@ -15,9 +15,11 @@
 
 | Scenario | Command |
 |----------|---------|
-| **Daily** | `source scripts/nbio` → `nanobot-bio doctor` → `nanobot-bio chat` |
+| **Daily** | `./scripts/nbio start` (or `source scripts/nbio` → chat) |
 | **First / hollow-env repair** | `./scripts/nbio setup` (or `setup_all.sh` here) |
 | Legacy activate | `source scripts/setup/activate_env.sh` → forwards to `nbio activate` |
+
+Paths (`AF3_ROOT` / `ENV_PREFIX` / delivery) are discovered on the host; see [`../README.md`](../README.md) “Path discovery”. AutoDL layouts are candidates only.
 
 `nbio` **activate never** auto `pip install`s CUDA/torch; doctor marks FAIL and you repair with `nbio setup`.
 
@@ -25,11 +27,11 @@
 
 | Script | When |
 |--------|------|
-| [`../nbio`](../nbio) | **User entry**: activate / status / doctor / setup / chat |
-| `setup_all.sh` | Called by `nbio setup`; `AF3_STACK=auto` |
-| `setup_all_ampere_or_older.sh` | Thin wrap: force `AF3_STACK=classic` |
-| `setup_all_blackwell.sh` | Thin wrap: force `AF3_STACK=blackwell` |
-| `setup_af3_blackwell.sh` | Out-of-tree AF3 only; override with `AF3_ROOT` / `ENV_PREFIX` |
+| [`../nbio`](../nbio) | **User entry (canonical)**: activate / status / doctor / setup / chat / start |
+| `setup_all.sh` | Called by `nbio setup`; `AF3_STACK=auto`; portable AF3 path discovery |
+| `setup_all_ampere_or_older.sh` | Thin compat wrap: force `AF3_STACK=classic` |
+| `setup_all_blackwell.sh` | Thin compat wrap: force `AF3_STACK=blackwell` |
+| `setup_af3_blackwell.sh` | Out-of-tree AF3 only; override with `AF3_ROOT` / `ENV_PREFIX`; host discovery, not AutoDL-specific |
 | `activate_env.sh` | Compat wrap → `source ../nbio activate` |
 
 ## How to use
@@ -39,9 +41,9 @@
 ./scripts/nbio setup --skip-conda
 bash scripts/setup/setup_all_blackwell.sh
 
-source scripts/nbio
+./scripts/nbio start                 # daily: discover → heal AF3 → chat
+# source scripts/nbio && nanobot-bio doctor
 ./scripts/nbio status
-nanobot-bio doctor
 ```
 
 Full narrative: [`INSTALL.md`](../../INSTALL.md).
