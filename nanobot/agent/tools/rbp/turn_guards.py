@@ -49,6 +49,9 @@ _AUTHORITATIVE_SCORE: Optional[dict[str, Any]] = None
 # Explicit force_transfer=true (tool arg / commit / user LOO intent) disables
 # near-match own-head Fast Path for this turn and overrides Stage 0 STOP.
 _FORCE_TRANSFER_ACTIVE: bool = False
+# Soft lit co-mention hits for automatic fuse_similarity_views injection.
+_LIT_FUSE_HITS: list[dict[str, Any]] = []
+_LIT_AXIS_USABLE: bool = False
 
 # Conservative user-message LOO cues (secondary to tool args / commit state).
 _LOO_USER_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -71,7 +74,7 @@ def reset_stage_guards() -> None:
     global _OWN_HEAD_STOP, _FUSE_DONE, _COMMIT_DONE, _ABSTAIN_DONE
     global _EVIDENCE_FLAGS, _EVIDENCE_RECORDS, _COMMITTED_PROXIES, _FUSED_PROXIES
     global _QUERY_TARGET, _CANONICAL_REQUEST, _AUTHORITATIVE_SCORE
-    global _FORCE_TRANSFER_ACTIVE
+    global _FORCE_TRANSFER_ACTIVE, _LIT_FUSE_HITS, _LIT_AXIS_USABLE
     _OWN_HEAD_STOP = False
     _FUSE_DONE = False
     _COMMIT_DONE = False
@@ -84,7 +87,30 @@ def reset_stage_guards() -> None:
     _CANONICAL_REQUEST = None
     _AUTHORITATIVE_SCORE = None
     _FORCE_TRANSFER_ACTIVE = False
+    _LIT_FUSE_HITS = []
+    _LIT_AXIS_USABLE = False
     _RETRIEVE_DONE.clear()
+
+
+def set_literature_fuse_hits(
+    hits: list[dict[str, Any]] | None,
+    *,
+    axis_usable: bool = True,
+) -> None:
+    """Store lit-derived RbpHit list for automatic fuse injection this turn."""
+    global _LIT_FUSE_HITS, _LIT_AXIS_USABLE
+    _LIT_AXIS_USABLE = bool(axis_usable)
+    if not axis_usable or not hits:
+        _LIT_FUSE_HITS = []
+        return
+    _LIT_FUSE_HITS = [dict(h) for h in hits if isinstance(h, dict) and h.get("alias")]
+
+
+def literature_fuse_hits() -> list[dict[str, Any]]:
+    """Return a copy of lit co-mention hits (empty if axis unusable)."""
+    if not _LIT_AXIS_USABLE:
+        return []
+    return [dict(h) for h in _LIT_FUSE_HITS]
 
 
 def mark_own_head_success() -> None:
@@ -702,6 +728,8 @@ __all__ = [
     "RETRIEVE_AFTER_OWN_HEAD",
     "STAGE_RETRIEVE",
     "reset_stage_guards",
+    "set_literature_fuse_hits",
+    "literature_fuse_hits",
     "mark_own_head_success",
     "mark_fuse_done",
     "mark_commit_done",

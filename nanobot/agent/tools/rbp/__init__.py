@@ -20,9 +20,12 @@ from nanobot.agent.tools.rbp.evolve_tools import (
     FuseSimilarityViewsTool,
     LookupProxyCacheTool,
 )
+from nanobot.agent.tools.rbp.fasta_score import ScoreBindingFastaTool
 from nanobot.agent.tools.rbp.near_known import CheckNearKnownTool
 from nanobot.agent.tools.rbp.phmmer import PhmmerSimilarityTool
 from nanobot.agent.tools.rbp.predict import PredictInteractionTool
+from nanobot.agent.tools.rbp.project_doc import ReadProjectDocTool
+from nanobot.agent.tools.rbp.prompt_suite import RunPromptSuiteTool
 from nanobot.agent.tools.rbp.seq import SeqSimilarityTool
 from nanobot.agent.tools.rbp.structure import PredictStructureTool, StructSimilarityTool
 
@@ -39,6 +42,9 @@ ALL_RBP_TOOL_CLASSES = [
     FuseSimilarityViewsTool,
     CommitProxyCandidatesTool,
     CheckNearKnownTool,
+    ScoreBindingFastaTool,
+    ReadProjectDocTool,
+    RunPromptSuiteTool,
 ]
 
 # A2: phmmer remote-homology axis is OPTIONAL — not mounted by default (needs
@@ -67,6 +73,9 @@ __all__ = [
     "FuseSimilarityViewsTool",
     "CommitProxyCandidatesTool",
     "CheckNearKnownTool",
+    "ScoreBindingFastaTool",
+    "ReadProjectDocTool",
+    "RunPromptSuiteTool",
     "PhmmerSimilarityTool",
     "register_all",
 ]

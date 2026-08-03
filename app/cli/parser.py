@@ -8,6 +8,7 @@ import argparse
 from app.cli.accept import (
     cmd_accept_golden,
     cmd_accept_llm,
+    cmd_batch_prompts,
     cmd_gap_closure,
     cmd_own_head,
 )
@@ -75,6 +76,22 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--uniprot", default=None)
     a.add_argument("--sequence-fasta", default=None)
     a.add_argument("--rna-file", default=None)
+    a.add_argument(
+        "--fasta",
+        default=None,
+        help="Allowlisted FASTA path: batch own-head score (no LLM); needs --query RBP",
+    )
+    a.add_argument(
+        "--max-seqs",
+        type=int,
+        default=None,
+        help="Optional subsample for --fasta",
+    )
+    a.add_argument(
+        "--doc",
+        default=None,
+        help="Print allowlisted markdown slice (read_project_doc; no LLM)",
+    )
     a.add_argument("--force-transfer", action="store_true")
     a.add_argument("--strict", action="store_true", help="Exit 2 unless mode=nanobot_llm")
     a.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
@@ -107,6 +124,66 @@ def build_parser() -> argparse.ArgumentParser:
     al.add_argument("--skip-unseen", action="store_true")
     al.add_argument("--no-strict", action="store_true")
     al.set_defaults(func=cmd_accept_llm)
+
+    bp = sub.add_parser(
+        "batch-prompts",
+        help=(
+            "Outer-loop multi-verdict: one agent turn per markdown case "
+            "(e.g. docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md)"
+        ),
+    )
+    bp.add_argument(
+        "--prompts",
+        default=str(
+            __import__("pathlib").Path(__file__).resolve().parents[2]
+            / "docs"
+            / "eval"
+            / "UNSEEN_RBP_TEST_PROMPTS_20.md"
+        ),
+        help="Markdown with ## Prompt NN — Case NN — GENE + ```text``` blocks",
+    )
+    bp.add_argument("--out-dir", default=None, help="Directory for jsonl + summary json")
+    bp.add_argument(
+        "--case",
+        action="append",
+        default=None,
+        help="Filter by case id / prompt id / gene (repeatable)",
+    )
+    bp.add_argument("--limit", type=int, default=None, help="Run at most N cases")
+    bp.add_argument(
+        "--offset",
+        type=int,
+        default=None,
+        help="Skip the first N cases before applying --limit",
+    )
+    bp.add_argument(
+        "--last",
+        type=int,
+        default=None,
+        help="Run only the last N cases (after --case filter)",
+    )
+    bp.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
+    bp.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse/list cases only (no LLM)",
+    )
+    bp.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Abort after the first failed case",
+    )
+    bp.add_argument(
+        "--stream",
+        action="store_true",
+        help="Force chat-like per-case tool streaming (default: on when stderr is a TTY)",
+    )
+    bp.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-case banners / tool streaming",
+    )
+    bp.set_defaults(func=cmd_batch_prompts)
 
     gc = sub.add_parser("gap-closure", help="Gap-closure evidence report")
     gc.add_argument("--no-live", action="store_true")

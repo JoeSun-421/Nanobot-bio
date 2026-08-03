@@ -33,6 +33,8 @@ fusion_weights:
   tm_score: 0.3
   lddt: 0.3
   function_similarity: 0.4
+  # Low-weight lit co-mention axis (literature_search → fuse); keep ≪ emb/domain.
+  literature_cooccurrence: 0.1
   saprot_cosine: 0.0
   # Delivery rna_blastn remains collected as evidence, but the current held-out
   # ablation found its fusion weight harmful; keep 0 until a later promote gate.

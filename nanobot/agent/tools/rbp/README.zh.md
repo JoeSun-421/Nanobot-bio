@@ -21,6 +21,10 @@
 | `phmmer.py` | `PhmmerSimilarityTool`（可选；`RBP_PHMMER=1`） |
 | `evolve_tools.py` | `FuseSimilarityViewsTool`、`LookupProxyCacheTool` |
 | `commit_proxies.py` | `CommitProxyCandidatesTool` |
+| `path_guard.py` | FASTA / markdown 工具的白名单路径解析 |
+| `fasta_score.py` | `ScoreBindingFastaTool` — 白名单 FASTA 路径批量 own-head + AUPRC |
+| `project_doc.py` | `ReadProjectDocTool` — 白名单 `.md` 分包读取 |
+| `prompt_suite.py` | `RunPromptSuiteTool` — docs/eval suite → 外层 batch-prompts |
 | `common.py` | 共享辅助 / 返回信封 |
 | `stage_contract.py` | 阶段契约 / 守卫 |
 | `turn_guards.py` | 回合级安全守卫 |

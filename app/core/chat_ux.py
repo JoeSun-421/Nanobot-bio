@@ -113,14 +113,15 @@ def print_chat_header(
         stream.write(f"  {s.dim('Session')}  {short}\n")
     stream.write(
         s.dim(
-            "  Commands  /help  /status  /tools  /new  /clear  /thinking  "
-            "/onboard  /quit\n"
+            "  Commands  /help  /status  /tools  /new  /suite  /clear  "
+            "/thinking  /caveats  /onboard  /quit\n"
         )
     )
     stream.write(
         s.dim(
-            "  Tips      Paste RNA+protein in one message · Esc+Enter for "
-            "multiline · thoughts folded (RBP_SHOW_THINKING=1)\n"
+            "  Tips      One protein×RNA per message · suite path → "
+            "/suite docs/eval/….md [--last N] (or path+最后N条) · Esc+Enter multiline · "
+            "RBP_SHOW_THINKING=1 · RBP_SHOW_CAVEATS=1\n"
         )
     )
     stream.write(
@@ -140,8 +141,10 @@ CHAT_HELP = """\
   /status     LLM, tools, session, paths
   /tools      List registered tool names
   /new        Start a fresh session key (optional; each query already recomputes)
+  /suite      Run docs/eval suite path (honours 最后N条 / --last / --limit / Prompt NN)
   /clear      Clear the terminal screen (keeps session key)
   /thinking   Toggle expanded thinking (RBP_SHOW_THINKING)
+  /caveats    Toggle expanded verdict caveats (RBP_SHOW_CAVEATS)
   /onboard    Reconfigure LLM provider / API key
   /quit       Exit chat
 
@@ -175,6 +178,13 @@ def print_status_panel(
             f"(RBP_SHOW_THINKING)\n"
         )
     )
+    stream.write(
+        s.dim(
+            f"  caveats   "
+            f"{'expanded' if _show_full_caveats() else 'folded'} "
+            f"(RBP_SHOW_CAVEATS)\n"
+        )
+    )
     stream.flush()
 
 
@@ -192,6 +202,35 @@ _PUBLIC_VERDICT_STRIP = frozenset(
         "_deterministic_confidence",
     }
 )
+
+
+def _show_full_caveats() -> bool:
+    """Expand folded verdict caveats (default = collapsed chrome)."""
+    return os.environ.get("RBP_SHOW_CAVEATS", "").strip().lower() in (
+        "1", "true", "yes", "full", "expand",
+    )
+
+
+def _caveat_preview(text: str, *, max_len: int = 48) -> str:
+    s = " ".join(str(text).split())
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
+def format_caveats_fold_line(
+    caveats: list[str], *, preview_n: int = 2
+) -> str:
+    """One-line folded caveats summary for chat chrome (not the JSON body)."""
+    n = len(caveats)
+    if n == 0:
+        return ""
+    previews = [_caveat_preview(c) for c in caveats[:preview_n] if str(c).strip()]
+    parts = [f"caveats: {n} (folded)"]
+    if previews:
+        parts.append(", ".join(previews))
+    parts.append("expand: RBP_SHOW_CAVEATS=1")
+    return " · ".join(parts)
 
 
 def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
@@ -218,6 +257,9 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
         parsed.pop("path", None)
         caveats = [str(x) for x in (parsed.get("caveats") or [])]
         confidence = parsed.get("confidence")
+        # Keep full caveats on the structured verdict; fold only the terminal dump.
+        if caveats and not _show_full_caveats():
+            parsed.pop("caveats", None)
         body = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
     if evidence:
         stream.write("\n" + s.bold("▸ evidence") + "\n")
@@ -245,14 +287,23 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     stream.write("\n")
     stream.write(s.bold(title) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
+    if "rna_placeholder" in caveats:
+        stream.write(
+            s.yellow(
+                "⚠ RNA marked PLACEHOLDER / not experimental gold — "
+                "scores are demo-path only; do not treat as biological gold.\n"
+            )
+        )
     stream.write(body if body.endswith("\n") else body + "\n")
     if confidence or caveats or path_mode:
         detail_parts: list[str] = []
-        if confidence or caveats:
-            detail = f"confidence={confidence or 'unknown'}"
-            if caveats:
-                detail += " · caveats=" + ", ".join(caveats)
-            detail_parts.append(detail)
+        if confidence:
+            detail_parts.append(f"confidence={confidence}")
+        if caveats:
+            if _show_full_caveats():
+                detail_parts.append("caveats=" + ", ".join(caveats))
+            else:
+                detail_parts.append(format_caveats_fold_line(caveats))
         if path_mode:
             detail_parts.append(f"path={path_mode}")
         stream.write(s.dim(" · ".join(detail_parts)) + "\n")
@@ -964,10 +1015,22 @@ def format_verdict_display(result: Any) -> str:
     from app.core.verdict_schema import (
         _parse_json_object,
         extract_verdict_from_content,
+        looks_like_tool_markup,
         normalize_verdict,
     )
 
     content = getattr(result, "content", None) or ""
+    # Never echo truncated DSML/tool XML as the "verdict" body.
+    if looks_like_tool_markup(content):
+        return (
+            json.dumps(
+                normalize_verdict(content),
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
     parsed = _parse_json_object(content) if content else None
     if isinstance(parsed, dict) and (
         ("A" in parsed and isinstance(parsed.get("A"), dict))
@@ -991,6 +1054,7 @@ def format_verdict_display(result: Any) -> str:
         and "Mode=unknown" in expl
         and content
         and len(content) > 200
+        and not looks_like_tool_markup(content)
     ):
         return content.strip() + "\n"
 

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import re
+from functools import lru_cache
+from typing import Any, Optional
 
 from nanobot.agent.tools.core.base import Tool, tool_parameters
 
@@ -17,6 +19,162 @@ from nanobot.agent.tools.rbp.common import (
     ok,
     timed_call,
 )
+
+# Metric name for lit-derived catalogue co-mentions fed into fuse_similarity_views.
+LITERATURE_COOCCURRENCE_METRIC = "literature_cooccurrence"
+
+_RELATEDNESS_MARKERS = (
+    "PARALOG",
+    "HOMOLOG",
+    "ORTHOLOG",
+    "PROTEIN FAMILY",
+    "RELATED RBP",
+    "RELATED PROTEIN",
+    "FAMILY MEMBER",
+    "SIMILAR TO",
+)
+_RBP_CONTEXT_MARKERS = (
+    "RNA-BINDING",
+    "RNA BINDING",
+    " RBP",
+    "RBP ",
+    "SPLICING",
+    "ECLIP",
+    "CLIP",
+)
+
+
+def default_literature_query(rbp_name: str) -> str:
+    """Europe PMC default: papers on proteins similar/related to this RBP.
+
+    Anchors on the resolved symbol while biasing toward family / paralog /
+    homolog / co-mentioned RBP neighbors — not a narrow CLIP+year filter
+    that often returns zero hits.
+    """
+    name = (rbp_name or "").strip() or "RBP"
+    return (
+        f'("{name}") AND (paralog* OR paralogue OR homolog* OR ortholog* '
+        f'OR "related protein" OR "related RBP" OR "protein family" '
+        f'OR "family member" OR "similar to" OR "RNA-binding protein" OR RBP)'
+    )
+
+
+@lru_cache(maxsize=1)
+def _catalogue_alias_index() -> tuple[tuple[str, str, str], ...]:
+    """Return ``(ALIAS_UPPER, display_alias, uniprot)`` sorted longest-first."""
+    try:
+        from nanobot.agent.tools.rbp.common import (
+            apply_delivery_env_facade,
+            load_rbp_registry_facade,
+        )
+
+        apply_delivery_env_facade()
+        reg = load_rbp_registry_facade()
+    except Exception:
+        return ()
+    rows: list[tuple[str, str, str]] = []
+    for up, rec in (reg or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        alias = str(rec.get("alias") or "").strip()
+        if not alias or len(alias) < 2:
+            continue
+        rows.append((alias.upper(), alias, str(up)))
+    rows.sort(key=lambda r: (-len(r[0]), r[0]))
+    return tuple(rows)
+
+
+def _token_in_blob(token_upper: str, blob_upper: str) -> bool:
+    if not token_upper or not blob_upper:
+        return False
+    return (
+        re.search(
+            rf"(?<![A-Z0-9]){re.escape(token_upper)}(?![A-Z0-9])",
+            blob_upper,
+        )
+        is not None
+    )
+
+
+def build_literature_cooccurrence_hits(
+    papers: list[Any],
+    query_name: str,
+    *,
+    max_hits: int = 8,
+    catalogue: Optional[tuple[tuple[str, str, str], ...]] = None,
+) -> list[dict[str, Any]]:
+    """Build low-weight fuse hits from catalogue aliases in paper text.
+
+    Scores in ``[0, 1]`` from paper rank + title vs abstract mention strength.
+    Excludes the query symbol. Metric: ``literature_cooccurrence``.
+    """
+    if not papers:
+        return []
+    index = catalogue if catalogue is not None else _catalogue_alias_index()
+    if not index:
+        return []
+    exclude = {(query_name or "").strip().upper()}
+    scores: dict[str, float] = {}
+    uniprot_of: dict[str, str] = {}
+    display_of: dict[str, str] = {}
+    n = len(papers)
+    for i, paper in enumerate(papers):
+        if not isinstance(paper, dict):
+            continue
+        title_u = str(paper.get("title") or "").upper()
+        abs_u = str(
+            paper.get("abstract_snippet") or paper.get("abstract") or ""
+        ).upper()
+        if not title_u and not abs_u:
+            continue
+        paper_w = max(0.35, 1.0 - (i / max(n, 1)) * 0.55)
+        for alias_up, alias_disp, uniprot in index:
+            if alias_up in exclude:
+                continue
+            in_title = _token_in_blob(alias_up, title_u)
+            in_abs = _token_in_blob(alias_up, abs_u)
+            if not in_title and not in_abs:
+                continue
+            bump = (0.55 if in_title else 0.30) * paper_w
+            scores[alias_up] = min(1.0, scores.get(alias_up, 0.0) + bump)
+            uniprot_of[alias_up] = uniprot
+            display_of[alias_up] = alias_disp
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    hits: list[dict[str, Any]] = []
+    for rank, (alias_up, score) in enumerate(ranked[: max(1, int(max_hits))], start=1):
+        hits.append(
+            {
+                "alias": display_of[alias_up],
+                "uniprot": uniprot_of.get(alias_up, ""),
+                "score": round(float(score), 4),
+                "metric": LITERATURE_COOCCURRENCE_METRIC,
+                "rank": rank,
+            }
+        )
+    return hits
+
+
+def _attach_literature_fuse_hits(
+    value: dict[str, Any],
+    papers: list[Any],
+    name: str,
+    *,
+    axis_usable: bool,
+) -> dict[str, Any]:
+    """Attach soft fuse hits; empty when off-topic / unusable."""
+    hits: list[dict[str, Any]] = []
+    if axis_usable:
+        hits = build_literature_cooccurrence_hits(papers, name)
+    value["hits"] = hits
+    value["hits_lit"] = hits
+    value["n_lit_hits"] = len(hits)
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import set_literature_fuse_hits
+
+        set_literature_fuse_hits(hits, axis_usable=axis_usable)
+    except Exception:
+        pass
+    return value
 
 
 def reset_tool_turn_guards() -> None:
@@ -216,9 +374,16 @@ class LiteratureSearchTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Literature via Europe PMC (delivery). Prefer a precise `query` "
-            "(CLIP/eCLIP/RBP + years). Bare name=MYC often returns off-topic hits — "
-            "say so if irrelevant. At most ONE call per query. Not web_search."
+            "Function-view literature retrieve (proposal Table 1 Function = "
+            "UniProt/PDB/literature): Europe PMC papers on proteins "
+            "similar/related to this RBP (family, paralogs, homologs, "
+            "co-mentioned panel RBPs). Prefer omitting `query` (server "
+            "default) — not ultra-narrow CLIP+year filters. Returns snippets "
+            "plus catalogue co-mention `hits`/`hits_lit` "
+            f"(`{LITERATURE_COOCCURRENCE_METRIC}`) that fuse weight-aggregates "
+            "into overall s_i under the function view when axis_usable "
+            "(weight 0.1; never a binding vote alone). At most ONE call per "
+            "query. Not web_search."
         )
 
     @property
@@ -259,10 +424,7 @@ class LiteratureSearchTool(Tool):
         if query:
             payload["query"] = query
         else:
-            payload["query"] = (
-                f'("{name}") AND (RBP OR "RNA-binding" OR CLIP OR eCLIP '
-                f"OR seCLIP OR splicing) AND (FIRST_PDATE:[2020 TO 2026])"
-            )
+            payload["query"] = default_literature_query(name)
 
         # A6: cross-session TTL memo cache (default 7d). Hit → return immediately
         # without consuming the one-shot success budget or hitting the network.
@@ -271,6 +433,19 @@ class LiteratureSearchTool(Tool):
         if cached is not None:
             cached_value = dict(cached)
             cached_value["cache"] = "hit"
+            papers = cached_value.get("papers") or []
+            if not isinstance(papers, list):
+                papers = []
+            possibly_off_topic = bool(
+                cached_value.get("possibly_off_topic")
+            ) or _papers_possibly_off_topic(papers, name)
+            cached_value["possibly_off_topic"] = possibly_off_topic
+            axis_usable = not possibly_off_topic
+            cached_value["axis_usable"] = axis_usable
+            _surface_literature_axis_flags(possibly_off_topic)
+            _attach_literature_fuse_hits(
+                cached_value, papers, name, axis_usable=axis_usable
+            )
             LiteratureSearchTool._calls_used += 1
             return dumps(ok(cached_value, 0.0))
 
@@ -302,23 +477,33 @@ class LiteratureSearchTool(Tool):
             if not isinstance(papers, list):
                 papers = []
             possibly_off_topic = _papers_possibly_off_topic(papers, name)
+            axis_usable = not possibly_off_topic
+            _surface_literature_axis_flags(possibly_off_topic)
             LiteratureSearchTool._calls_used += 1
             value = {
                 "papers": papers,
                 "query": out.get("query") or payload.get("query"),
                 "n_papers": len(papers),
                 "possibly_off_topic": possibly_off_topic,
+                "axis_usable": axis_usable,
                 "retries": attempt,
                 "cache": "miss",
             }
+            _attach_literature_fuse_hits(
+                value, papers, name, axis_usable=axis_usable
+            )
             # A6: persist to the cross-session TTL memo cache.
             literature_cache_put(cache_key, value)
             return dumps(ok(value, ms_total))
 
         try:
-            from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+            from nanobot.agent.tools.rbp.turn_guards import (
+                add_evidence_flag,
+                set_literature_fuse_hits,
+            )
 
             add_evidence_flag("literature_unavailable", True)
+            set_literature_fuse_hits([], axis_usable=False)
         except Exception:
             pass
         return dumps(
@@ -327,6 +512,19 @@ class LiteratureSearchTool(Tool):
                 ms_total,
             )
         )
+
+
+def _surface_literature_axis_flags(possibly_off_topic: bool) -> None:
+    """Mark literature unusable for fuse/explanation when off-topic."""
+    if not possibly_off_topic:
+        return
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+        add_evidence_flag("literature_off_topic", True)
+        add_evidence_flag("literature_axis_unusable", True)
+    except Exception:
+        pass
 
 
 def _is_transient_network_error(msg: str) -> bool:
@@ -346,8 +544,22 @@ def _is_transient_network_error(msg: str) -> bool:
     return any(n in low for n in needles)
 
 
+def _blob_has_related_rbp_context(blob_upper: str) -> bool:
+    """True when snippet discusses relatedness in an RBP/RNA-binding context."""
+    if not blob_upper:
+        return False
+    has_rel = any(m in blob_upper for m in _RELATEDNESS_MARKERS)
+    has_rbp = any(m in blob_upper for m in _RBP_CONTEXT_MARKERS)
+    return has_rel and has_rbp
+
+
 def _papers_possibly_off_topic(papers: list[Any], rbp_name: str) -> bool:
-    """True when no paper title/snippet mentions the RBP symbol (coarse check)."""
+    """True when papers look off-topic for the query RBP / related-RBP axis.
+
+    On-topic if any paper mentions the RBP symbol, or (for relatedness-oriented
+    defaults) discusses paralog/homolog/family language together with
+    RNA-binding context — so family-neighbor papers are not falsely flagged.
+    """
     if not papers:
         return True
     needle = (rbp_name or "").strip().upper()
@@ -361,5 +573,7 @@ def _papers_possibly_off_topic(papers: list[Any], rbp_name: str) -> bool:
             for k in ("title", "abstract_snippet", "abstract", "journal")
         ).upper()
         if needle in blob:
+            return False
+        if _blob_has_related_rbp_context(blob):
             return False
     return True

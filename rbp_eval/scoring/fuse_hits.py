@@ -16,6 +16,8 @@ DEFAULT_WEIGHTS = {
     "fident": 0.2,
     "saprot_cosine": 0.0,
     "function_similarity": 0.4,
+    # Low-weight Function peer axis from literature_search co-mentions.
+    "literature_cooccurrence": 0.1,
     # Collected when PEAKS_DB is ready, but promoted into fusion only after a
     # held-out ablation; the current certified policy keeps this at zero.
     "rna_peak_homology": 0.0,
@@ -66,7 +68,12 @@ _SEQ_METRICS = frozenset(
 )
 _STRUCT_METRICS = frozenset({"tm_score", "lddt", "fident", "alntmscore"})
 _FUNC_METRICS = frozenset(
-    {"domain_jaccard", "domain_overlap", "function_similarity"}
+    {
+        "domain_jaccard",
+        "domain_overlap",
+        "function_similarity",
+        "literature_cooccurrence",
+    }
 )
 
 
@@ -267,6 +274,82 @@ def fuse_rbp_hits(
     for i, row in enumerate(selected, start=1):
         row["rank"] = i
     return selected
+
+
+def append_literature_gap_fill(
+    donors: list[dict[str, Any]],
+    lit_hits: list[dict[str, Any]],
+    *,
+    top_k: int = 5,
+    max_gap: int = 2,
+    tau_drop: float = 0.30,
+    exclude_aliases: Optional[set[str]] = None,
+    allowed_aliases: Optional[set[str]] = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Append lit-mentioned panel aliases missing from fused donors (soft).
+
+    Lit-only donors rarely clear ``tau_drop`` under the low
+    ``literature_cooccurrence`` weight, so Checkpoint 1 would never see
+    literature omissions. This appends up to ``max_gap`` soft rows with
+    scores capped below ``tau_drop`` so they remain selectable but cannot
+    outrank multi-view donors. Returns ``(donors, gap_fill_aliases)``.
+    """
+    if not lit_hits or max_gap <= 0:
+        return list(donors or []), []
+    exclude_folded = {str(a).casefold() for a in (exclude_aliases or set())}
+    allowed_folded = (
+        {str(a).casefold() for a in allowed_aliases}
+        if allowed_aliases is not None
+        else None
+    )
+    present = {str(d.get("alias") or "").casefold() for d in (donors or [])}
+    out = list(donors or [])
+    filled: list[str] = []
+    ordered = sorted(
+        (h for h in lit_hits if isinstance(h, dict) and h.get("alias")),
+        key=lambda h: float(h.get("score") or 0.0),
+        reverse=True,
+    )
+    soft_cap = max(0.12, min(float(tau_drop) - 0.01, 0.29))
+    for hit in ordered:
+        if len(filled) >= max_gap:
+            break
+        alias = str(hit.get("alias") or "").strip()
+        if not alias:
+            continue
+        folded = alias.casefold()
+        if folded in present or folded in exclude_folded:
+            continue
+        if allowed_folded is not None and folded not in allowed_folded:
+            continue
+        lit_score = max(0.0, min(1.0, float(hit.get("score") or 0.0)))
+        soft = round(min(soft_cap, max(0.12, 0.22 * lit_score)), 4)
+        out.append(
+            {
+                "alias": alias,
+                "uniprot": hit.get("uniprot") or "",
+                "score": soft,
+                "fused_score": soft,
+                "vote_similarity": round(0.1 * lit_score, 4),
+                "vote_similarity_source": "literature_gap_fill",
+                "metric": "fused",
+                "rank": 0,
+                "sim_by_modality": {"literature_cooccurrence": round(lit_score, 4)},
+                "sim_normalized": {"literature_cooccurrence": round(lit_score, 4)},
+                "similarity_breakdown": {"func": round(lit_score, 4)},
+                "gap_fill": "literature_cooccurrence",
+            }
+        )
+        present.add(folded)
+        filled.append(alias)
+    primary = [r for r in out if not r.get("gap_fill")]
+    gap = [r for r in out if r.get("gap_fill")]
+    primary.sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    gap.sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    merged = (primary + gap)[: max(top_k, 0) + max(max_gap, 0)]
+    for i, row in enumerate(merged, start=1):
+        row["rank"] = i
+    return merged, filled
 
 
 def fuse_proxy_candidates(

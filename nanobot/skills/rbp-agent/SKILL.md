@@ -65,7 +65,8 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 
 1. **Registered science tools only** — use any tool exposed in the registry / [§9 Tool map](#9-tool-map) (full delivery surface by default).  
    **Never:** `exec`, shell, `pip`, editors, `web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`.  
-   Papers → `literature_search` only (**≤ 1** call per query).
+   Papers → `literature_search` only (**≤ 1** call per query; prefer omit `query` for related-protein default).  
+   **Path paste:** `.fasta`/`.fa` → `score_binding_fasta` (must include RBP); prompt-suite `.md` under `docs/eval/` (e.g. `transfer_test_prompts.md`, `UNSEEN_RBP_TEST_PROMPTS_20.md`) or “run this file …” → **`run_prompt_suite`** (outer-loop batch; one turn per case); other allowlisted `.md` under docs/skills → `read_project_doc` (chunk via `next_offset` if `eof=false`). Do **not** use `read_project_doc` for FASTA or for suite runs.
 2. **No fabricated biology** — do not invent sequences, pLDDT, citations, or probabilities. Never put a UniProt ID in a `sequence` field.
 3. **Catalogue addressing** — prefer `alias` / `uniprot` on seq / struct / domain tools. `resolve_rbp` already returns `sequence` when matched.
 4. **No loops (within this user turn only)** — same tool + same arguments → do not re-call *inside the current message's tool chain*. Batch when possible; use as many distinct registered tools as the science needs (no artificial call-count cap).
@@ -74,6 +75,7 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 7. **Batch wisely** — prefer one batched `predict_interaction(rbps=[...])` over many single-RBP calls.
 8. **Output contract** — final message = exactly one JSON object (see [§8](#8-final-json-output)).
 9. **Score authority** — `p_hat` / `prob` only from `predict_interaction` / `similarity_weighted_vote` (runtime `set_authoritative_score`). Never invent or overwrite scores. Checkpoint 1 selects donors only — never invents `similarity_score`.
+10. **One case per request** — each user message is **one** protein × one RNA, **unless** it is a prompt-suite path. Do **not** score multiple cases / genes from a pasted suite body in a single turn (output will truncate mid-tool-call). When the user pastes a **path** to `docs/eval/*.md` suite (or says “run this file”), call **`run_prompt_suite(path=…)`** once and stop — do **not** `read_project_doc` the whole suite and fuse in-chat. Single fenced ```text``` prompt → normal Stage 0–3 pipeline. Chat also short-circuits suite paths / `/suite`; CLI: `nanobot-bio batch-prompts`.
 
 ---
 
@@ -150,7 +152,7 @@ Full playbooks: [`references/stages.md`](references/stages.md).
 | --- | --- |
 | **Stage 0** Own-head | `resolve_rbp` → `in_panel=true` → `predict_interaction` **once** → JSON → **STOP** |
 | **Near-known** | `check_near_known` (exact catalogue AA **or** ≥95% id / exact resolve) → **own-head Fast Path** on the matched headed catalogue RBP; disclose near_match; STOP (do not force multi-donor transfer). **`force_transfer=true` (LOO):** disables near-match own-head; foreign donors only (single foreign donor OK); never predict on the query/target’s own head; disclose near_match in caveats |
-| **Stage 1** Retrieve | `lookup_proxy_cache` → characterize → parallel retrieve (seq + domain + structure + **function/annotation** + literature) → `fuse_similarity_views` (authoritative numeric `s_i`) → **`commit_proxy_candidates`** (selection only) → **`confidence_abstain`** |
+| **Stage 1** Retrieve | `lookup_proxy_cache` → characterize → parallel retrieve (**seq + struct + function** = UniProt annotation + literature peer retrieve) → `fuse_similarity_views` (authoritative numeric `s_i`; lit soft hits auto-injected at weight 0.1) → **`commit_proxy_candidates`** (selection only; never invent `s_i`) → **`confidence_abstain`** |
 | **Stage 2** Predict | Batched `predict_interaction` on committed donors (after abstain). Default aggregate **`weighted`**. No invent / no retry on OOM |
 | **Stage 3** Integrate | Evidence checklist (≥2 fails → `confidence=low`; surface **caveats**); optional `transfer_prior_lookup` / `donor_quality_prior`. `p_hat` already from weighted aggregation — do not replace with invented numbers |
 
@@ -163,7 +165,7 @@ Full playbooks: [`references/stages.md`](references/stages.md).
 6. **Sequence-only / anonymous targets** (no accession): skip tools that require UniProt (or call only with clear **donor/homolog** attribution); structure path = AFDB miss → `predict_structure` ≤ 1. Do not thrash `get_func_annotation` / `literature_search` on homolog IDs without labeling them as donor/homolog annotations.
 **Sequence:** ESM-C + MMseqs dual axes. **Aggregate default:** `weighted` — delivery `similarity_weighted_vote`: `Σ(s_i × tprior_i × quality_i × prob_i) / Σ(s_i × tprior_i × quality_i)`. `s_i` = committed proxy similarity; `tprior_i` / `quality_i` from `transfer_prior_lookup` / `donor_quality_prior` (auto-fetched in `predict_interaction` when enabled). Verdict `confidence` is rule-based (Stage-3 checklist), not per-donor weighting.
 **`p_hat`:** raw from predict tools only (weighted over committed proxies on transfer).
-**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** retrieve axes on the unseen path. If a tool errors, surface the corresponding caveat (`literature_unavailable`) as a **caveat only** (does **not** count as a checklist failure or deduct confidence) — do **not** substitute model-memory annotations.
+**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** retrieve axes on the unseen path. Prefer omitting `literature_search.query` (server default targets **proteins similar/related** to the RBP — family/paralogs/homologs — not ultra-narrow CLIP+year filters). Literature returns paper snippets **and** low-weight catalogue co-mention soft hits (`literature_cooccurrence`, weight 0.1) that `fuse_similarity_views` auto-injects under the Function peer view when `axis_usable`. Off-topic papers → empty soft hits + `literature_off_topic` / `literature_axis_unusable` (caveat only; do not invent `s_i`). Literature is a **peer retrieve axis**, not only a Stage-3 remedy, and never a raw-abstract binding vote. If a tool errors, surface `literature_unavailable` as a **caveat only** — do **not** substitute model-memory annotations.
 
 ---
 
@@ -223,7 +225,10 @@ Unseen-path Stage 2/3 integrate tools (`transfer_prior_lookup`, `donor_quality_p
 | `get_func_annotation` | Function + category + optional PDB ≤ 1 / UniProt. **Required on the unseen path** — function/category/RNA-motif annotations cited in the explanation must come from here (or `literature_search`), never from model memory |
 | `function_category` | Raw delivery category (also merged into get_func_annotation) |
 | `pdb_metadata` | Optional PDB annotation |
-| `literature_search` | ≤ 1 paper search. **Required on the unseen path** for any literature/motif citation; on error surface `literature_unavailable` caveat |
+| `literature_search` | ≤ 1 paper search for **related/similar RBPs** (prefer omit `query`). Returns snippets + soft `hits_lit` (`literature_cooccurrence`) for low-weight fuse; also feeds Checkpoint 1/2 narrative. **Required on unseen path**; on error → `literature_unavailable`; off-topic → `axis_usable=false`, empty soft hits, `literature_off_topic` (caveat only) |
+| `score_binding_fasta` | User pasted an allowlisted `.fasta`/`.fa` path + RBP → batch own-head scores; returns AUPRC/AUROC summary + CSV path (not full sequences in chat). CLI: `nanobot-bio agent --query RBP --fasta path` |
+| `run_prompt_suite` | User pasted a **prompt-suite** path under `docs/eval/` (or “run this file”) → parse fenced cases and run outer-loop batch (one agent turn / case → JSONL/summary). Do **not** predict all cases in the current turn. CLI: `nanobot-bio batch-prompts`; chat: paste path or `/suite PATH` |
+| `read_project_doc` | User pasted an allowlisted `.md` path under `docs/` or `skills/` → return text chunk; continue with `offset=next_offset` until `eof`. Not for suite batch runs (use `run_prompt_suite`). Not general `read_file` |
 | `transfer_prior_lookup` | Stage 3 prior |
 | `donor_quality_prior` | Stage 3 donor quality |
 | `similarity_weighted_vote` | Stage 3 evidence table (same formula as `predict_interaction` weighted aggregation) |
@@ -235,7 +240,9 @@ Other delivery-ready tools in the registry (beyond this table) may be used when 
 
 ### 9.3 Not available
 
-`web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`, shell / `exec` are not registered for the RBP agent — do not attempt to call them. Use `literature_search` for papers and registered science tools for resolution. (`RBP_RAW_TOOLS` only toggles delivery science tools, never these.)
+`web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`, shell / `exec` are not registered for the RBP agent — do not attempt to call them. Use `literature_search` for papers, `read_project_doc` for allowlisted markdown, `run_prompt_suite` for docs/eval prompt suites, `score_binding_fasta` for allowlisted FASTA paths, and registered science tools for resolution. (`RBP_RAW_TOOLS` only toggles delivery science tools, never these.)
+
+Guide: [`docs/guides/BATCH_FASTA_SCORE.zh.md`](../../../../docs/guides/BATCH_FASTA_SCORE.zh.md) (readable via `read_project_doc`).
 
 ---
 

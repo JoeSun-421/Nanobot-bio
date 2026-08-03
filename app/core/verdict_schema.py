@@ -51,6 +51,37 @@ def label_from_p_hat(
 
 _FENCE_OPEN_RE = re.compile(r"```(?:json)?\s*", re.IGNORECASE)
 
+# Truncated DeepSeek/DSML (or similar) tool-call XML dumped as assistant "content".
+_TOOL_MARKUP_RE = re.compile(
+    r"(?:DSML\s*\|?\s*tool_calls|</?\s*(?:\|+\s*)?DSML|"
+    r"<\|?[^\n|]{0,40}?tool_calls|"
+    r"invoke\s+name\s*=\s*[\"']fuse_similarity_views|"
+    r"<tool_call\b|"
+    r"function\s*calls?\s*begin)",
+    re.IGNORECASE,
+)
+
+
+def looks_like_tool_markup(text: Any) -> bool:
+    """True when content is truncated tool-call markup, not a JSON verdict.
+
+    Chat failure mode: completion hits max_tokens mid-``fuse_similarity_views``;
+    the runner may surface raw DSML/XML as the final message. That must never be
+    treated as a scientific verdict.
+    """
+    if not isinstance(text, str):
+        return False
+    s = text.strip()
+    if not s or len(s) < 24:
+        return False
+    if _TOOL_MARKUP_RE.search(s):
+        return True
+    # Common DSML delimiters with zero-width / pipe noise from terminals.
+    compact = re.sub(r"[\s|]+", "", s[:400]).lower()
+    if "dsml" in compact and ("tool_calls" in compact or "invoke" in compact):
+        return True
+    return False
+
 
 def _balanced_json_slice(s: str, start: int) -> Optional[str]:
     """Return s[start:end] for a balanced {...} object starting at start."""
@@ -201,11 +232,46 @@ def normalize_verdict(
     if raw is None:
         raw = {}
     if isinstance(raw, str):
-        parsed = _parse_json_object(raw)
-        raw = parsed if parsed is not None else {"explanation": raw, "raw_content": raw}
+        if looks_like_tool_markup(raw):
+            raw = {
+                "label": "No",
+                "p_hat": None,
+                "confidence": "low",
+                "explanation": (
+                    "Incomplete turn: final assistant content looks like truncated "
+                    "tool-call markup (e.g. DSML fuse_similarity_views), not a JSON "
+                    "verdict. Re-run as a single case (one protein per request / "
+                    "`nanobot-bio batch-prompts`); do not paste many cases in one chat turn."
+                ),
+                "supporting_rbps": [],
+                "caveats": ["truncated_tool_markup", "incomplete_turn"],
+                "mode": default_mode or "unknown",
+                "raw_content": raw[:500],
+            }
+        else:
+            parsed = _parse_json_object(raw)
+            raw = parsed if parsed is not None else {"explanation": raw, "raw_content": raw}
 
     if not isinstance(raw, dict):
         raw = {"raw": raw}
+
+    # Catch markup stuffed into explanation (skip if already flagged above).
+    caveats0 = raw.get("caveats") if isinstance(raw.get("caveats"), list) else []
+    if "truncated_tool_markup" not in caveats0 and looks_like_tool_markup(
+        raw.get("explanation")
+    ):
+        raw = {
+            "label": "No",
+            "p_hat": None,
+            "confidence": "low",
+            "explanation": (
+                "Incomplete turn: truncated tool-call markup was treated as content. "
+                "Re-run one case per request (`nanobot-bio batch-prompts` for suites)."
+            ),
+            "supporting_rbps": [],
+            "caveats": ["truncated_tool_markup", "incomplete_turn"],
+            "mode": raw.get("mode") or default_mode or "unknown",
+        }
 
     # Nested under "verdict" (pipeline full result)
     if "verdict" in raw and isinstance(raw["verdict"], dict):
@@ -436,6 +502,9 @@ def normalize_verdict(
         "structure_mostly_disordered",
         "region_plddt_low",
         "literature_unavailable",
+        "literature_off_topic",
+        "literature_axis_unusable",
+        "literature_gap_fill",
         "mmseqs_segfall",
         "low_head_coverage",
         "single_donor_transfer",
@@ -444,6 +513,8 @@ def normalize_verdict(
         "near_match_loo_disclosed",
         "ood",
         "selective_abstain",
+        "truncated_tool_markup",
+        "incomplete_turn",
     )
     caveats = out.get("caveats")
     if not isinstance(caveats, list):

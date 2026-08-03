@@ -21,6 +21,10 @@ These tools implement the scientific stages described in [`docs/product/BINDING_
 | `phmmer.py` | `PhmmerSimilarityTool` (optional; `RBP_PHMMER=1`) |
 | `evolve_tools.py` | `FuseSimilarityViewsTool`, `LookupProxyCacheTool` |
 | `commit_proxies.py` | `CommitProxyCandidatesTool` |
+| `path_guard.py` | Allowlisted path resolution for FASTA / markdown tools |
+| `fasta_score.py` | `ScoreBindingFastaTool` — allowlisted FASTA batch own-head + AUPRC |
+| `project_doc.py` | `ReadProjectDocTool` — allowlisted `.md` chunked reads |
+| `prompt_suite.py` | `RunPromptSuiteTool` — docs/eval suite → outer-loop batch-prompts |
 | `common.py` | Shared helpers / envelopes |
 | `stage_contract.py` | Stage contracts / guards |
 | `turn_guards.py` | Per-turn safety guards |
