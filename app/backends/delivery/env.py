@@ -346,11 +346,14 @@ def apply_delivery_env() -> dict[str, str]:
             defaults["AF3_PYTHON"] = str(af3_py)
     applied = {}
     for k, v in defaults.items():
-        if k not in os.environ:
+        # Treat missing OR blank (e.g. EMB_BANK= in a stale shell/.env) as unset so
+        # delivery path defaults actually apply — blank blocks setdefault-style logic.
+        cur = os.environ.get(k)
+        if cur is None or (isinstance(cur, str) and not cur.strip()):
             os.environ[k] = v
             applied[k] = v
         else:
-            applied[k] = os.environ[k]
+            applied[k] = cur
     Path(applied["HF_HOME"]).mkdir(parents=True, exist_ok=True)
     Path(applied["HUGGINGFACE_HUB_CACHE"]).mkdir(parents=True, exist_ok=True)
     Path(applied["TRANSFORMERS_CACHE"]).mkdir(parents=True, exist_ok=True)

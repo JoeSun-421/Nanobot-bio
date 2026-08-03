@@ -19,6 +19,8 @@
 | `retune.py` | 权重 / 阈值 / abstain / `tau_drop` 重调 |
 | `proposals.py` | 工具归因 + toolkit 扩展提案 |
 | `proxy_cache.py` | 提升高频 target→proxy 映射（`artifacts/cache/proxy_map.json`） |
+| `../loo/expand_matrix.py` | 一键扩展 agent 侧 LOO 矩阵副本（不改 delivery） |
+| `../loo/matrix_ab_eval.py` | delivery vs 扩展矩阵 A/B（`delta_auprc`） |
 | `promote.py` | 门禁并将候选 promote 为 `evolved.yaml` |
 | `evolve_eval.py` | 在 LOO medoids 上的轻量嵌套 train/test |
 | `run_eval.py` | Agent run_eval + 模态消融 |
@@ -28,7 +30,13 @@
 ## 入口
 
 ```bash
-nanobot-bio evolve [--dry-run]
+# LOO 矩阵副本 + 自演进 + A/B（不改 delivery）
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 64
+export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
+export TRANSFER_DIR="$RBP_LOO_TRANSFER_DIR"
+nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR"
+nanobot-bio loo-matrix-ab
+
 nanobot-bio evolve-eval
 nanobot-bio run-eval
 nanobot-bio promote-evolved [--seed]

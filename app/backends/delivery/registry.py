@@ -463,7 +463,7 @@ def build_proposal_tools(client: Optional[DeliveryToolClient] = None) -> list[To
     except ImportError:
         # Ensure tools are installed into the real nanobot tree, then retry
         try:
-            from app.integrate import install_rbp_tools_into_nanobot
+            from app.rbp_bootstrap import install_rbp_tools_into_nanobot
 
             install_rbp_tools_into_nanobot()
         except Exception:

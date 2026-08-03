@@ -277,6 +277,24 @@ def add_evidence_flag(key: str, value: Any = True) -> None:
     _EVIDENCE_FLAGS[str(key)] = value
 
 
+def clear_evidence_flag(key: str) -> None:
+    _EVIDENCE_FLAGS.pop(str(key), None)
+
+
+def clear_structure_axis_unavailable() -> None:
+    """Clear sticky AFDB-miss flags after a usable structure is recovered.
+
+    ``structure_fetch`` / AFDB miss may set ``structure_axis_unavailable`` (and
+    sometimes ``structure_unavailable``). A later successful AF3
+    ``predict_structure`` or ``struct_similarity`` must clear those so
+    ``normalize_verdict`` does not force low confidence. Intentional trust
+    flags (``structure_mostly_disordered``, ``structure_low_plddt``, …) are
+    left untouched.
+    """
+    clear_evidence_flag("structure_axis_unavailable")
+    clear_evidence_flag("structure_unavailable")
+
+
 def evidence_flags() -> dict[str, Any]:
     return dict(_EVIDENCE_FLAGS)
 
@@ -704,6 +722,8 @@ __all__ = [
     "abstain_done",
     "own_head_stop_active",
     "add_evidence_flag",
+    "clear_evidence_flag",
+    "clear_structure_axis_unavailable",
     "evidence_flags",
     "set_force_transfer_active",
     "force_transfer_active",

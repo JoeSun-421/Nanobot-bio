@@ -63,18 +63,42 @@ _LOO_CSV_SUBDIRS = (
 )
 
 
-def resolve_loo_csvs() -> tuple[Path, Path]:
-    """Single source of truth for locating loo_summary.csv + loo_transfer_metrics.csv.
+def default_expanded_transfer_dir() -> Path:
+    """Agent-side LOO matrix copy (not delivery SoT)."""
+    return Path(__file__).resolve().parents[1] / "data" / "transfer"
 
-    Tries every known delivery layout under both ``agent_db`` and the resolved
-    delivery root, returning the first existing pair. When nothing exists yet, the
-    preferred (agent_db) paths are returned so callers can emit a clear ``missing``
-    error instead of a stale hard-coded guess. Shared by loo_eval, evaluator and
-    the engineering gate so the three never drift.
+
+def resolve_loo_csvs(
+    transfer_dir: Optional[Path | str] = None,
+    *,
+    prefer_delivery: bool = False,
+) -> tuple[Path, Path]:
+    """Locate loo_summary.csv + loo_transfer_metrics.csv.
+
+    Priority (unless ``prefer_delivery``):
+      1. Explicit ``transfer_dir`` argument
+      2. ``RBP_LOO_TRANSFER_DIR`` env (agent-side expanded copy)
+      3. Delivery layouts under ``agent_db`` / delivery root
+
+    Shared by loo_eval, retune, heavy_loo, transfer_calibration, expand_matrix.
     """
+    import os
+
     from app.backends.delivery.env import apply_delivery_env, resolve_delivery_paths
 
     apply_delivery_env()
+
+    explicit = transfer_dir or os.environ.get("RBP_LOO_TRANSFER_DIR")
+    if not prefer_delivery and explicit:
+        base = Path(str(explicit)).expanduser().resolve()
+        summary = base / "loo_summary.csv"
+        metrics = base / "loo_transfer_metrics.csv"
+        if summary.is_file() and metrics.is_file():
+            return summary, metrics
+        # Prefer explicit dir even if incomplete so callers report clear missing paths
+        if base.is_dir() or explicit:
+            return summary, metrics
+
     paths = resolve_delivery_paths()
     agent_db = Path(paths["agent_db"])
     root = Path(paths["delivery_root"])
@@ -83,7 +107,6 @@ def resolve_loo_csvs() -> tuple[Path, Path]:
         cands = [agent_db / "transfer" / name]
         for sub in _LOO_CSV_SUBDIRS:
             cands.append(root.joinpath(*sub, name))
-        # De-dupe while preserving order
         seen: set[str] = set()
         out: list[Path] = []
         for c in cands:
@@ -103,8 +126,8 @@ def resolve_loo_csvs() -> tuple[Path, Path]:
     return _pick("loo_summary.csv"), _pick("loo_transfer_metrics.csv")
 
 
-def _paths():
-    return resolve_loo_csvs()
+def _paths(transfer_dir: Optional[Path | str] = None):
+    return resolve_loo_csvs(transfer_dir=transfer_dir)
 
 
 def policy_from_hits(

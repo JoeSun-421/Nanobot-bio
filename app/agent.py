@@ -64,14 +64,8 @@ _SKILL_CANDIDATES = (
 # Install / skill
 # ---------------------------------------------------------------------------
 
-def install_rbp_tools_into_nanobot() -> Path:
-    """Sync SoT tools/skill into installed nanobot runtime + workspace."""
-    from app.sync_overlay import sync_overlay
-
-    sync_overlay()
-    nb = Path(os.environ.get("NANOBOT_SRC", _DEFAULT_NANOBOT_SRC)).expanduser().resolve()
-    return nb / "agent" / "tools" / "rbp"
-
+# Re-export: keep public API; implementation lives in rbp_bootstrap (no import cycle).
+from app.rbp_bootstrap import install_rbp_tools_into_nanobot  # noqa: E402
 
 _AGENTS_BOOTSTRAP = """# RNA–RBP agent
 

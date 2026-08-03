@@ -99,6 +99,7 @@ def cmd_evolve(args: argparse.Namespace) -> int:
         write_config=True,
         require_loo_report=not bool(getattr(args, "allow_missing_loo", False)),
         allow_retrieval_only=bool(getattr(args, "allow_retrieval_only", False)),
+        transfer_dir=getattr(args, "transfer_dir", None),
     )
     print("self_evolution_report:", DEFAULT_EVOLVE_REPORT)
     print("candidate_config:", report.evolved_config_path)
@@ -224,4 +225,49 @@ def cmd_promote_evolved(args: argparse.Namespace) -> int:
         return 1
     print(f"promoted → {path}")
     return 0
+
+
+def cmd_expand_loo_matrix(args: argparse.Namespace) -> int:
+    """Seed + expand agent-side LOO transfer CSV copy (no delivery writes)."""
+    import os
+
+    from rbp_eval.loo.expand_matrix import expand_loo_matrix
+    from rbp_eval.loo.loo_eval import default_expanded_transfer_dir
+
+    out_dir = getattr(args, "out_dir", None) or str(default_expanded_transfer_dir())
+    device = getattr(args, "device", None) or os.environ.get("RHOBIND_DEVICE") or "cuda"
+    report = expand_loo_matrix(
+        out_dir=Path(out_dir),
+        cohort=str(getattr(args, "cohort", "K562") or "K562"),
+        max_seqs=int(getattr(args, "max_seqs", 64) or 64),
+        device=str(device),
+        rbp_chunk=int(getattr(args, "rbp_chunk", 40) or 40),
+        seed=int(getattr(args, "seed", 42) or 42),
+        resume=not bool(getattr(args, "no_resume", False)),
+        held_filter=list(args.held) if getattr(args, "held", None) else None,
+        skip_existing_helds=bool(getattr(args, "skip_existing_helds", False)),
+        list_helds_only=bool(getattr(args, "list_helds", False)),
+    )
+    if not getattr(args, "list_helds", False):
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    return 0 if report.get("ok") else 1
+
+
+def cmd_loo_matrix_ab(args: argparse.Namespace) -> int:
+    """A/B delivery LOO matrix vs rbp_eval expanded copy."""
+    from rbp_eval.loo.loo_eval import default_expanded_transfer_dir
+    from rbp_eval.loo.matrix_ab_eval import run_matrix_ab
+
+    expanded = getattr(args, "expanded_dir", None) or str(default_expanded_transfer_dir())
+    report = run_matrix_ab(
+        expanded_dir=Path(expanded),
+        helds=list(args.held) if getattr(args, "held", None) else None,
+        top_k=int(getattr(args, "top_k", 5) or 5),
+        retune=not bool(getattr(args, "no_retune", False)),
+        out=Path(args.out) if getattr(args, "out", None) else None,
+    )
+    print(json.dumps(report.get("delta"), indent=2, ensure_ascii=False))
+    print(json.dumps(report.get("conclusion"), indent=2, ensure_ascii=False))
+    print("report:", (report.get("paths") or {}).get("json"))
+    return 0 if report.get("baseline", {}).get("status") == "ok" else 2
 

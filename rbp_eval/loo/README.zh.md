@@ -12,13 +12,18 @@ Leave-one-out 评估：轻量 policy LOO 与重型 hide-own-head。
 
 | 模块 | 角色 |
 |------|------|
-| `loo_eval.py` | 轻量 LOO 报告 CLI |
+| `loo_eval.py` | 轻量 LOO 报告 CLI；`RBP_LOO_TRANSFER_DIR` 优先 |
 | `heavy_loo.py` | 重型 hide-own-head CLI |
+| `expand_matrix.py` | 扩展 agent 侧 LOO 矩阵副本（`rbp_eval/data/transfer/`） |
+| `matrix_ab_eval.py` | delivery vs 扩展矩阵 A/B |
 | `__init__.py` | 包标记 |
 
 ## 入口
 
 ```bash
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 64
+export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
+nanobot-bio loo-matrix-ab
 python -m rbp_eval.loo.loo_eval --out artifacts/reports/json/eval_loo_report.json
 python -m rbp_eval.loo.heavy_loo --help
 nanobot-bio run-eval

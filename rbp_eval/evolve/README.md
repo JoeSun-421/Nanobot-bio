@@ -28,7 +28,13 @@ Policy docs: [`../../docs/product/SELF_EVOLUTION.md`](../../docs/product/SELF_EV
 ## Entry points
 
 ```bash
-nanobot-bio evolve [--dry-run]
+# Expand agent-side LOO matrix copy (does not edit delivery), then evolve + A/B
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 64
+export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
+export TRANSFER_DIR="$RBP_LOO_TRANSFER_DIR"
+nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR"
+nanobot-bio loo-matrix-ab
+
 nanobot-bio evolve-eval
 nanobot-bio run-eval
 nanobot-bio promote-evolved [--seed]

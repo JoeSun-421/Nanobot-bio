@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -23,6 +24,7 @@ from rbp_eval.evolve.proxy_cache import promote_from_traces
 from rbp_eval.evolve.retune import (
     _hit_lists_from_results,
     retune_abstain_thresholds,
+    retune_fusion_on_dval_ce,
     retune_label_thresholds,
     retune_tau_drop,
     retune_weights,
@@ -36,12 +38,14 @@ class EvolutionReport:
     n_val: int = 0
     tool_attribution: dict[str, Any] = field(default_factory=dict)
     weight_retune: dict[str, Any] = field(default_factory=dict)
+    dval_ce_retune: dict[str, Any] = field(default_factory=dict)
     threshold_retune: dict[str, Any] = field(default_factory=dict)
     abstain_retune: dict[str, Any] = field(default_factory=dict)
     tau_drop_retune: dict[str, Any] = field(default_factory=dict)
     toolkit_proposals: list[dict[str, Any]] = field(default_factory=list)
     cache_promotion: dict[str, Any] = field(default_factory=dict)
     promotion_evidence: dict[str, Any] = field(default_factory=dict)
+    transfer_dir: Optional[str] = None
     evolved_config_path: Optional[str] = None
     notes: list[str] = field(default_factory=list)
 
@@ -60,6 +64,7 @@ def run_self_evolution(
     write_config: bool = True,
     require_loo_report: bool = True,
     allow_retrieval_only: bool = False,
+    transfer_dir: Optional[str | Path] = None,
 ) -> EvolutionReport:
     """
     Full offline self-evolution loop.
@@ -87,7 +92,20 @@ def run_self_evolution(
         run_eval,
     )
 
+    prev_transfer = os.environ.get("RBP_LOO_TRANSFER_DIR")
+
+    def _restore_transfer_env() -> None:
+        if transfer_dir:
+            if prev_transfer is None:
+                os.environ.pop("RBP_LOO_TRANSFER_DIR", None)
+            else:
+                os.environ["RBP_LOO_TRANSFER_DIR"] = prev_transfer
+
+    if transfer_dir:
+        os.environ["RBP_LOO_TRANSFER_DIR"] = str(Path(transfer_dir).expanduser().resolve())
+
     report = EvolutionReport(n_val=len(results), n_traces=len(traces or []))
+    report.transfer_dir = os.environ.get("RBP_LOO_TRANSFER_DIR")
     report.promotion_evidence = {
         "status": "required_at_promote",
         "metric": "real_transfer_calibration.delta_auprc",
@@ -124,6 +142,7 @@ def run_self_evolution(
             )
             report.notes.append(f"Report → {EVOLVED_REPORT}")
             report.evolved_config_path = None
+            _restore_transfer_env()
             return report
 
     synthetic = results_are_retrieval_only_synthetic(results)
@@ -170,13 +189,24 @@ def run_self_evolution(
         }
         report.notes.append("Weight retune skipped — provide LOO hit lists.")
 
-    # 3 thresholds
+    # 3 thresholds + D_val CE (proposal §7.3 dual objective)
     if scored_labels:
         report.threshold_retune = retune_label_thresholds(scored_labels)
+        tuned_w_for_ce = None
+        if report.weight_retune.get("status") == "ok":
+            tuned_w_for_ce = report.weight_retune.get("tuned_weights")
+        report.dval_ce_retune = retune_fusion_on_dval_ce(
+            scored_labels, base_weights=tuned_w_for_ce or base_weights
+        )
     else:
         report.threshold_retune = retune_label_thresholds([])
+        report.dval_ce_retune = {
+            "status": "skipped",
+            "reason": "need scored_labels / --with-labels",
+            "objective": "calibrated_cross_entropy_on_dval",
+        }
         report.notes.append(
-            "Threshold CE skipped — pass scored_labels / --with-labels for (p_hat,y) pairs."
+            "Threshold/D_val CE skipped — pass scored_labels / --with-labels for (p_hat,y) pairs."
         )
 
     # 3b abstain thresholds
@@ -275,11 +305,17 @@ def run_self_evolution(
         tuned_tau = None
         if (report.tau_drop_retune or {}).get("status") == "ok":
             tuned_tau = report.tau_drop_retune.get("tuned_tau_drop")
+        soft = list(
+            (report.tool_attribution or {}).get("soft_disabled_suggestions")
+            or (report.tool_attribution or {}).get("retirement_candidates")
+            or []
+        )
         path = write_evolved_config(
             tuned_weights=tuned_w,
             thresholds=thr,
             abstain_thresholds=abstain,
             tau_drop=tuned_tau,
+            soft_disabled=soft,
             path=CANDIDATE_CONFIG,
             promoted=False,
         )
@@ -304,6 +340,7 @@ def run_self_evolution(
         encoding="utf-8",
     )
     report.notes.append(f"Report → {EVOLVED_REPORT}")
+    _restore_transfer_env()
     return report
 
 

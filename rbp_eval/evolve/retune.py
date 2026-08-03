@@ -183,6 +183,64 @@ def retune_weights(
     }
 
 
+def retune_fusion_on_dval_ce(
+    scored_labels: list[dict[str, Any]],
+    *,
+    base_weights: Optional[dict[str, float]] = None,
+    grid: Optional[list[float]] = None,
+) -> dict[str, Any]:
+    """Proposal §7.3 secondary objective: calibrated CE on D_val (p_hat, y) pairs.
+
+    Does not replace LOO-AUPRC fusion search; reports CE of current scores and
+    a soft temperature-like scale on p_hat (keeps fusion weights from AUPRC path).
+    """
+    pairs = [
+        (float(x["p_hat"]), int(x["y"]))
+        for x in scored_labels
+        if x.get("p_hat") is not None and x.get("y") is not None
+    ]
+    weights = {**DEFAULT_WEIGHTS, **(base_weights or {})}
+    if len(pairs) < 5:
+        return {
+            "status": "skipped",
+            "reason": "need ≥5 labeled (p_hat, y) pairs",
+            "n": len(pairs),
+            "weights_passthrough": weights,
+            "objective": "calibrated_cross_entropy_on_dval",
+        }
+
+    def _ce(scale: float) -> float:
+        eps = 1e-6
+        loss = 0.0
+        for p, y in pairs:
+            z = max(-20.0, min(20.0, scale * (p - 0.5)))
+            pred = 1.0 / (1.0 + math.exp(-z))
+            pred = min(1.0 - eps, max(eps, pred))
+            loss += -(y * math.log(pred) + (1 - y) * math.log(1.0 - pred))
+        return loss / len(pairs)
+
+    grid = grid or [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+    best_s = 8.0
+    best_ce = _ce(best_s)
+    for s in grid:
+        ce = _ce(s)
+        if ce < best_ce - 1e-9:
+            best_ce = ce
+            best_s = s
+    return {
+        "status": "ok",
+        "objective": "calibrated_cross_entropy_on_dval",
+        "n": len(pairs),
+        "ce": round(best_ce, 6),
+        "logit_scale": best_s,
+        "weights_passthrough": weights,
+        "note": (
+            "Fusion weights remain from LOO-AUPRC retune; "
+            "D_val CE fits a calibration scale for thresholding."
+        ),
+    }
+
+
 def retune_label_thresholds(
     scored_labels: list[dict[str, Any]],
     *,

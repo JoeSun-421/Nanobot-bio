@@ -130,6 +130,66 @@ def _af3_confidence_fields(out: dict[str, Any]) -> dict[str, Any]:
     return {k: out.get(k) for k in keys if out.get(k) is not None}
 
 
+def _usable_structure_path(payload: dict[str, Any] | None) -> bool:
+    """True when a payload carries a non-empty structure / pdb path."""
+    if not isinstance(payload, dict):
+        return False
+    for key in ("structure", "pdb_path"):
+        val = payload.get(key)
+        if val is not None and str(val).strip():
+            return True
+    return False
+
+
+def _clear_sticky_structure_unavailable(payload: dict[str, Any] | None = None) -> None:
+    """Drop AFDB-miss sticky flags once a usable structure path exists.
+
+    Does not clear AF3 hard-failure flags (``af3_unavailable``) or intentional
+    trust flags (``structure_mostly_disordered``, ``structure_low_plddt``, …).
+    """
+    if payload is not None and not _usable_structure_path(payload):
+        return
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import clear_structure_axis_unavailable
+
+        clear_structure_axis_unavailable()
+    except Exception:
+        pass
+
+
+def _surface_af3_success_evidence(value: dict[str, Any]) -> None:
+    """On AF3 success: clear sticky axis-unavailable; keep/add trust flags."""
+    if not _usable_structure_path(value):
+        return
+    _clear_sticky_structure_unavailable(value)
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
+
+        trust = value.get("structure_trust")
+        if trust and trust != "ok":
+            add_evidence_flag(f"structure_{trust}", True)
+        rpl = value.get("region_plddt")
+        if rpl is not None:
+            # region_plddt may be a list of {region, plddt} or a scalar; check min.
+            try:
+                if isinstance(rpl, list):
+                    rvals: list[float] = []
+                    for x in rpl:
+                        raw = x.get("plddt") if isinstance(x, dict) else x
+                        if not isinstance(raw, (int, float, str)):
+                            continue
+                        rvals.append(float(raw))
+                    rmin = min(rvals) if rvals else None
+                else:
+                    rmin = float(rpl)
+                if rmin is not None and rmin < 50:
+                    add_evidence_flag("region_plddt_low", True)
+            except (TypeError, ValueError):
+                pass
+    except Exception:
+        pass
+
+
 def _usalign_refine_enabled(kwargs: dict[str, Any]) -> bool:
     """Honor explicit kwargs, else runtime ``axes.struct_align_refine``."""
     if "refine_usalign" in kwargs:
@@ -262,6 +322,11 @@ class StructSimilarityTool(Tool):
                     ms,
                 )
             )
+        # Usable PDB path (and/or hits) recovers the structure axis after AFDB miss.
+        if isinstance(value, dict) and (
+            _usable_structure_path(value) or value.get("hits")
+        ):
+            _clear_sticky_structure_unavailable()
         return dumps(ok(value, ms))
 
 
@@ -375,19 +440,17 @@ class PredictStructureTool(Tool):
             alias=str(kw.get("alias") or name or ""),
         )
         if local is not None:
-            return dumps(
-                ok(
-                    {
-                        "structure": str(local),
-                        "mean_plddt": None,
-                        "ptm": None,
-                        "note": "AFDB PDB already present; skipped AF3",
-                        "sequence_source": src,
-                        "structure_axis": "afdb",
-                        "cache": "skipped_af3",
-                    }
-                )
-            )
+            afdb_value = {
+                "structure": str(local),
+                "mean_plddt": None,
+                "ptm": None,
+                "note": "AFDB PDB already present; skipped AF3",
+                "sequence_source": src,
+                "structure_axis": "afdb",
+                "cache": "skipped_af3",
+            }
+            _clear_sticky_structure_unavailable(afdb_value)
+            return dumps(ok(afdb_value))
 
         # Honor axes / structure_policy before AF3
         try:
@@ -453,6 +516,7 @@ class PredictStructureTool(Tool):
                             _hit_ms,
                         )
                     )
+                _clear_sticky_structure_unavailable(cached)
                 return dumps(ok(cached, _hit_ms))
 
         def _try_afdb_on_msa_429() -> dict[str, Any] | None:
@@ -529,6 +593,7 @@ class PredictStructureTool(Tool):
                         add_evidence_flag("af3_msa_429_afdb_fallback", True)
                     except Exception:
                         pass
+                    _clear_sticky_structure_unavailable(fb)
                     structure_cache_put(ckey, fb)
                     return dumps(ok(fb, ms))
                 # Transient — do not poison the 7-day failure cache.
@@ -569,6 +634,7 @@ class PredictStructureTool(Tool):
                         add_evidence_flag("af3_msa_429_afdb_fallback", True)
                     except Exception:
                         pass
+                    _clear_sticky_structure_unavailable(fb)
                     structure_cache_put(ckey, fb)
                     return dumps(ok(fb, ms))
                 try:
@@ -612,33 +678,7 @@ class PredictStructureTool(Tool):
             value["structure_trust"] = "mostly_disordered"
         else:
             value["structure_trust"] = "ok"
-        # B1/B3: surface AF3 soft-failures + low region_plddt as evidence flags so
-        # they reach verdict caveats (normalize_verdict_with_turn_state consumes them).
-        try:
-            from nanobot.agent.tools.rbp.turn_guards import add_evidence_flag
-
-            trust = value.get("structure_trust")
-            if trust and trust != "ok":
-                add_evidence_flag(f"structure_{trust}", True)
-            rpl = value.get("region_plddt")
-            if rpl is not None:
-                # region_plddt may be a list of {region, plddt} or a scalar; check min.
-                try:
-                    if isinstance(rpl, list):
-                        rvals: list[float] = []
-                        for x in rpl:
-                            raw = x.get("plddt") if isinstance(x, dict) else x
-                            if not isinstance(raw, (int, float, str)):
-                                continue
-                            rvals.append(float(raw))
-                        rmin = min(rvals) if rvals else None
-                    else:
-                        rmin = float(rpl)
-                    if rmin is not None and rmin < 50:
-                        add_evidence_flag("region_plddt_low", True)
-                except (TypeError, ValueError):
-                    pass
-        except Exception:
-            pass
+        # Clear sticky AFDB-miss flags; surface intentional trust / region_plddt.
+        _surface_af3_success_evidence(value)
         structure_cache_put(ckey, value)
         return dumps(ok(value, ms))

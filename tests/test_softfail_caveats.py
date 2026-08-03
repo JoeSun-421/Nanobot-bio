@@ -17,7 +17,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from nanobot.agent.tools.rbp import turn_guards  # noqa: E402
-from app.core.verdict_schema import normalize_verdict_with_turn_state  # noqa: E402
+from app.core.verdict_schema import (  # noqa: E402
+    normalize_verdict,
+    normalize_verdict_with_turn_state,
+)
 
 
 def _reset():
@@ -129,4 +132,75 @@ def test_two_axis_failures_force_low_via_checklist():
     }
     out = normalize_verdict_with_turn_state(raw)
     assert out["confidence"] == "low"
+    _reset()
+
+
+def test_af3_success_clears_structure_axis_unavailable_keeps_disordered():
+    """AFDB miss sets sticky flag; AF3 usable structure clears it but keeps trust."""
+    from nanobot.agent.tools.rbp.structure import _surface_af3_success_evidence
+
+    _reset()
+    # Simulate structure_fetch / AFDB miss soft-fail.
+    turn_guards.add_evidence_flag("structure_axis_unavailable", True)
+    turn_guards.add_evidence_flag("structure_unavailable", True)
+    assert turn_guards.evidence_flags().get("structure_axis_unavailable") is True
+
+    # AF3 succeeded with a path; disordered trust is intentional and must remain.
+    value = {
+        "structure": "/tmp/af3_query.cif",
+        "structure_axis": "af3",
+        "ok": True,
+        "mean_plddt": 55.0,
+        "fraction_disordered": 0.72,
+        "structure_trust": "mostly_disordered",
+    }
+    _surface_af3_success_evidence(value)
+
+    flags = turn_guards.evidence_flags()
+    assert "structure_axis_unavailable" not in flags
+    assert "structure_unavailable" not in flags
+    assert flags.get("structure_mostly_disordered") is True
+
+    # Sticky AFDB-miss must not reappear as structure_unavailable after AF3 recovery.
+    raw = {
+        "label": "Likely",
+        "p_hat": 0.73,
+        "confidence": "medium",
+        "explanation": "AF3 recovered structure axis",
+        "evidence_flags": dict(flags),
+    }
+    out = normalize_verdict(raw)
+    caveats = out.get("caveats") or []
+    assert "structure_axis_unavailable" not in caveats
+    assert "structure_unavailable" not in caveats
+    assert out.get("structure_unavailable") is not True
+    assert "structure_mostly_disordered" in caveats
+    assert out["confidence"] == "medium"
+    _reset()
+
+
+def test_af3_hard_failure_does_not_clear_structure_axis_unavailable():
+    """Hard AF3 failure must leave the sticky AFDB-miss flag in place."""
+    from nanobot.agent.tools.rbp.structure import _surface_af3_success_evidence
+
+    _reset()
+    turn_guards.add_evidence_flag("structure_axis_unavailable", True)
+    # No usable structure path → success helper is a no-op.
+    _surface_af3_success_evidence(
+        {"ok": False, "error": "af3 failed", "structure_axis": "unavailable"}
+    )
+    assert turn_guards.evidence_flags().get("structure_axis_unavailable") is True
+    _reset()
+
+
+def test_struct_similarity_success_clears_structure_axis_unavailable():
+    """Successful Foldseek (pdb path / hits) also recovers the structure axis."""
+    from nanobot.agent.tools.rbp.structure import _clear_sticky_structure_unavailable
+
+    _reset()
+    turn_guards.add_evidence_flag("structure_axis_unavailable", True)
+    _clear_sticky_structure_unavailable(
+        {"pdb_path": "/tmp/query.pdb", "hits": [{"alias": "RBFOX2"}], "structure_axis": "ok"}
+    )
+    assert "structure_axis_unavailable" not in turn_guards.evidence_flags()
     _reset()

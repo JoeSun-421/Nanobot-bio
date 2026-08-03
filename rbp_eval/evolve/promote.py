@@ -196,6 +196,7 @@ def write_evolved_config(
     promoted: bool = False,
     abstain_thresholds: Optional[dict[str, float]] = None,
     tau_drop: Optional[float] = None,
+    soft_disabled: Optional[list[str]] = None,
 ) -> Path:
     """Write evolved knobs. Default path is *candidate* (not live until promote)."""
     # Prefer existing target file so abstain_thresholds / axes survive retunes
@@ -240,6 +241,15 @@ def write_evolved_config(
             pass
     elif "tau_drop" not in cfg and base.get("tau_drop") is not None:
         cfg["tau_drop"] = base["tau_drop"]
+    tools = dict(cfg.get("tools") or base.get("tools") or {})
+    if soft_disabled is not None:
+        tools["soft_disabled"] = [str(t) for t in soft_disabled]
+        tools["soft_disabled_note"] = (
+            "Suggestions from tool_attribution; human review before demotion. "
+            "Not auto-unregistered."
+        )
+    if tools:
+        cfg["tools"] = tools
     ver = str(cfg.get("schema_version") or base.get("schema_version") or "2.0")
     if not ver.endswith("+evolved"):
         ver = ver + "+evolved"

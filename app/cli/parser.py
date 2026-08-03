@@ -15,7 +15,9 @@ from app.cli.eval_cmds import (
     cmd_eval_plan,
     cmd_evolve,
     cmd_evolve_eval,
+    cmd_expand_loo_matrix,
     cmd_heavy_loo,
+    cmd_loo_matrix_ab,
     cmd_promote_evolved,
     cmd_run_eval,
 )
@@ -129,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Dev only: allow writing candidate from retrieval-only synthetic batch",
     )
+    evo.add_argument(
+        "--transfer-dir",
+        default=None,
+        help="Prefer agent-side LOO matrix dir (sets RBP_LOO_TRANSFER_DIR for this run)",
+    )
     evo.set_defaults(func=cmd_evolve)
 
     re = sub.add_parser("run-eval", help="LOO ceiling + modality ablation harness")
@@ -171,6 +178,41 @@ def build_parser() -> argparse.ArgumentParser:
     hl.add_argument("--top-k", type=int, default=5, help="Foreign donor heads per held RBP")
     hl.add_argument("--out", default=None, help="Output JSON path (md written alongside)")
     hl.set_defaults(func=cmd_heavy_loo)
+
+    elm = sub.add_parser(
+        "expand-loo-matrix",
+        help="Expand LOO transfer matrix into rbp_eval/data/transfer (never edits delivery)",
+    )
+    elm.add_argument("--out-dir", default=None)
+    elm.add_argument("--cohort", default="K562")
+    elm.add_argument("--max-seqs", type=int, default=64)
+    elm.add_argument("--device", default=None)
+    elm.add_argument("--rbp-chunk", type=int, default=40)
+    elm.add_argument("--seed", type=int, default=42)
+    elm.add_argument("--no-resume", action="store_true")
+    elm.add_argument("--held", action="append", default=None, help="Limit to alias (repeatable)")
+    elm.add_argument(
+        "--skip-existing-helds",
+        action="store_true",
+        help="Skip helds already in loo_summary.csv (only score new test.fasta)",
+    )
+    elm.add_argument(
+        "--list-helds",
+        action="store_true",
+        help="Dry-run: show catalogue ∩ test.fasta planned helds and exit",
+    )
+    elm.set_defaults(func=cmd_expand_loo_matrix)
+
+    lab = sub.add_parser(
+        "loo-matrix-ab",
+        help="A/B delivery vs expanded LOO matrix (policy AUPRC / prior_missing / retune)",
+    )
+    lab.add_argument("--expanded-dir", default=None)
+    lab.add_argument("--top-k", type=int, default=5)
+    lab.add_argument("--no-retune", action="store_true")
+    lab.add_argument("--out", default=None)
+    lab.add_argument("--held", action="append", default=None)
+    lab.set_defaults(func=cmd_loo_matrix_ab)
 
     # --- maint ---
     g = sub.add_parser("gate", help="Engineering gate: ruff + pytest + layout (+ light eval)")
