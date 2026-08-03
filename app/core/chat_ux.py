@@ -117,19 +117,6 @@ def print_chat_header(
             "/thinking  /caveats  /onboard  /quit\n"
         )
     )
-    stream.write(
-        s.dim(
-            "  Tips      One protein×RNA per message · suite path → "
-            "/suite docs/eval/….md [--last N] (or path+最后N条) · Esc+Enter multiline · "
-            "RBP_SHOW_THINKING=1 · RBP_SHOW_CAVEATS=1\n"
-        )
-    )
-    stream.write(
-        s.dim(
-            "  Try       “Does this RNA interact with PTBP1?” + paste RNA, "
-            "or resolve an unseen UniProt\n"
-        )
-    )
     if mem_warn:
         stream.write(s.yellow(f"\n  ⚠ {mem_warn}\n"))
     stream.write("\n")
