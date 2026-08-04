@@ -28,9 +28,9 @@ Offline evaluation and self-evolution live in [`rbp_eval/`](../rbp_eval/README.m
 | [`backends/`](backends/README.md) · [`backends/delivery/`](backends/delivery/README.md) | `DeliveryToolClient`, `mapping.yaml`, env resolve |
 | [`core/`](core/README.md) | paths, runtime_config, capability_matrix, verdict_schema, onboard, chat_ux |
 | [`dev/`](dev/README.md) | gate / layout / mvp / compliance (engineering, not science scores) |
-| `sync_overlay.py` | SoT skill/tools → runtime + `workspace/skills` |
+| [`bootstrap/`](bootstrap/) | SoT locate, `sync_overlay`, tool install (no `app.agent` cycle) |
+| `sync_overlay.py` | Sole root compat entry (`python -m app.sync_overlay` → bootstrap) |
 | `dotenv_util.py` | Load package-root `.env` |
-| `sot.py` / `integrate.py` | SoT helpers; prefer `app.agent` over legacy `integrate` |
 
 Layering ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1):
 
@@ -98,6 +98,7 @@ Setup: [`scripts/setup/`](../scripts/setup/README.md) · [`INSTALL.md`](../INSTA
 - **Separation of concerns:** App orchestrates; delivery owns RhoBind / Foldseek / AF3. The LLM never invents `p_hat`, motifs, or annotations.
 - **Stable CLI names:** Collaborators and CI depend on argparse names in `cli/parser.py`.
 - **Honest capabilities:** Missing AF3 / peaks become caveats via `capability_matrix`, not fake similarity `0`.
+- **No cross-layer merge:** Do not fold `app/` into `nanobot/`, `rbp_eval/`, or `nanobot/agent/tools/rbp`. Keep product shell, framework SoT, offline eval, and read-only delivery separate. Canonical APIs are `app.bootstrap` / `app.agent`; the only root compat module is `sync_overlay`.
 
 ## See also
 

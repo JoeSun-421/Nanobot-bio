@@ -1,5 +1,19 @@
 # -*- coding: utf-8 -*-
-"""P1/P2 tools — get_func_annotation + literature_search."""
+"""Stage-1 Function-axis tools: annotation + literature peer extraction.
+
+Tools:
+
+* ``get_func_annotation`` — delivery ``uniprot_annotation`` (GO/Pfam fallback);
+  structured function / RBD fields for Checkpoint 1
+* ``literature_search`` — Europe PMC retrieve; rule-extracts catalogue peers
+  co-mentioned with the query and emits ``literature_cooccurrence`` fuse hits
+* ``record_lit_peer_decisions`` — optional rationale / weight notes only
+
+Invariant: peers and fuse hits are rule-derived from tool text; never invent
+``s_i`` / ``p_hat``. Soft Function-axis hits are stored in ``turn_guards`` for
+automatic injection into ``fuse_similarity_views``. Call annotation once per
+UniProt; literature is hard-capped to one successful call per turn.
+"""
 
 from __future__ import annotations
 
@@ -590,7 +604,7 @@ def prepare_tool_turn_guards(user_message: str = "") -> None:
     }
 )
 class GetFuncAnnotationTool(Tool):
-    """P1 annotation — cached once per UniProt; hard cap on total calls (anti-loop)."""
+    """Stage-1 Function retrieve — UniProt/GO/Pfam annotation (once per accession)."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
@@ -726,7 +740,7 @@ class GetFuncAnnotationTool(Tool):
     }
 )
 class LiteratureSearchTool(Tool):
-    """P2 literature — hard-capped to one successful call per turn (anti-loop)."""
+    """Stage-1 Function retrieve — Europe PMC peers → literature_cooccurrence hits."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

@@ -1,9 +1,17 @@
 # -*- coding: utf-8 -*-
-"""
-P0 tool — predict_interaction
-Path: nanobot/agent/tools/rbp/predict.py
+"""P0 tool: ``predict_interaction`` — RhoBind fθ(RNA, RBP) binding probabilities.
 
-nanobot Tool → delivery ``rhobind_predict`` (agent/backbone/predict_api.py).
+Bridges the nanobot Tool to delivery ``rhobind_predict``
+(``agent/backbone/predict_api.py``). Two product paths:
+
+* Own-head (Stage 0): in-panel or near-known headed alias → call once with
+  ``rbp_id``, emit JSON, STOP (unless LOO / ``force_transfer``)
+* Transfer / multi-donor (Stage 3): after fuse → commit → abstain, pass
+  ``rbps=[donor aliases]``; probs come only from delivery heads
+
+Invariant: never invent ``p_hat``. On error/OOM return null and do not retry.
+Per-turn call/cache guards prevent anti-loops; cache hits re-apply Stage
+guard side-effects (own-head STOP, low-head-coverage flags).
 """
 
 from __future__ import annotations
@@ -155,7 +163,7 @@ def _find_donor_prob(
     }
 )
 class PredictInteractionTool(Tool):
-    """fθ(RNA, RBP) — delivery RhoBind multi-task heads."""
+    """P0 Stage-0/3 predictor — own-head Fast Path or multi-donor transfer probs."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

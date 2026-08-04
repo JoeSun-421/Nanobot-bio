@@ -1036,7 +1036,7 @@ def format_verdict_display(result: Any) -> str:
     # returned a non-flat object (e.g. only nested keys).
     expl = str(verdict.get("explanation") or "")
     if (
-        not verdict.get("p_hat")
+        verdict.get("p_hat") is None
         and verdict.get("label") == "No"
         and "Mode=unknown" in expl
         and content

@@ -16,7 +16,7 @@ def run_accept_llm(
 ) -> dict[str, Any]:
     from app.backends.delivery.examples import own_head_prompt
     from app.core.paths import SESSIONS, ensure_artifact_dirs, report_path
-    from app.integrate import RBPAgent
+    from app.agent import RBPAgent
 
     ensure_artifact_dirs()
     agent = RBPAgent(prefer_nanobot_llm=True, allow_fallback=False)

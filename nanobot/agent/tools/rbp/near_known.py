@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Stage-0 helper — check_near_known (seq identity ≥ near_match threshold)."""
+"""Stage-0 near-known Fast Path: exact catalogue match or high seq identity.
+
+Tool: ``check_near_known``. Compares the query protein to the RhoBind catalogue
+via exact AA equality and/or delivery MMseqs identity. When best identity ≥
+``near_match_seq_identity`` (default 0.95) to a headed RBP → ``near_match=true``
+and a donor alias for own-head ``predict_interaction``, then STOP.
+
+Under LOO / ``force_transfer``, near_match is disclosed but own-head Fast Path
+is overridden — continue Stage 1–3 on foreign donors only. Read-only; identity
+scores come from delivery / catalogue FASTA only.
+"""
 
 from __future__ import annotations
 
@@ -119,7 +129,7 @@ def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
     }
 )
 class CheckNearKnownTool(Tool):
-    """Read-only Stage-0 near-known detector (Proposal ≥95% identity Fast Path)."""
+    """Stage-0 near-match detector — exact catalogue AA or identity ≥ threshold."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

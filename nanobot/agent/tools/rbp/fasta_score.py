@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
-"""score_binding_fasta — allowlisted FASTA path → batch own-head scores + AUPRC."""
+"""Batch own-head scoring for an allowlisted labeled FASTA (eval / AUPRC).
+
+Tool: ``score_binding_fasta``. Resolves a local ``.fasta`` / ``.fa`` path through
+``path_guard``, then scores sequences with an in-panel RBP head via delivery
+``rhobind_predict`` (or the release ``infer`` CLI when available).
+
+Headers starting with ``NEG`` are negatives; others positive. Returns a metrics
+summary (AUPRC/AUROC when both classes present) plus a CSV artifact path — does
+not dump all sequences into chat. Not a general ``read_file``. Scores come only
+from the predictor; never invent ``p_hat``.
+"""
 
 from __future__ import annotations
 
@@ -399,7 +409,7 @@ def run_fasta_score(
     }
 )
 class ScoreBindingFastaTool(Tool):
-    """Batch own-head score for a labeled FASTA path (AUPRC when POS+NEG)."""
+    """Batch own-head FASTA scoring for one in-panel RBP (AUPRC when POS+NEG)."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

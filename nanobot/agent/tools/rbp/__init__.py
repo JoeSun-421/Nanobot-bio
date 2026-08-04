@@ -1,11 +1,25 @@
 # -*- coding: utf-8 -*-
-"""
-Plugin SoT RBP tools — nanobot/agent/tools/rbp/
+"""Curated RhoBind / RBP agent tools (Stage 0–3 product surface).
 
-P0–P2 tools as nanobot.agent.tools.core.base.Tool subclasses.
-When this package is installed into the real nanobot tree
-(``agent/tools/rbp/``), ToolLoader can discover classes with
+P0–P2 ``Tool`` subclasses for catalogue lookup, multi-view retrieve, fuse /
+commit, and ``predict_interaction``. When installed under nanobot
+``agent/tools/rbp/``, ToolLoader can discover classes with
 ``_plugin_discoverable = True``.
+
+Module map:
+
+* ``catalogue`` / ``seq`` / ``structure`` / ``annotation`` / ``phmmer`` —
+  Stage-0/1 retrieve axes (phmmer optional via ``RBP_PHMMER=1``)
+* ``near_known`` — Stage-0 near-match Fast Path
+* ``evolve_tools`` / ``commit_proxies`` — fuse + Checkpoint-1 commit
+* ``predict`` / ``fasta_score`` — Stage-3 / batch own-head scoring
+* ``common`` / ``path_guard`` / ``stage_contract`` / ``turn_guards`` —
+  shared helpers, path jail, ordering policy, per-turn state
+* ``project_doc`` / ``register`` — doc reader + registry mount
+* ``prompt_suite`` — offline prompt-suite runner (eval harness)
+
+Invariant across tools: never invent ``s_i`` / ``p_hat``; probs and
+similarities come from delivery or upstream tool results only.
 """
 
 import os

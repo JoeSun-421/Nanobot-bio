@@ -14,7 +14,7 @@ from pathlib import Path
 def sot_root() -> Path:
     """Return the SoT directory (contains ``skills/`` and ``agent/tools/rbp/``)."""
     bio = Path(
-        os.environ.get("NANOBOT_BIO_ROOT", Path(__file__).resolve().parents[1])
+        os.environ.get("NANOBOT_BIO_ROOT", Path(__file__).resolve().parents[2])
     ).expanduser().resolve()
     preferred = bio / "nanobot"
     skill = preferred / "skills" / "rbp-agent" / "SKILL.md"

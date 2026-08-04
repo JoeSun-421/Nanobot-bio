@@ -54,18 +54,13 @@ WORKSPACE = PACKAGE_ROOT / "workspace"
 DEFAULT_TRACE = DEFAULT_AGENT_TRACE
 ensure_artifact_dirs()
 
-_SKILL_CANDIDATES = (
-    PACKAGE_ROOT / "plugin" / "nanobot" / "skills" / "rbp-agent" / "SKILL.md",
-    PACKAGE_ROOT / "workspace" / "skills" / "rbp-agent" / "SKILL.md",
-)
-
 
 # ---------------------------------------------------------------------------
 # Install / skill
 # ---------------------------------------------------------------------------
 
 # Re-export: keep public API; implementation lives in rbp_bootstrap (no import cycle).
-from app.rbp_bootstrap import install_rbp_tools_into_nanobot  # noqa: E402
+from app.bootstrap import install_rbp_tools_into_nanobot  # noqa: E402
 
 _AGENTS_BOOTSTRAP = """# RNA–RBP agent
 
@@ -92,15 +87,54 @@ or borrow a homolog accession to skip AF3. Failure ≠ sim 0.
 """
 
 
+def _skill_sources() -> list[Path]:
+    """Prefer ``app.bootstrap.skill_md()`` (nanobot/skills); workspace is fallback only."""
+    out: list[Path] = []
+    try:
+        from app.bootstrap import skill_md
+
+        sot = skill_md()
+        if sot.is_file():
+            out.append(sot.resolve())
+    except FileNotFoundError:
+        pass
+    fallback = (PACKAGE_ROOT / "workspace" / "skills" / "rbp-agent" / "SKILL.md").resolve()
+    if fallback not in out:
+        out.append(fallback)
+    return out
+
+
+def skill_path() -> Optional[Path]:
+    for p in _skill_sources():
+        if p.is_file():
+            return p
+    return None
+
+
 def ensure_workspace_skill(workspace: Optional[Path] = None) -> Path:
     """Skill + AGENTS.md under nanobot workspace (always-on Stage 0 rules)."""
     ws = Path(workspace or WORKSPACE)
     dest = ws / "skills" / "rbp-agent" / "SKILL.md"
-    for src in _SKILL_CANDIDATES:
-        if src.is_file():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-            break
+    src = skill_path()
+    if src is not None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            same = dest.exists() and dest.resolve() == src.resolve()
+        except OSError:
+            same = False
+        # Preserve sync_overlay symlinks that already point at SoT.
+        if not same:
+            if dest.is_symlink():
+                try:
+                    dest.unlink()
+                except OSError:
+                    pass
+            try:
+                from app.bootstrap.sync_overlay import _link_or_copy
+
+                _link_or_copy(src, dest)
+            except Exception:
+                dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     agents = ws / "AGENTS.md"
     agents.parent.mkdir(parents=True, exist_ok=True)
     # Keep our Stage-0 contract at the top; preserve any extra user notes below a marker.
@@ -114,13 +148,6 @@ def ensure_workspace_skill(workspace: Optional[Path] = None) -> Path:
             extra = old
     agents.write_text(_AGENTS_BOOTSTRAP + marker + extra, encoding="utf-8")
     return dest
-
-
-def skill_path() -> Optional[Path]:
-    for p in _SKILL_CANDIDATES:
-        if p.is_file():
-            return p
-    return None
 
 
 def _raw_mode() -> str:
@@ -252,7 +279,12 @@ class RBPAgent:
 
             resolved = resolve_device(device)
         except Exception:
-            resolved = "cuda" if str(device).lower() in ("cuda", "gpu", "auto", "") else str(device or "cpu")
+            # Fail safe to CPU when device probe is unavailable (no silent CUDA assume).
+            d = str(device or "cpu").lower()
+            if d in ("cuda", "gpu"):
+                resolved = "cuda"
+            else:
+                resolved = "cpu"
         os.environ["RHOBIND_DEVICE"] = resolved
         self.workspace = Path(workspace or WORKSPACE)
         self.config_path = Path(config_path).expanduser() if config_path else None

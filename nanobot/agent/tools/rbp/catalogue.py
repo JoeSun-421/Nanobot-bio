@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""P0 tool — get_known_rbp_list → delivery rbp_registry.json."""
+"""P0 tool: ``get_known_rbp_list`` — RhoBind catalogue lookup.
+
+Bridges to delivery registry JSON (~238 headed RBPs). Prefer filtering with
+``query`` / ``alias`` / ``uniprot`` so the agent gets one protein (optionally
+with AA sequence) instead of a truncated full dump.
+
+Not a neighbour search — use ``seq_similarity`` for similar RBPs. Numbers and
+sequences come from delivery / catalogue FASTA only.
+"""
 
 from __future__ import annotations
 
@@ -44,6 +52,8 @@ from nanobot.agent.tools.rbp.common import (
     }
 )
 class GetKnownRBPListTool(Tool):
+    """P0 catalogue lookup — filter by alias/UniProt; not a neighbour search."""
+
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
 

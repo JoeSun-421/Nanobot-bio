@@ -176,7 +176,15 @@ class DeliveryToolClient:
                 f"No validated mapping.yaml script binding for tool {name!r}. "
                 f"Reconcile mapping.yaml with tools/registry.json."
             )
-        p = (self.root / rel).resolve()
+        root = self.root.resolve()
+        p = (root / rel).resolve()
+        try:
+            p.relative_to(root)
+        except ValueError as e:
+            raise FileNotFoundError(
+                f"Delivery script for {name!r} escapes DELIVERY_ROOT "
+                f"({root}): {p}"
+            ) from e
         if not p.is_file():
             raise FileNotFoundError(
                 f"Delivery script missing for {name!r}: {p} "
@@ -269,8 +277,16 @@ class DeliveryToolClient:
                     "_latency_ms": 0.0,
                     "_invocation": "skipped_axis",
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            # Fail closed: never run a gated axis when the gate itself breaks.
+            return {
+                "ok": False,
+                "skipped": True,
+                "tool": name,
+                "error": f"axis_gate_unavailable: {type(e).__name__}: {e}",
+                "_latency_ms": 0.0,
+                "_invocation": "skipped_axis",
+            }
 
         meta = self.meta.get(name, {})
 
@@ -326,16 +342,22 @@ class DeliveryToolClient:
                 invocation = "subprocess_json"
 
             result: dict[str, Any] = dict(out) if isinstance(out, dict) else {"value": out}
-            # Preserve delivery ``ok`` semantics; default True only if absent
-            result.setdefault("ok", True)
+            # Missing ok + error/reason → failure; never invent success.
+            if "ok" not in result:
+                if result.get("error") or result.get("reason"):
+                    result["ok"] = False
+                else:
+                    result["ok"] = True
             result["_tool"] = name
             result["_script"] = str(self.script_path(name))
             result["_invocation"] = invocation
             result["_args_hash"] = ah
             result["_latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
-            self._recent_calls[ah] = (now, dict(result))
-            if name == "esm_similarity" and result.get("ok", True) and not result.get("skipped"):
-                self._esm_disk_put(payload, result)
+            # Dedupe / disk-cache only successful non-skipped envelopes.
+            if result.get("ok") is True and not result.get("skipped"):
+                self._recent_calls[ah] = (now, dict(result))
+                if name == "esm_similarity":
+                    self._esm_disk_put(payload, result)
             return result
 
         except Exception as e:  # noqa: BLE001 — return envelope, do not crash agent
@@ -348,7 +370,7 @@ class DeliveryToolClient:
                 "_args_hash": ah,
                 "_latency_ms": round((time.perf_counter() - t0) * 1000.0, 3),
             }
-            self._recent_calls[ah] = (now, dict(err))
+            # Do not sticky-cache failures for the full TTL.
             return err
 
     # ------------------------------------------------------------------
@@ -469,7 +491,7 @@ class DeliveryToolClient:
             cmd,
             capture_output=True,
             text=True,
-            timeout=int(payload.get("timeout_s") or 3600),
+            timeout=max(1, min(int(payload.get("timeout_s") or 3600), 3600)),
             env=env,
             cwd=str(self.root),
         )

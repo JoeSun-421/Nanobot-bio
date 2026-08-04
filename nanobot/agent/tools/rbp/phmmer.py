@@ -90,7 +90,7 @@ def _catalogue_fasta(client: Any, *, cache_dir: Path) -> Path:
     }
 )
 class PhmmerSimilarityTool(Tool):
-    """phmmer remote-homology similarity (optional axis, default off)."""
+    """Optional Stage-1 remote-homology axis (hmmer phmmer; off unless RBP_PHMMER=1)."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

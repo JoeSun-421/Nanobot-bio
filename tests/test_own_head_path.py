@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 
 
 def test_skill_always_on_and_own_head_playbook(tmp_path):
-    from app.integrate import ensure_workspace_skill
+    from app.agent import ensure_workspace_skill
     from nanobot.agent.skills import SkillsLoader
 
     skill = ROOT / "nanobot" / "skills" / "rbp-agent" / "SKILL.md"
@@ -945,7 +945,7 @@ def test_skill_documents_loo_overrides_stage0_stop():
 
 
 def test_workspace_skill_sync_copies_always_frontmatter(tmp_path):
-    from app.integrate import ensure_workspace_skill
+    from app.agent import ensure_workspace_skill
 
     dest = ensure_workspace_skill(tmp_path)
     text = dest.read_text(encoding="utf-8")

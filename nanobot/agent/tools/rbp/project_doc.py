@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""read_project_doc — allowlisted markdown path → chunked text for the LLM."""
+"""Allowlisted project-markdown reader for product / skill docs.
+
+Tool: ``read_project_doc``. When the user pastes a ``docs/`` or ``skills/`` path,
+returns a text chunk (offset / max_chars pagination). Paths resolve through
+``path_guard.resolve_doc_path`` — not a general ``read_file``.
+
+Does not read FASTA or code; use ``score_binding_fasta`` for labeled FASTA
+eval. No scientific scores are produced here.
+"""
 
 from __future__ import annotations
 
@@ -72,7 +80,7 @@ def read_project_doc(
     }
 )
 class ReadProjectDocTool(Tool):
-    """Read product/skill markdown (chunked). Not general read_file."""
+    """Chunked allowlisted markdown reader for docs/skills — not general read_file."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

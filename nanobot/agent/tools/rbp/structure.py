@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
-"""P1/P2 tools — struct_similarity + predict_structure.
+"""Stage-1 structure tools: Foldseek similarity + optional AF3 prediction.
 
-Structure evidence order (agent-side): AFDB fetch → Foldseek → AF3 ≤1 →
-structure_axis=unavailable. Failures are cached; never map failure to sim=0.
+Tools:
+
+* ``struct_similarity`` — delivery Foldseek (+ optional USalign refine) against
+  catalogue AFDB PDBs; prefer ``alias`` / ``uniprot``
+* ``predict_structure`` — AF3 (slow/GPU), ≤1 call; prefer AFDB fetch first
+
+Agent-side structure evidence order: AFDB fetch → Foldseek → AF3 ≤1 →
+``structure_axis=unavailable``. Failures (including AF3) are disk-cached;
+never map a missing/failed structure to similarity 0. Scores (TM / lDDT /
+fident) come from delivery only.
 """
 
 from __future__ import annotations
@@ -73,7 +81,7 @@ def _classify_af3_failure(detail: str, stderr: str = "") -> str:
             "af3 failed: GPU compute capability unsupported by bundled "
             "jax/triton (RTX 50-series / CC 12.0). Structure axis unavailable — "
             "continue AFDB/sequence/domain transfer; do not map failure to sim=0. "
-            "See docs/工程指南.zh.md §8 (AF3)."
+            "See docs/guides/AF3_RUNTIME_AND_RELEASE.md."
         )
     # Delivery truncates stderr to the last 2k chars; the Triton assert is often
     # at the *start*, so fall back to host GPU probe on generic failures.
@@ -97,7 +105,7 @@ def _classify_af3_failure(detail: str, stderr: str = "") -> str:
                     "incompatible with AF3 env jax 0.4.34 / triton 3.1 — "
                     "structure_axis=unavailable. Prefer AFDB + ESM/domain; "
                     "force confidence=low until AF3 stack is upgraded "
-                    "(docs/工程指南.zh.md §8)."
+                    "(docs/guides/AF3_RUNTIME_AND_RELEASE.md)."
                 )
         except Exception:
             pass
@@ -226,6 +234,8 @@ def _usalign_refine_enabled(kwargs: dict[str, Any]) -> bool:
     }
 )
 class StructSimilarityTool(Tool):
+    """Stage-1 structure retrieve — Foldseek (+ optional USalign) vs AFDB PDBs."""
+
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
 
@@ -381,6 +391,8 @@ class StructSimilarityTool(Tool):
     }
 )
 class PredictStructureTool(Tool):
+    """Optional AF3 structure prediction (≤1/turn); never map failure to sim=0."""
+
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
 

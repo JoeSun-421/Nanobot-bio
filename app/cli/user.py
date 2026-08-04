@@ -625,7 +625,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     sync_ok = False
     sync_err = None
     try:
-        from app.sync_overlay import sync_overlay
+        from app.bootstrap import sync_overlay
 
         sync_ok = sync_overlay(quiet=True) == 0
     except Exception as e:

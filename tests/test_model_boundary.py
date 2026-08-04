@@ -17,7 +17,7 @@ def test_no_proposal_sot_or_fusion_shim():
 
 
 def test_sot_root_is_repo_nanobot():
-    from app.sot import skill_md, sot_root, tools_rbp
+    from app.bootstrap import skill_md, sot_root, tools_rbp
 
     assert sot_root() == (ROOT / "nanobot").resolve()
     assert skill_md().is_file()

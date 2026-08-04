@@ -31,7 +31,11 @@ def test_layout_proposal_paths():
     assert (ROOT / "app" / "backends" / "delivery" / "client.py").is_file()
     assert (ROOT / "app" / "cli" / "__init__.py").is_file()
     assert (ROOT / "app" / "agent.py").is_file()
-    assert (ROOT / "app" / "integrate.py").is_file()  # compat re-export → app.agent
+    assert (ROOT / "app" / "bootstrap" / "__init__.py").is_file()
+    assert (ROOT / "app" / "sync_overlay.py").is_file()  # sole root CLI shim
+    assert not (ROOT / "app" / "integrate.py").exists()
+    assert not (ROOT / "app" / "sot.py").exists()
+    assert not (ROOT / "app" / "rbp_bootstrap.py").exists()
     assert (ROOT / "app" / "core" / "capability_matrix.py").is_file()
     assert not (ROOT / "cli.py").exists()
     assert not (ROOT / "integrate.py").exists()
@@ -63,8 +67,8 @@ def test_rbp_eval_modules_importable():
 
 
 def test_skill_sot_matches_workspace_copy():
-    from app.integrate import ensure_workspace_skill
-    from app.sot import skill_md
+    from app.agent import ensure_workspace_skill
+    from app.bootstrap import skill_md
 
     sot_path = skill_md()
     assert sot_path.is_file()
@@ -113,7 +117,7 @@ def test_fuse_and_label():
 
 
 def test_agent_default_no_fallback():
-    from app.integrate import RBPAgent
+    from app.agent import RBPAgent
 
     # Instantiation may fail without delivery; only check default flag via signature
     import inspect

@@ -352,7 +352,7 @@ def run_batch_prompts(
     runner = turn_runner or _run_case_turn
     agent: Any = None
     if turn_runner is None:
-        from app.integrate import RBPAgent
+        from app.agent import RBPAgent
 
         # One agent for the whole suite — sync_overlay at most once (not per case).
         agent = RBPAgent(prefer_nanobot_llm=True, allow_fallback=False, device=device)

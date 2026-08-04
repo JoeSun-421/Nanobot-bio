@@ -1,5 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Self-evolution runtime tools: proxy cache lookup + multi-view fusion."""
+"""Stage-1 integrate helpers: promoted proxy cache + multi-view fusion.
+
+Tools:
+
+* ``lookup_proxy_cache`` — after ``resolve_rbp`` when ``in_panel=false``, look up
+  offline-promoted proxy donors; on hit, bypass Stage-1 multi-view retrieve
+* ``fuse_similarity_views`` — fuse seq/struct/domain/(soft)function hit lists
+  with evolved or default ``fusion_weights`` into ranked donors
+
+Delivery / offline code owns the numeric scores. This module only orchestrates
+cache lookup and fusion; the LLM must not invent ``s_i`` or ``p_hat``. On the
+unseen/transfer path: retrieve → fuse → ``commit_proxy_candidates`` →
+``confidence_abstain`` → ``predict_interaction``.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +46,7 @@ from nanobot.agent.tools.rbp.common import dumps, err, ok, timed_call
     }
 )
 class LookupProxyCacheTool(Tool):
-    """Bypass Stage 1 when (p* → proxies) has been promoted."""
+    """Stage-1 bypass — return promoted proxy donors from the offline cache."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
@@ -175,7 +188,7 @@ class LookupProxyCacheTool(Tool):
     }
 )
 class FuseSimilarityViewsTool(Tool):
-    """Fuse multi-view hits with evolved (or default) fusion_weights."""
+    """Stage-1 fuse — rank donors from multi-view hits; no invented s_i."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}

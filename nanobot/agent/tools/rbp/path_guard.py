@@ -1,5 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Allowlisted path resolution for score_binding_fasta / read_project_doc."""
+"""Allowlisted file-path jail for FASTA, project markdown, and structure inputs.
+
+The product path does not expose a general ``read_file`` tool. A few curated
+tools still need local paths; they must resolve through this module:
+
+* ``resolve_allowed_path`` — path must sit under an allow root and have a legal
+  suffix
+* ``resolve_doc_path`` — further restricted to docs / skills (and related) roots
+* Default roots: ``cwd``, ``NANOBOT_BIO_ROOT``, ``DELIVERY_ROOT``, plus
+  ``RBP_FASTA_ALLOW_ROOTS`` / ``RBP_DOC_ALLOW_ROOTS`` (colon-separated)
+
+Rejects path traversal and absolute paths outside the jail so the LLM cannot
+pull arbitrary host files into context.
+"""
 
 from __future__ import annotations
 

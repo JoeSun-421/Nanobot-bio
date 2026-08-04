@@ -1,5 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Register curated RBP tools + optional raw delivery tools onto a ToolRegistry."""
+"""Mount curated RBP tools and optional raw delivery tools on a ToolRegistry.
+
+Entry point: ``register_rbp_tools(registry, include_raw_delivery=…)``, used by
+``app.agent`` when assembling the product tool surface.
+
+* Curated layer: ``nanobot.agent.tools.rbp.register_all`` (P0–P2 Tool subclasses)
+* Raw layer: ``app.backends.delivery.registry.build_delivery_raw_tools``
+  (``SCRIPT_MAP`` delivery scripts not already covered by curated tools)
+
+``include_raw_delivery`` / env ``RBP_RAW_TOOLS``:
+
+* ``all`` (default) — every ready delivery tool
+* ``whitelist`` / ``mvp`` — Stage whitelist extras only
+* ``none`` — curated tools only
+
+Does not register PA legacy tools (shell/web/…); the product path unregisters
+those separately.
+"""
 
 from __future__ import annotations
 

@@ -132,7 +132,7 @@ def _normalize_candidate(row: dict[str, Any], *, tau_drop: float) -> dict[str, A
     }
 )
 class CommitProxyCandidatesTool(Tool):
-    """Persist selected deterministic Stage-1 proxies for Stage 2/3."""
+    """Checkpoint 1 — select fused proxies; copy numeric s_i, never invent them."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
