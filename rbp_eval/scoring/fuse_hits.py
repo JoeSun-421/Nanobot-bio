@@ -16,12 +16,46 @@ DEFAULT_WEIGHTS = {
     "fident": 0.2,
     "saprot_cosine": 0.0,
     "function_similarity": 0.4,
-    # Low-weight Function peer axis from literature_search co-mentions.
+    # Function peer axis from literature / UniProt (agent may override per turn).
     "literature_cooccurrence": 0.1,
     # Collected when PEAKS_DB is ready, but promoted into fusion only after a
     # held-out ablation; the current certified policy keeps this at zero.
     "rna_peak_homology": 0.0,
 }
+
+# Per-turn agent override ceiling (allows a decisive axis above default emb=1.0).
+FUSION_WEIGHT_WMAX = 2.0
+
+
+def apply_fusion_weight_override(
+    base: dict[str, float] | None,
+    override: dict[str, Any] | None,
+    *,
+    wmax: float = FUSION_WEIGHT_WMAX,
+) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    """Merge runtime weights with agent override; clamp each value to ``[0, wmax]``.
+
+    Returns ``(applied_weights, clamped)`` where ``clamped`` maps metric →
+    ``{requested, applied}`` for values that were out of range.
+    """
+    applied = {str(k): float(v) for k, v in (base or {}).items()}
+    clamped: dict[str, dict[str, float]] = {}
+    if not isinstance(override, dict) or not override:
+        return applied, clamped
+    lo, hi = 0.0, float(wmax)
+    for raw_key, raw_val in override.items():
+        key = str(raw_key).strip()
+        if not key:
+            continue
+        try:
+            requested = float(raw_val)
+        except (TypeError, ValueError):
+            continue
+        value = max(lo, min(hi, requested))
+        if value != requested:
+            clamped[key] = {"requested": requested, "applied": value}
+        applied[key] = value
+    return applied, clamped
 
 
 def _rank_normalize(scores: dict[str, float]) -> dict[str, float]:

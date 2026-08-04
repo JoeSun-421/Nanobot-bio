@@ -160,6 +160,16 @@ class LookupProxyCacheTool(Tool):
                 "type": "number",
                 "description": "Drop donors with fused score below this (default from config).",
             },
+            "fusion_weights": {
+                "type": "object",
+                "description": (
+                    "Optional per-turn modality weight overrides (floats). "
+                    "Merged over runtime defaults; each value clamped to "
+                    "[0, 2.0]. Use to raise/lower seq/struct/function axes "
+                    "from evidence (never invent per-donor s_i or p_hat)."
+                ),
+                "additionalProperties": {"type": "number"},
+            },
         },
         "required": [],
     }
@@ -177,17 +187,15 @@ class FuseSimilarityViewsTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Fuse multi-view RbpHit lists into ranked donors using runtime "
-            "fusion_weights (delivery-style: emb/seq + Foldseek structure + "
-            "domain Jaccard). Auto-injects literature_cooccurrence (weight 0.1) "
-            "only for peers that corroborate hard Donors_SS — never lit-only "
-            "gap-fill or LLM-invented s_i. Runtime blocks fuse until structure "
-            "+ domain retrieves have been attempted (or honest unavailable / "
-            "domain_empty flags are set). Each donor includes an authoritative "
-            "deterministic similarity_score and breakdown for Checkpoint 1. "
-            "After fuse: select donors with commit_proxy_candidates (numeric "
-            "scores cannot be changed), then confidence_abstain, then "
-            "predict_interaction (proposal §4: fuse → commit → abstain → predict)."
+            "Fuse multi-view RbpHit lists into ranked donors. Pass optional "
+            "fusion_weights floats to reweight axes this turn (clamped "
+            "[0,2]); YAML defaults are the fallback. Auto-injects Function "
+            "axis hits (literature_cooccurrence from PMC/UniProt peers). "
+            "Tool scores only — never invent s_i or p_hat. Runtime blocks "
+            "fuse until structure + domain retrieves have been attempted "
+            "(or honest unavailable / domain_empty). Then "
+            "commit_proxy_candidates → confidence_abstain → predict "
+            "(proposal §4)."
         )
 
     @property
@@ -223,9 +231,13 @@ class FuseSimilarityViewsTool(Tool):
                 cohort_head_aliases,
                 corroborate_literature_hits_for_aliases,
                 register_retrieve_donors,
+                set_turn_fusion_weights,
                 stage1_bypassed,
             )
-            from rbp_eval.scoring.fuse_hits import fuse_rbp_hits
+            from rbp_eval.scoring.fuse_hits import (
+                apply_fusion_weight_override,
+                fuse_rbp_hits,
+            )
 
             # Remap common LLM aliases (seq_hits → hits_seq, …) before fuse.
             _alias_map = {
@@ -294,7 +306,7 @@ class FuseSimilarityViewsTool(Tool):
                     "[[{alias,score,...}], ...] or [{hits:[...]}, ...]"
                 )
 
-            # Register hard-retrieve aliases (Donors_SS) then corroborate lit peers.
+            # Register hard-retrieve aliases; Function peers all eligible for fuse.
             aliases_from_lists = {
                 str(hit.get("alias") or hit.get("rbp_id") or "")
                 for rows in lists
@@ -305,7 +317,6 @@ class FuseSimilarityViewsTool(Tool):
             }
             register_retrieve_donors(aliases_from_lists)
             lit_hits = corroborate_literature_hits_for_aliases(aliases_from_lists)
-            # Auto-inject corroborated literature soft hits only (never lit-only gap-fill).
             has_lit = any(
                 isinstance(h, dict)
                 and str(h.get("metric") or "") == "literature_cooccurrence"
@@ -314,14 +325,7 @@ class FuseSimilarityViewsTool(Tool):
             )
             explicit_lit = kwargs.get("hits_lit")
             if isinstance(explicit_lit, list) and explicit_lit and not has_lit:
-                # Accept explicit lit only for aliases already in hard Donors_SS.
-                donors_up = {a.upper() for a in aliases_from_lists if a}
-                filtered = [
-                    h
-                    for h in explicit_lit
-                    if isinstance(h, dict)
-                    and str(h.get("alias") or "").upper() in donors_up
-                ]
+                filtered = [h for h in explicit_lit if isinstance(h, dict) and h.get("alias")]
                 if filtered:
                     lists.append(filtered)
                     lit_hits = filtered
@@ -334,7 +338,14 @@ class FuseSimilarityViewsTool(Tool):
             top_k = int(kwargs.get("top_k") or 5)
             tau = kwargs.get("tau_drop")
             tau_f = float(tau) if tau is not None else cfg_tau()
-            weights = fusion_weights()
+            base_weights = fusion_weights()
+            weights, clamped = apply_fusion_weight_override(
+                base_weights, kwargs.get("fusion_weights")
+            )
+            try:
+                set_turn_fusion_weights(weights, clamped=clamped)
+            except Exception:
+                pass
             cfg = get_runtime_config()
             canonical = canonical_request() or {}
             cohort = str(
@@ -363,13 +374,12 @@ class FuseSimilarityViewsTool(Tool):
                 use_rank_normalize=True,
                 tau_drop=tau_f,
             )
-            # Lit-only peers must not gap-fill into fuse; they need seq/struct recompare.
             gap_aliases: list[str] = []
             if lit_hits:
                 try:
-                    add_evidence_flag("literature_corroboration", True)
+                    add_evidence_flag("literature_function_axis", True)
                     add_evidence_flag(
-                        "literature_corroboration_aliases",
+                        "literature_function_aliases",
                         [
                             str(h.get("alias"))
                             for h in lit_hits
@@ -428,6 +438,9 @@ class FuseSimilarityViewsTool(Tool):
                     "weights_source": config_source(),
                     "tau_drop": tau_f,
                     "fusion_weights": weights,
+                    "fusion_weights_applied": weights,
+                    "fusion_weights_clamped": clamped,
+                    "fusion_weights_base": base_weights,
                     "modality_coverage": coverage,
                     "missing_modalities": missing,
                     "metrics_present": sorted(metrics_seen),

@@ -49,15 +49,18 @@ _AUTHORITATIVE_SCORE: Optional[dict[str, Any]] = None
 # Explicit force_transfer=true (tool arg / commit / user LOO intent) disables
 # near-match own-head Fast Path for this turn and overrides Stage 0 STOP.
 _FORCE_TRANSFER_ACTIVE: bool = False
-# Soft lit corroboration hits for automatic fuse_similarity_views injection.
+# Soft Function-axis hits for automatic fuse_similarity_views injection.
 _LIT_FUSE_HITS: list[dict[str, Any]] = []
 _LIT_AXIS_USABLE: bool = False
-# Full pairwise lit peers + budgeted lit-only orphans for LLM recompare.
+# Full pairwise Function peers (+ optional overlap annotation vs Donors_SS).
 _LIT_PEERS: list[dict[str, Any]] = []
 _LIT_ONLY_PEERS: list[dict[str, Any]] = []
 _LIT_PEER_DECISIONS: list[dict[str, Any]] = []
 # Aliases seen in seq/struct/domain retrieve hit lists this turn (Donors_SS).
 _RETRIEVE_DONOR_ALIASES: set[str] = set()
+# Per-turn agent fusion_weights override (after clamp).
+_TURN_FUSION_WEIGHTS: dict[str, float] = {}
+_TURN_FUSION_WEIGHTS_CLAMPED: dict[str, dict[str, float]] = {}
 # Proxy-cache hit: skip Stage-1 multi-view retrieve (proposal §7.5).
 _STAGE1_BYPASSED: bool = False
 _CACHE_PROXIES: list[dict[str, Any]] = []
@@ -85,6 +88,7 @@ def reset_stage_guards() -> None:
     global _QUERY_TARGET, _CANONICAL_REQUEST, _AUTHORITATIVE_SCORE
     global _FORCE_TRANSFER_ACTIVE, _LIT_FUSE_HITS, _LIT_AXIS_USABLE
     global _LIT_PEERS, _LIT_ONLY_PEERS, _LIT_PEER_DECISIONS
+    global _TURN_FUSION_WEIGHTS, _TURN_FUSION_WEIGHTS_CLAMPED
     global _STAGE1_BYPASSED, _CACHE_PROXIES
     _OWN_HEAD_STOP = False
     _FUSE_DONE = False
@@ -103,6 +107,8 @@ def reset_stage_guards() -> None:
     _LIT_PEERS = []
     _LIT_ONLY_PEERS = []
     _LIT_PEER_DECISIONS = []
+    _TURN_FUSION_WEIGHTS = {}
+    _TURN_FUSION_WEIGHTS_CLAMPED = {}
     _RETRIEVE_DONOR_ALIASES.clear()
     _STAGE1_BYPASSED = False
     _CACHE_PROXIES = []
@@ -141,7 +147,7 @@ def set_literature_fuse_hits(
     *,
     axis_usable: bool = True,
 ) -> None:
-    """Store lit corroboration RbpHit list for automatic fuse injection."""
+    """Store Function-axis RbpHit list for automatic fuse injection."""
     global _LIT_FUSE_HITS, _LIT_AXIS_USABLE
     _LIT_AXIS_USABLE = bool(axis_usable)
     if not axis_usable or not hits:
@@ -151,10 +157,43 @@ def set_literature_fuse_hits(
 
 
 def literature_fuse_hits() -> list[dict[str, Any]]:
-    """Return lit corroboration hits (empty if axis unusable)."""
+    """Return Function-axis lit/UniProt hits (empty if axis unusable)."""
     if not _LIT_AXIS_USABLE:
         return []
     return [dict(h) for h in _LIT_FUSE_HITS]
+
+
+def set_turn_fusion_weights(
+    weights: dict[str, float] | None,
+    *,
+    clamped: dict[str, dict[str, float]] | None = None,
+) -> None:
+    """Store per-turn agent fusion_weights (already clamped) for audit/trace."""
+    global _TURN_FUSION_WEIGHTS, _TURN_FUSION_WEIGHTS_CLAMPED
+    _TURN_FUSION_WEIGHTS = {
+        str(k): float(v) for k, v in (weights or {}).items()
+    }
+    _TURN_FUSION_WEIGHTS_CLAMPED = {
+        str(k): dict(v)
+        for k, v in (clamped or {}).items()
+        if isinstance(v, dict)
+    }
+    if _TURN_FUSION_WEIGHTS:
+        add_evidence_flag("fusion_weights_override", True)
+    if _TURN_FUSION_WEIGHTS_CLAMPED:
+        add_evidence_flag("fusion_weights_clamped", True)
+        add_evidence_flag(
+            "fusion_weights_clamped_keys",
+            sorted(_TURN_FUSION_WEIGHTS_CLAMPED.keys()),
+        )
+
+
+def turn_fusion_weights() -> dict[str, float]:
+    return dict(_TURN_FUSION_WEIGHTS)
+
+
+def turn_fusion_weights_clamped() -> dict[str, dict[str, float]]:
+    return {k: dict(v) for k, v in _TURN_FUSION_WEIGHTS_CLAMPED.items()}
 
 
 def set_literature_peers(
@@ -261,23 +300,32 @@ def register_retrieve_donors_from_tool_result(
 def record_lit_peer_decisions(
     decisions: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
-    """Store LLM lit-only recompare/drop decisions; surface caveats/trace."""
+    """Store optional Function-axis rationale (weight notes / narrative).
+
+    Recompare/drop actions remain accepted for backward compatibility but are
+    **not** required for peers to enter fuse (Function is a first-class view).
+    """
     global _LIT_PEER_DECISIONS
     cleaned: list[dict[str, Any]] = []
+    allowed = {
+        "recompare_seq",
+        "recompare_struct",
+        "drop",
+        "weight_note",
+        "keep",
+    }
     for item in decisions or []:
         if not isinstance(item, dict):
             continue
-        alias = str(item.get("alias") or "").strip()
-        action = str(item.get("action") or "").strip().lower()
-        if not alias or action not in {
-            "recompare_seq",
-            "recompare_struct",
-            "drop",
-        }:
+        alias = str(item.get("alias") or item.get("metric") or "").strip()
+        action = str(item.get("action") or "weight_note").strip().lower()
+        if action not in allowed:
+            continue
+        if not alias and action != "weight_note":
             continue
         cleaned.append(
             {
-                "alias": alias,
+                "alias": alias or "*",
                 "action": action,
                 "rationale": str(item.get("rationale") or "").strip()[:400],
             }
@@ -293,18 +341,6 @@ def record_lit_peer_decisions(
                 for d in cleaned
             ],
         )
-        dropped = [d["alias"] for d in cleaned if d["action"] == "drop"]
-        if dropped:
-            add_evidence_flag("literature_lit_only_dropped", True)
-            add_evidence_flag("literature_lit_only_dropped_aliases", dropped)
-        recomposed = [
-            d["alias"]
-            for d in cleaned
-            if d["action"] in {"recompare_seq", "recompare_struct"}
-        ]
-        if recomposed:
-            add_evidence_flag("literature_lit_only_recompare", True)
-            add_evidence_flag("literature_lit_only_recompare_aliases", recomposed)
         record_evidence(
             {
                 "kind": "lit_peer_decisions",
@@ -321,10 +357,11 @@ def lit_peer_decisions() -> list[dict[str, Any]]:
 def corroborate_literature_hits_for_aliases(
     donor_aliases: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Rebuild corroborated lit fuse hits against current Donors_SS / fuse lists.
+    """Refresh Function-axis fuse hits from stored lit_peers (all peers eligible).
 
-    Called at fuse time so literature that ran in parallel with seq/struct still
-    contributes corroboration once hard donors are known.
+    Overlap with Donors_SS is annotated as ``literature_corroboration``; peers
+    only on the Function view are ``function_peer``. Agent fusion_weights
+    control how strongly they affect ``s_i``.
     """
     if not _LIT_AXIS_USABLE or not _LIT_PEERS:
         return literature_fuse_hits()
@@ -332,18 +369,18 @@ def corroborate_literature_hits_for_aliases(
     if donor_aliases:
         donors |= {str(a).strip().upper() for a in donor_aliases if str(a).strip()}
     try:
-        from nanobot.agent.tools.rbp.annotation import split_lit_peers_vs_donors
+        from nanobot.agent.tools.rbp.annotation import peers_to_function_fuse_hits
 
-        corroborated, lit_only, _ = split_lit_peers_vs_donors(
-            _LIT_PEERS, donors
-        )
+        hits = peers_to_function_fuse_hits(_LIT_PEERS, donor_aliases=donors)
     except Exception:
         return literature_fuse_hits()
     global _LIT_ONLY_PEERS
-    # Keep original budgeted orphans for LLM; do not expand at fuse time.
-    if lit_only and not _LIT_ONLY_PEERS:
-        _LIT_ONLY_PEERS = lit_only
-    set_literature_fuse_hits(corroborated, axis_usable=True)
+    _LIT_ONLY_PEERS = [
+        dict(h)
+        for h in hits
+        if str(h.get("score_kind") or "") == "function_peer"
+    ]
+    set_literature_fuse_hits(hits, axis_usable=True)
     return literature_fuse_hits()
 
 
@@ -989,6 +1026,9 @@ __all__ = [
     "set_literature_peers",
     "literature_peers",
     "lit_only_peers",
+    "set_turn_fusion_weights",
+    "turn_fusion_weights",
+    "turn_fusion_weights_clamped",
     "register_retrieve_donors",
     "retrieve_donor_aliases",
     "register_retrieve_donors_from_tool_result",
