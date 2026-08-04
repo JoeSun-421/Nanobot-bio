@@ -49,9 +49,18 @@ _AUTHORITATIVE_SCORE: Optional[dict[str, Any]] = None
 # Explicit force_transfer=true (tool arg / commit / user LOO intent) disables
 # near-match own-head Fast Path for this turn and overrides Stage 0 STOP.
 _FORCE_TRANSFER_ACTIVE: bool = False
-# Soft lit co-mention hits for automatic fuse_similarity_views injection.
+# Soft lit corroboration hits for automatic fuse_similarity_views injection.
 _LIT_FUSE_HITS: list[dict[str, Any]] = []
 _LIT_AXIS_USABLE: bool = False
+# Full pairwise lit peers + budgeted lit-only orphans for LLM recompare.
+_LIT_PEERS: list[dict[str, Any]] = []
+_LIT_ONLY_PEERS: list[dict[str, Any]] = []
+_LIT_PEER_DECISIONS: list[dict[str, Any]] = []
+# Aliases seen in seq/struct/domain retrieve hit lists this turn (Donors_SS).
+_RETRIEVE_DONOR_ALIASES: set[str] = set()
+# Proxy-cache hit: skip Stage-1 multi-view retrieve (proposal §7.5).
+_STAGE1_BYPASSED: bool = False
+_CACHE_PROXIES: list[dict[str, Any]] = []
 
 # Conservative user-message LOO cues (secondary to tool args / commit state).
 _LOO_USER_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -75,6 +84,8 @@ def reset_stage_guards() -> None:
     global _EVIDENCE_FLAGS, _EVIDENCE_RECORDS, _COMMITTED_PROXIES, _FUSED_PROXIES
     global _QUERY_TARGET, _CANONICAL_REQUEST, _AUTHORITATIVE_SCORE
     global _FORCE_TRANSFER_ACTIVE, _LIT_FUSE_HITS, _LIT_AXIS_USABLE
+    global _LIT_PEERS, _LIT_ONLY_PEERS, _LIT_PEER_DECISIONS
+    global _STAGE1_BYPASSED, _CACHE_PROXIES
     _OWN_HEAD_STOP = False
     _FUSE_DONE = False
     _COMMIT_DONE = False
@@ -89,7 +100,40 @@ def reset_stage_guards() -> None:
     _FORCE_TRANSFER_ACTIVE = False
     _LIT_FUSE_HITS = []
     _LIT_AXIS_USABLE = False
+    _LIT_PEERS = []
+    _LIT_ONLY_PEERS = []
+    _LIT_PEER_DECISIONS = []
+    _RETRIEVE_DONOR_ALIASES.clear()
+    _STAGE1_BYPASSED = False
+    _CACHE_PROXIES = []
     _RETRIEVE_DONE.clear()
+
+
+def mark_stage1_bypassed(proxies: list[dict[str, Any]] | None = None) -> None:
+    """Cache hit: skip Stage-1 multi-view retrieve; allow fuse/commit from proxies."""
+    global _STAGE1_BYPASSED, _CACHE_PROXIES
+    _STAGE1_BYPASSED = True
+    _CACHE_PROXIES = [dict(p) for p in (proxies or []) if isinstance(p, dict)]
+    # Satisfy fuse multi-view sentinels without inventing retrieve tool runs.
+    add_evidence_flag("stage1_bypassed", True)
+    add_evidence_flag("structure_axis_skipped", True)
+    add_evidence_flag("domain_axis_skipped", True)
+    # Synthetic retrieve marker so __any_retrieve__ is satisfied.
+    _RETRIEVE_DONE.add("lookup_proxy_cache")
+    if _CACHE_PROXIES:
+        set_fused_proxies(_CACHE_PROXIES)
+        register_retrieve_donors(
+            str(p.get("alias") or p.get("rbp_id") or "")
+            for p in _CACHE_PROXIES
+        )
+
+
+def stage1_bypassed() -> bool:
+    return bool(_STAGE1_BYPASSED)
+
+
+def cache_proxies() -> list[dict[str, Any]]:
+    return [dict(p) for p in _CACHE_PROXIES]
 
 
 def set_literature_fuse_hits(
@@ -97,7 +141,7 @@ def set_literature_fuse_hits(
     *,
     axis_usable: bool = True,
 ) -> None:
-    """Store lit-derived RbpHit list for automatic fuse injection this turn."""
+    """Store lit corroboration RbpHit list for automatic fuse injection."""
     global _LIT_FUSE_HITS, _LIT_AXIS_USABLE
     _LIT_AXIS_USABLE = bool(axis_usable)
     if not axis_usable or not hits:
@@ -107,10 +151,200 @@ def set_literature_fuse_hits(
 
 
 def literature_fuse_hits() -> list[dict[str, Any]]:
-    """Return a copy of lit co-mention hits (empty if axis unusable)."""
+    """Return lit corroboration hits (empty if axis unusable)."""
     if not _LIT_AXIS_USABLE:
         return []
     return [dict(h) for h in _LIT_FUSE_HITS]
+
+
+def set_literature_peers(
+    lit_peers: list[dict[str, Any]] | None,
+    lit_only: list[dict[str, Any]] | None = None,
+    *,
+    axis_usable: bool = True,
+) -> None:
+    """Store pairwise lit peers and budgeted lit-only orphans for this turn."""
+    global _LIT_PEERS, _LIT_ONLY_PEERS, _LIT_AXIS_USABLE
+    if axis_usable:
+        _LIT_AXIS_USABLE = True
+    _LIT_PEERS = [
+        dict(p) for p in (lit_peers or []) if isinstance(p, dict) and p.get("alias")
+    ]
+    _LIT_ONLY_PEERS = [
+        dict(p) for p in (lit_only or []) if isinstance(p, dict) and p.get("alias")
+    ]
+    if _LIT_ONLY_PEERS:
+        add_evidence_flag("literature_lit_only_peers", True)
+        add_evidence_flag(
+            "literature_lit_only_aliases",
+            [str(p.get("alias")) for p in _LIT_ONLY_PEERS],
+        )
+
+
+def literature_peers() -> list[dict[str, Any]]:
+    return [dict(p) for p in _LIT_PEERS]
+
+
+def lit_only_peers() -> list[dict[str, Any]]:
+    return [dict(p) for p in _LIT_ONLY_PEERS]
+
+
+def register_retrieve_donors(aliases: Any) -> None:
+    """Accumulate Donors_SS aliases from seq/struct/domain retrieve hits."""
+    if aliases is None:
+        return
+    if isinstance(aliases, (str, bytes)):
+        aliases = [aliases]
+    for raw in aliases:
+        alias = str(raw or "").strip()
+        if alias:
+            _RETRIEVE_DONOR_ALIASES.add(alias.upper())
+
+
+def retrieve_donor_aliases() -> set[str]:
+    """Uppercased aliases seen in this turn's hard retrieve hit lists."""
+    return set(_RETRIEVE_DONOR_ALIASES)
+
+
+def register_retrieve_donors_from_tool_result(
+    tool_name: str, result: Any
+) -> None:
+    """Parse an ok tool envelope and register hit aliases into Donors_SS."""
+    if tool_name not in STAGE_RETRIEVE:
+        return
+    # Literature itself is not a hard donor source.
+    if tool_name in {"literature_search", "literature_retrieval", "get_func_annotation"}:
+        return
+    payload = result
+    if isinstance(result, str):
+        text = result.strip()
+        if not text.startswith("{"):
+            return
+        try:
+            import json
+
+            payload = json.loads(text)
+        except Exception:
+            return
+    if not isinstance(payload, dict):
+        return
+    value = payload.get("value") if payload.get("status") == "ok" else payload
+    if not isinstance(value, dict):
+        return
+    aliases: list[str] = []
+    for key in (
+        "hits",
+        "hits_emb",
+        "hits_seq",
+        "hits_struct",
+        "hits_domain",
+    ):
+        rows = value.get(key)
+        if not isinstance(rows, list):
+            continue
+        for hit in rows:
+            if isinstance(hit, dict) and hit.get("alias"):
+                aliases.append(str(hit["alias"]))
+            elif isinstance(hit, dict) and hit.get("rbp_id"):
+                aliases.append(str(hit["rbp_id"]))
+    # Domain architecture may nest neighbours under similar keys.
+    for key in ("neighbours", "neighbors", "domain_hits"):
+        rows = value.get(key)
+        if isinstance(rows, list):
+            for hit in rows:
+                if isinstance(hit, dict) and hit.get("alias"):
+                    aliases.append(str(hit["alias"]))
+    if aliases:
+        register_retrieve_donors(aliases)
+
+
+def record_lit_peer_decisions(
+    decisions: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Store LLM lit-only recompare/drop decisions; surface caveats/trace."""
+    global _LIT_PEER_DECISIONS
+    cleaned: list[dict[str, Any]] = []
+    for item in decisions or []:
+        if not isinstance(item, dict):
+            continue
+        alias = str(item.get("alias") or "").strip()
+        action = str(item.get("action") or "").strip().lower()
+        if not alias or action not in {
+            "recompare_seq",
+            "recompare_struct",
+            "drop",
+        }:
+            continue
+        cleaned.append(
+            {
+                "alias": alias,
+                "action": action,
+                "rationale": str(item.get("rationale") or "").strip()[:400],
+            }
+        )
+    _LIT_PEER_DECISIONS = cleaned
+    if cleaned:
+        add_evidence_flag("literature_peer_decisions", True)
+        add_evidence_flag(
+            "literature_peer_decision_detail",
+            [
+                f"{d['alias']}:{d['action']}"
+                + (f" ({d['rationale']})" if d.get("rationale") else "")
+                for d in cleaned
+            ],
+        )
+        dropped = [d["alias"] for d in cleaned if d["action"] == "drop"]
+        if dropped:
+            add_evidence_flag("literature_lit_only_dropped", True)
+            add_evidence_flag("literature_lit_only_dropped_aliases", dropped)
+        recomposed = [
+            d["alias"]
+            for d in cleaned
+            if d["action"] in {"recompare_seq", "recompare_struct"}
+        ]
+        if recomposed:
+            add_evidence_flag("literature_lit_only_recompare", True)
+            add_evidence_flag("literature_lit_only_recompare_aliases", recomposed)
+        record_evidence(
+            {
+                "kind": "lit_peer_decisions",
+                "decisions": cleaned,
+            }
+        )
+    return list(cleaned)
+
+
+def lit_peer_decisions() -> list[dict[str, Any]]:
+    return [dict(d) for d in _LIT_PEER_DECISIONS]
+
+
+def corroborate_literature_hits_for_aliases(
+    donor_aliases: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Rebuild corroborated lit fuse hits against current Donors_SS / fuse lists.
+
+    Called at fuse time so literature that ran in parallel with seq/struct still
+    contributes corroboration once hard donors are known.
+    """
+    if not _LIT_AXIS_USABLE or not _LIT_PEERS:
+        return literature_fuse_hits()
+    donors = set(retrieve_donor_aliases())
+    if donor_aliases:
+        donors |= {str(a).strip().upper() for a in donor_aliases if str(a).strip()}
+    try:
+        from nanobot.agent.tools.rbp.annotation import split_lit_peers_vs_donors
+
+        corroborated, lit_only, _ = split_lit_peers_vs_donors(
+            _LIT_PEERS, donors
+        )
+    except Exception:
+        return literature_fuse_hits()
+    global _LIT_ONLY_PEERS
+    # Keep original budgeted orphans for LLM; do not expand at fuse time.
+    if lit_only and not _LIT_ONLY_PEERS:
+        _LIT_ONLY_PEERS = lit_only
+    set_literature_fuse_hits(corroborated, axis_usable=True)
+    return literature_fuse_hits()
 
 
 def mark_own_head_success() -> None:
@@ -464,6 +698,12 @@ def _any_retrieve_done() -> bool:
 
 
 def retrieve_blocked_reason(tool_name: str) -> Optional[str]:
+    if _STAGE1_BYPASSED and tool_name in STAGE_RETRIEVE:
+        return (
+            f"Stage-1 bypassed (proxy cache hit): refusing {tool_name}. "
+            "Use cached proxies → fuse_similarity_views / commit_proxy_candidates "
+            "(stage1_bypassed=true). Do not re-run multi-view retrieve."
+        )
     if force_transfer_active():
         return None
     if _OWN_HEAD_STOP and tool_name in RETRIEVE_AFTER_OWN_HEAD:
@@ -623,13 +863,15 @@ def fuse_blocked_reason() -> Optional[str]:
     Requires at least one retrieve tool, plus structure + domain axes when those
     axes are enabled. Honest soft-fails (``structure_axis_unavailable``,
     ``domain_empty``, axis-skipped flags) satisfy the sentinel without inventing
-    sim=0 hits.
+    sim=0 hits. Proxy-cache Stage-1 bypass also satisfies these sentinels.
     """
     if _OWN_HEAD_STOP and not force_transfer_active():
         return (
             "Stage 0 STOP: own-head already succeeded; refuse fuse_similarity_views. "
             "Emit JSON verdict now."
         )
+    if _STAGE1_BYPASSED:
+        return None
     fuse_reqs = REQUIRES.get("fuse_similarity_views", ())
     if "__any_retrieve__" in fuse_reqs and not _any_retrieve_done():
         return (
@@ -658,7 +900,21 @@ def fuse_blocked_reason() -> Optional[str]:
 
 
 def blocked_envelope_json(tool_name: str) -> Optional[str]:
-    """JSON error envelope if Stage-0 stop blocks ``tool_name``, else None."""
+    """JSON error envelope if Stage-0 stop / soft-disable / Stage-1 bypass blocks."""
+    try:
+        from app.core.runtime_config import soft_disabled_tools
+
+        if tool_name in set(soft_disabled_tools()):
+            from nanobot.agent.tools.rbp.common import dumps, err
+
+            return dumps(
+                err(
+                    f"disabled_by_evolution: {tool_name} is in tools.soft_disabled "
+                    "(self-evolution retirement candidate; delivery untouched)."
+                )
+            )
+    except Exception:
+        pass
     reason = retrieve_blocked_reason(tool_name)
     if not reason:
         return None
@@ -730,6 +986,15 @@ __all__ = [
     "reset_stage_guards",
     "set_literature_fuse_hits",
     "literature_fuse_hits",
+    "set_literature_peers",
+    "literature_peers",
+    "lit_only_peers",
+    "register_retrieve_donors",
+    "retrieve_donor_aliases",
+    "register_retrieve_donors_from_tool_result",
+    "record_lit_peer_decisions",
+    "lit_peer_decisions",
+    "corroborate_literature_hits_for_aliases",
     "mark_own_head_success",
     "mark_fuse_done",
     "mark_commit_done",
@@ -745,6 +1010,9 @@ __all__ = [
     "authoritative_score",
     "mark_abstain_done",
     "mark_retrieve_done",
+    "mark_stage1_bypassed",
+    "stage1_bypassed",
+    "cache_proxies",
     "fuse_done",
     "commit_done",
     "abstain_done",

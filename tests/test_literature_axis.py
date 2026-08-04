@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Literature axis: related-protein query, soft fuse hits, off-topic → no hits."""
+"""Literature axis: pairwise lit_peers, corroboration fuse, lit-only recompare."""
 
 from __future__ import annotations
 
@@ -15,8 +15,11 @@ if str(ROOT) not in sys.path:
 from nanobot.agent.tools.rbp import turn_guards  # noqa: E402
 from nanobot.agent.tools.rbp.annotation import (  # noqa: E402
     LiteratureSearchTool,
+    RecordLitPeerDecisionsTool,
     build_literature_cooccurrence_hits,
     default_literature_query,
+    extract_literature_peers,
+    split_lit_peers_vs_donors,
     _papers_possibly_off_topic,
     _surface_literature_axis_flags,
 )
@@ -68,7 +71,7 @@ def test_papers_on_topic_via_relatedness_context():
     assert _papers_possibly_off_topic(papers, "PTBP1") is False
 
 
-def test_build_literature_cooccurrence_hits_from_mock_papers():
+def test_extract_requires_same_paper_query_and_peer():
     catalogue = (
         ("PTBP2", "PTBP2", "P0DUMMY1"),
         ("HNRNPL", "HNRNPL", "P0DUMMY2"),
@@ -77,25 +80,106 @@ def test_build_literature_cooccurrence_hits_from_mock_papers():
     papers = [
         {
             "title": "PTBP2, a paralog of PTBP1, regulates splicing",
-            "abstract_snippet": "Compared with HNRNPL in RNA-binding assays.",
+            "abstract_snippet": "RNA-binding assays with PTBP1 and PTBP2.",
         },
         {
-            "title": "Unrelated kinase cascade",
-            "abstract_snippet": "No catalogue symbols here.",
+            # Peer alone — no query → must not count.
+            "title": "HNRNPL binds RNA in unrelated assay",
+            "abstract_snippet": "Kinase cascade without the query gene symbol.",
         },
     ]
-    hits = build_literature_cooccurrence_hits(
-        papers, "PTBP1", catalogue=catalogue, max_hits=5
+    peers = extract_literature_peers(
+        papers, "PTBP1", catalogue=catalogue, max_peers=5
     )
-    aliases = {h["alias"] for h in hits}
+    aliases = {p["alias"] for p in peers}
     assert "PTBP2" in aliases
-    assert "HNRNPL" in aliases
+    assert "HNRNPL" not in aliases
     assert "PTBP1" not in aliases
-    assert all(h["metric"] == "literature_cooccurrence" for h in hits)
-    assert all(0.0 < float(h["score"]) <= 1.0 for h in hits)
-    # Title mention ranks above abstract-only.
-    by_alias = {h["alias"]: h["score"] for h in hits}
-    assert by_alias["PTBP2"] >= by_alias["HNRNPL"]
+    assert all(p.get("score_kind") == "literature_evidence" for p in peers)
+    assert all(0.0 < float(p["rule_score"]) <= 1.0 for p in peers)
+
+
+def test_function_cue_boosts_rule_score():
+    catalogue = (("PTBP2", "PTBP2", "P0X"),)
+    with_cue = [
+        {
+            "title": "PTBP1 and PTBP2 in alternative splicing",
+            "abstract_snippet": "RNA-binding proteins with RRM domains.",
+        }
+    ]
+    bare = [
+        {
+            "title": "PTBP1 and PTBP2 interaction study",
+            "abstract_snippet": "Two proteins compared in vitro.",
+        }
+    ]
+    s_cue = extract_literature_peers(with_cue, "PTBP1", catalogue=catalogue)[0][
+        "rule_score"
+    ]
+    s_bare = extract_literature_peers(bare, "PTBP1", catalogue=catalogue)[0][
+        "rule_score"
+    ]
+    assert s_cue >= s_bare
+
+
+def test_corroboration_only_hits_overlap_donors():
+    catalogue = (
+        ("PTBP2", "PTBP2", "P0DUMMY1"),
+        ("HNRNPL", "HNRNPL", "P0DUMMY2"),
+    )
+    papers = [
+        {
+            "title": "PTBP1 with PTBP2 and HNRNPL in splicing",
+            "abstract_snippet": "RNA-binding protein family members.",
+        }
+    ]
+    hits = build_literature_cooccurrence_hits(
+        papers,
+        "PTBP1",
+        catalogue=catalogue,
+        donor_aliases={"PTBP2"},
+        corroboration_only=True,
+        max_hits=5,
+    )
+    assert [h["alias"] for h in hits] == ["PTBP2"]
+    assert hits[0]["score_kind"] == "literature_corroboration"
+    assert hits[0]["metric"] == "literature_cooccurrence"
+
+
+def test_split_lit_only_budget():
+    peers = [
+        {"alias": "A1", "rule_score": 0.9, "score": 0.9},
+        {"alias": "A2", "rule_score": 0.8, "score": 0.8},
+        {"alias": "A3", "rule_score": 0.7, "score": 0.7},
+        {"alias": "A4", "rule_score": 0.6, "score": 0.6},
+        {"alias": "KEEP", "rule_score": 0.5, "score": 0.5},
+    ]
+    corr, orphan, all_p = split_lit_peers_vs_donors(
+        peers, {"KEEP"}, lit_only_budget=3
+    )
+    assert [c["alias"] for c in corr] == ["KEEP"]
+    assert len(orphan) == 3
+    assert {o["alias"] for o in orphan} == {"A1", "A2", "A3"}
+    assert len(all_p) == 5
+
+
+def test_lit_only_does_not_auto_enter_fuse_hits():
+    """Without Donors_SS overlap, build hits must be empty (no gap-fill path)."""
+    catalogue = (("PTBP2", "PTBP2", "P0X"),)
+    papers = [
+        {
+            "title": "PTBP1 and PTBP2 splicing",
+            "abstract_snippet": "RNA-binding proteins.",
+        }
+    ]
+    hits = build_literature_cooccurrence_hits(
+        papers,
+        "PTBP1",
+        catalogue=catalogue,
+        donor_aliases=set(),
+        corroboration_only=True,
+    )
+    assert hits == []
 
 
 def test_off_topic_surfaces_axis_unusable_flags():
@@ -196,13 +280,12 @@ def test_lit_soft_hits_enter_fuse_with_low_weight():
     by1 = {d["alias"]: d for d in with_}
     assert "literature_cooccurrence" in by1["QKI"]["sim_by_modality"]
     assert by1["QKI"]["similarity_breakdown"].get("func", 0) > 0
-    # Low weight: lit must not flip a clear emb leader.
     assert with_[0]["alias"] == without[0]["alias"] == "U2AF2"
     assert by1["QKI"]["score"] >= by0["QKI"]["score"] - 1e-9
 
 
 def test_empty_lit_hits_do_not_change_fuse():
-    from rbp_eval.scoring.fuse_hits import append_literature_gap_fill, fuse_rbp_hits
+    from rbp_eval.scoring.fuse_hits import fuse_rbp_hits
 
     hits = [
         [{"alias": "U2AF2", "score": 0.95, "metric": "esmc_cosine"}],
@@ -211,34 +294,69 @@ def test_empty_lit_hits_do_not_change_fuse():
     a = fuse_rbp_hits(hits, top_k=5, use_rank_normalize=False)
     b = fuse_rbp_hits(hits + [[]], top_k=5, use_rank_normalize=False)
     assert [d["alias"] for d in a] == [d["alias"] for d in b]
-    merged, filled = append_literature_gap_fill(a, [], top_k=5)
-    assert filled == []
-    assert [d["alias"] for d in merged] == [d["alias"] for d in a]
 
 
-def test_gap_fill_appends_missing_panel_alias():
-    from rbp_eval.scoring.fuse_hits import append_literature_gap_fill
-
-    donors = [
+def test_fuse_time_corroboration_from_stored_peers():
+    """Literature before seq still corroborates at fuse via stored lit_peers."""
+    _reset()
+    peers = [
         {
-            "alias": "U2AF2",
+            "alias": "PTBP2",
+            "uniprot": "P0X",
+            "rule_score": 0.8,
             "score": 0.8,
-            "fused_score": 0.8,
-            "sim_by_modality": {"esmc_cosine": 0.9},
-        }
+            "metric": "literature_cooccurrence",
+            "score_kind": "literature_evidence",
+        },
+        {
+            "alias": "ORPHAN",
+            "uniprot": "P0Y",
+            "rule_score": 0.7,
+            "score": 0.7,
+            "metric": "literature_cooccurrence",
+            "score_kind": "literature_evidence",
+        },
     ]
-    lit = [
-        {"alias": "PTBP1", "score": 0.9, "metric": "literature_cooccurrence", "uniprot": "P26599"}
-    ]
-    out, filled = append_literature_gap_fill(
-        donors, lit, top_k=5, max_gap=2, tau_drop=0.30, allowed_aliases={"u2af2", "ptbp1"}
-    )
-    assert filled == ["PTBP1"]
-    by = {d["alias"]: d for d in out}
-    assert "PTBP1" in by
-    assert by["PTBP1"].get("gap_fill") == "literature_cooccurrence"
-    assert float(by["PTBP1"]["score"]) < 0.30
-    assert float(by["U2AF2"]["score"]) > float(by["PTBP1"]["score"])
+    turn_guards.set_literature_peers(peers, lit_only=[peers[1]], axis_usable=True)
+    turn_guards.set_literature_fuse_hits([], axis_usable=True)
+    hits = turn_guards.corroborate_literature_hits_for_aliases({"PTBP2"})
+    assert any(h.get("alias") == "PTBP2" for h in hits)
+    assert not any(h.get("alias") == "ORPHAN" for h in hits)
+    _reset()
+
+
+def test_record_lit_peer_decisions_writes_flags():
+    _reset()
+
+    async def _run():
+        tool = RecordLitPeerDecisionsTool()
+        return await tool.execute(
+            decisions=[
+                {
+                    "alias": "PTBP2",
+                    "action": "recompare_seq",
+                    "rationale": "distant homolog may miss MMseqs threshold",
+                },
+                {
+                    "alias": "QKI",
+                    "action": "drop",
+                    "rationale": "off-family mention",
+                },
+            ]
+        )
+
+    raw = asyncio.run(_run())
+    envelope = json.loads(raw)
+    assert envelope.get("status") == "ok"
+    flags = turn_guards.evidence_flags()
+    assert flags.get("literature_peer_decisions") is True
+    assert flags.get("literature_lit_only_recompare") is True
+    assert flags.get("literature_lit_only_dropped") is True
+    detail = turn_guards.lit_peer_decisions()
+    assert {d["alias"] for d in detail} == {"PTBP2", "QKI"}
+    records = turn_guards.evidence_records()
+    assert any(r.get("kind") == "lit_peer_decisions" for r in records)
+    _reset()
 
 
 def test_literature_success_off_topic_empty_soft_hits(monkeypatch, tmp_path):
@@ -291,8 +409,9 @@ def test_literature_success_off_topic_empty_soft_hits(monkeypatch, tmp_path):
     _reset()
 
 
-def test_literature_success_builds_soft_hits(monkeypatch, tmp_path):
+def test_literature_success_corroborates_when_donors_present(monkeypatch, tmp_path):
     _reset()
+    turn_guards.register_retrieve_donors(["PTBP2"])
 
     import nanobot.agent.tools.rbp.annotation as ann
     import nanobot.agent.tools.rbp.common as common
@@ -318,7 +437,7 @@ def test_literature_success_builds_soft_hits(monkeypatch, tmp_path):
                 "papers": [
                     {
                         "title": "PTBP1 and its paralog PTBP2 in splicing",
-                        "abstract_snippet": "RNA-binding proteins PTBP1/PTBP2.",
+                        "abstract_snippet": "RNA-binding proteins PTBP1/PTBP2; QKI also noted with PTBP1.",
                     }
                 ],
                 "query": payload.get("query"),
@@ -333,6 +452,53 @@ def test_literature_success_builds_soft_hits(monkeypatch, tmp_path):
     value = envelope.get("value") or {}
     assert value.get("axis_usable") is True
     assert any(h.get("alias") == "PTBP2" for h in (value.get("hits_lit") or []))
+    assert any(h.get("alias") == "PTBP2" for h in (value.get("corroborated") or []))
+    # QKI co-mentioned with query but not in Donors_SS → lit_only, not fuse hits.
+    lit_only = {p.get("alias") for p in (value.get("lit_only_peers") or [])}
+    assert "QKI" in lit_only
+    assert not any(h.get("alias") == "QKI" for h in (value.get("hits_lit") or []))
     stored = turn_guards.literature_fuse_hits()
     assert any(h.get("alias") == "PTBP2" for h in stored)
+    _reset()
+
+
+def test_literature_crafted_query_passed_through(monkeypatch, tmp_path):
+    _reset()
+
+    import nanobot.agent.tools.rbp.annotation as ann
+    import nanobot.agent.tools.rbp.common as common
+
+    monkeypatch.setattr(
+        common,
+        "_literature_cache_dir",
+        lambda: tmp_path / "literature",
+    )
+    monkeypatch.setattr(ann, "literature_cache_get", lambda *_a, **_k: None)
+    monkeypatch.setattr(ann, "_catalogue_alias_index", lambda: ())
+
+    seen: dict = {}
+
+    class _FakeClient:
+        def call(self, name, payload):
+            seen["query"] = payload.get("query")
+            return {
+                "papers": [
+                    {
+                        "title": "PTBP1 RRM family",
+                        "abstract_snippet": "PTBP1 RNA-binding.",
+                    }
+                ],
+                "query": payload.get("query"),
+            }
+
+    monkeypatch.setattr(ann, "get_delivery_client", lambda **_k: _FakeClient())
+    monkeypatch.setattr(ann, "timed_call", lambda fn: (fn(), 1.0, None))
+
+    tool = LiteratureSearchTool()
+    crafted = 'PTBP1 AND ("protein family" OR paralog*) AND RBP'
+    raw = asyncio.run(tool.execute(name="PTBP1", query=crafted, max_results=2))
+    envelope = json.loads(raw)
+    assert envelope.get("status") == "ok"
+    assert seen["query"] == crafted
+    assert (envelope.get("value") or {}).get("query") == crafted
     _reset()

@@ -4,6 +4,8 @@ LLM provider 适配器与工厂。
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 在 `LLMProvider` 背后抽象 chat/completions（及相关）后端。产品 onboard 通过 `~/.nanobot/config.json` + `.env` 配置 OpenAI 兼容端点（如 DeepSeek）；工厂（`make_provider`）为 `Nanobot.from_config` 构建活动 provider。

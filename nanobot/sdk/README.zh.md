@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 为 `nanobot.nanobot.Nanobot` 提供流式事件、薄客户端（session / memory / runtime）与共享类型。这**不是**给产品协作者的第二套公共 API——请优先 `from nanobot import Nanobot` 或 App CLI。

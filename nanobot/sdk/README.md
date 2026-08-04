@@ -4,6 +4,8 @@ Internal helpers for the high-level Nanobot Python API surface.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Supports `nanobot.nanobot.Nanobot` with streaming events, thin clients (session / memory / runtime), and shared types. This is **not** a second public API for product collaborators — prefer `from nanobot import Nanobot` or the App CLI.

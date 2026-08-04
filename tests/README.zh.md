@@ -6,6 +6,16 @@ Pytest 套件：布局、契约、CLI/UX、delivery 桥与离线评估逻辑。
 
 ## 功能
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - 提案 / Table 合规与 slim-vendor 包布局断言
 - 能力矩阵诚实性、soft-fail caveat、verdict / 阶段契约
 - Chat UX、onboard、设备、会话日期布局、记忆/提升阶段检查

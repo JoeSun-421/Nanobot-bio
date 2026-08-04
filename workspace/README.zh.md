@@ -8,6 +8,16 @@ Nanobot 工作区根：同步的 skill 与（符号链接的）session/memory �
 
 - Nanobot 期望的运行时工作区（`NANOBOT_WORKSPACE`）
 - `skills/` 下的同步 skill 副本（见 [`skills/README.zh.md`](skills/README.zh.md)）
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - `sessions` → `../artifacts/sessions`、`memory` → `../artifacts/memory`（避免双写）
 - `AGENTS.md` 中的工作区级短提示
 

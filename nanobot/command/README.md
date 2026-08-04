@@ -4,6 +4,8 @@ Slash-command routing and built-in handlers for the Nanobot CLI/chat surface.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Routes in-chat slash commands (`/…`) to handlers via `CommandRouter`, and registers built-ins through `register_builtin_commands`. The product CLI (`nanobot-bio …`) is separate (`app.cli`); this package is the framework’s in-session command layer.

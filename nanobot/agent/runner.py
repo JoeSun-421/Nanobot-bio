@@ -1136,9 +1136,13 @@ class AgentRunner:
             # satisfy the declarative "__any_retrieve__" edge.  Import is optional
             # so the generic runner remains usable without the RBP plugin.
             with suppress(Exception):
-                from nanobot.agent.tools.rbp.turn_guards import mark_retrieve_done
+                from nanobot.agent.tools.rbp.turn_guards import (
+                    mark_retrieve_done,
+                    register_retrieve_donors_from_tool_result,
+                )
 
                 mark_retrieve_done(tool_call.name)
+                register_retrieve_donors_from_tool_result(tool_call.name, result)
         except asyncio.CancelledError:
             raise
         except BaseException as exc:

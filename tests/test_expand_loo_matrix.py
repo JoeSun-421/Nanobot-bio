@@ -13,6 +13,46 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_test_fasta_for_prefers_rbp_test_data_root(tmp_path, monkeypatch):
+    from rbp_eval.loo.heavy_loo import test_fasta_for
+
+    root = tmp_path / "td"
+    fasta = root / "k562" / "FAKERBP" / "test.fasta"
+    fasta.parent.mkdir(parents=True)
+    fasta.write_text(">NEG\nACGU\n>pos\nUGCA\n", encoding="utf-8")
+    monkeypatch.setenv("RBP_TEST_DATA_ROOT", str(root))
+    found = test_fasta_for("FAKERBP", "K562", tmp_path / "missing_delivery")
+    assert found == fasta
+
+
+def test_validate_complete_matrix_sparse(tmp_path, monkeypatch):
+    from rbp_eval.loo import expand_matrix as em
+
+    monkeypatch.setattr(
+        em,
+        "plan_helds",
+        lambda **_kw: {
+            "n_catalogue": 3,
+            "held_planned": ["A", "B"],
+            "n_with_test_fasta": 2,
+        },
+    )
+    (tmp_path / "loo_summary.csv").write_text(
+        "held_rbp,n_in_train,own_full_auprc,best_foreign_rbp,best_foreign_auprc,"
+        "mean_foreign_auprc,single_task_auprc,gap_full_minus_best_foreign,"
+        "median_rest_delta_auprc,mean_rest_delta_auprc\n"
+        "A,2,0.9,B,0.8,0.7,,,,\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "loo_transfer_metrics.csv").write_text(
+        "held_rbp,foreign_rbp,auprc,auroc\nA,B,0.8,0.9\n",
+        encoding="utf-8",
+    )
+    report = em.validate_complete_matrix(tmp_path, cohort="K562")
+    assert report["ok"] is False
+    assert report["n_incomplete"] >= 1
+
+
 def test_resolve_loo_csvs_prefers_env(tmp_path, monkeypatch):
     from rbp_eval.loo.loo_eval import resolve_loo_csvs
 
@@ -110,6 +150,8 @@ def test_retune_fusion_on_dval_ce():
     assert out["status"] == "ok"
     assert out["objective"] == "calibrated_cross_entropy_on_dval"
     assert out["ce"] >= 0
+    assert out["logit_scale"] > 0
+    assert "tuned_weights" in out
 
 
 def test_matrix_ab_schema(tmp_path, monkeypatch):

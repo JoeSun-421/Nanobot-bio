@@ -10,6 +10,16 @@ These tools implement the scientific stages described in [`docs/product/BINDING_
 
 ## Layout
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | Module | Tools / role |
 |--------|----------------|
 | `predict.py` | `PredictInteractionTool` — own-head / donor-head predict |

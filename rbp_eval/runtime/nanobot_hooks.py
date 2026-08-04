@@ -31,18 +31,20 @@ class RBPTraceHook(AgentHook):
         self._query_hint: dict[str, Any] = {}
 
     def _write(self, event: dict[str, Any]) -> None:
-        row = {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "session_key": self.session_key,
-            **event,
-        }
+        from rbp_eval.runtime.trace_schema import make_event
+
+        type_ = str(event.pop("type", "stage") or "stage")
+        # Normalize legacy names to rbp_trace/v1
+        if type_ == "after_iteration":
+            type_ = "after_tools"
+        row = make_event(type_, session_key=self.session_key, **event)
         self._buffer.append(row)
         with open(self.out_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
 
     def push_event(self, event: dict[str, Any]) -> None:
         """Also used by deterministic RBPAgent path / integrate query_end."""
-        self._write(event)
+        self._write(dict(event))
 
     def note_query(
         self,
@@ -145,6 +147,30 @@ class RBPTraceHook(AgentHook):
         except Exception:
             canonical = None
             provenance = []
+        # Enrich donors with similarity_breakdown for attribution (§7.2)
+        enriched: list[dict[str, Any]] = []
+        for d in donors:
+            if not isinstance(d, dict):
+                continue
+            row = dict(d)
+            br = row.get("similarity_breakdown") or row.get("sim_by_modality")
+            if not isinstance(br, dict) or not br:
+                # Best-effort single-channel mass from fused score
+                try:
+                    sc = float(row.get("score") or row.get("similarity_score") or 0.0)
+                except (TypeError, ValueError):
+                    sc = 0.0
+                if sc > 0:
+                    row["sim_by_modality"] = {"fused": sc}
+            enriched.append(row)
+        fused_sims = [
+            {
+                "alias": e.get("alias"),
+                "score": e.get("score") or e.get("similarity_score"),
+                "sim_by_modality": e.get("sim_by_modality") or e.get("similarity_breakdown"),
+            }
+            for e in enriched
+        ]
         self._write(
             {
                 "type": "query_end",
@@ -153,7 +179,8 @@ class RBPTraceHook(AgentHook):
                 "uniprot": query.get("uniprot"),
                 "canonical_request": canonical,
                 "evidence_records": provenance,
-                "donors": donors,
+                "donors": enriched,
+                "fused_similarities": fused_sims,
                 "verdict": v,
                 "tools_used": tools_used or [t.get("name") for t in self._tool_timeline],
                 "tool_timeline": self._tool_timeline[-40:],

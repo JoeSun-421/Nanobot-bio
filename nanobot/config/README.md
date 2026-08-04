@@ -4,6 +4,8 @@ Nanobot configuration loading, paths, and schema (`Config`).
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Loads `~/.nanobot/config.json` (or override path), resolves `${ENV}` placeholders, and exposes typed `Config` plus helper path getters. Product science knobs (fusion weights, thresholds) live in repo `config/*.yaml` via `app.core.runtime_config` — this package is the **framework** LLM/workspace config.

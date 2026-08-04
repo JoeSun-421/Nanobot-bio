@@ -4,6 +4,8 @@ LLM provider adapters and factory.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Abstracts chat/completions (and related) backends behind `LLMProvider`. Product onboard configures an OpenAI-compatible endpoint (e.g. DeepSeek) via `~/.nanobot/config.json` + `.env`; the factory (`make_provider`) builds the live provider for `Nanobot.from_config`.

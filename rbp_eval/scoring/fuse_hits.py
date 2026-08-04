@@ -288,11 +288,9 @@ def append_literature_gap_fill(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Append lit-mentioned panel aliases missing from fused donors (soft).
 
-    Lit-only donors rarely clear ``tau_drop`` under the low
-    ``literature_cooccurrence`` weight, so Checkpoint 1 would never see
-    literature omissions. This appends up to ``max_gap`` soft rows with
-    scores capped below ``tau_drop`` so they remain selectable but cannot
-    outrank multi-view donors. Returns ``(donors, gap_fill_aliases)``.
+    Legacy helper: the agent fuse path no longer gap-fills lit-only peers
+    (they must be recompared via seq/struct). Kept for unit tests / offline
+    experiments. Returns ``(donors, gap_fill_aliases)``.
     """
     if not lit_hits or max_gap <= 0:
         return list(donors or []), []

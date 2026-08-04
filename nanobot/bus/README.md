@@ -4,6 +4,8 @@ Message bus for decoupled channel ↔ agent communication.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Provides inbound/outbound message types and a queue bus so UI channels (when enabled) can talk to the agent loop without tight coupling. The slim nanobot-bio product path primarily uses direct `Nanobot.run` / CLI chat rather than external channel bridges, but the bus remains part of the framework core.

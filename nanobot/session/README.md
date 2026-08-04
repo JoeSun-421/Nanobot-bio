@@ -4,6 +4,8 @@ Session persistence and turn-continuation helpers.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Owns `Session` / `SessionManager` for storing conversation state. In nanobot-bio, canonical session files live under `artifacts/sessions/` (with workspace symlinks) — see [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](../../docs/guides/MEMORY_AND_SESSIONS.zh.md) and [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §2.

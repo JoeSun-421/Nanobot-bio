@@ -207,16 +207,75 @@ def score_held_against_foreigns(
     device: str,
     rbp_chunk: int,
     seed: int,
+    legacy_per_call: bool = False,
+    batch_size: int = 64,
 ) -> dict[str, Any]:
-    """Return metrics rows + summary stats for one held RBP."""
-    from app.backends.delivery.client import DeliveryToolClient
+    """Return metrics rows + summary stats for one held RBP.
+
+    Default path: single-process encode-once batch scorer (rhobind conda).
+    ``legacy_per_call=True`` uses per-RNA DeliveryToolClient (slow).
+    """
     from app.backends.delivery.env import apply_delivery_env, resolve_delivery_paths
 
     apply_delivery_env()
-    delivery = Path(resolve_delivery_paths()["delivery_root"])
+    paths = resolve_delivery_paths()
+    delivery = Path(paths["delivery_root"])
     fasta = test_fasta_for(held, cohort, delivery)
     if fasta is None:
         return {"ok": False, "reason": f"test.fasta missing for {held}"}
+
+    if not legacy_per_call:
+        from rbp_eval.loo.batch_score_held import run_batch_score_subprocess
+
+        release = Path(paths.get("rhobind_release") or (delivery / "release" / "rhobind_release_v1"))
+        result = run_batch_score_subprocess(
+            held=held,
+            cohort=cohort,
+            fasta=fasta,
+            release=release,
+            foreigns=foreigns,
+            max_seqs=max_seqs,
+            device=device,
+            batch_size=batch_size,
+            seed=seed,
+        )
+        if result.get("ok"):
+            result["scoring_path"] = "batch_encode_once"
+            return result
+        # Fall through to legacy only if batch path completely unavailable
+        print(
+            f"[expand-loo] batch score failed for {held}: {result.get('reason')}; "
+            "trying legacy per-call",
+            flush=True,
+        )
+
+    return _score_held_legacy_per_call(
+        held,
+        cohort=cohort,
+        foreigns=foreigns,
+        max_seqs=max_seqs,
+        device=device,
+        rbp_chunk=rbp_chunk,
+        seed=seed,
+        delivery=delivery,
+        fasta=fasta,
+    )
+
+
+def _score_held_legacy_per_call(
+    held: str,
+    *,
+    cohort: str,
+    foreigns: list[str],
+    max_seqs: int,
+    device: str,
+    rbp_chunk: int,
+    seed: int,
+    delivery: Path,
+    fasta: Path,
+) -> dict[str, Any]:
+    """Slow per-RNA DeliveryToolClient path (legacy)."""
+    from app.backends.delivery.client import DeliveryToolClient
 
     entries = parse_test_fasta(fasta)
     used = subsample(entries, max_seqs, seed=seed)
@@ -225,13 +284,11 @@ def score_held_against_foreigns(
 
     cli = DeliveryToolClient(offline=False, device=device, use_conda=True)
     cohort_u = cohort.upper() if cohort.upper() in ("K562", "HEPG2") else "K562"
-    # foreign -> list of (y, prob)
     by_f: dict[str, list[tuple[int, float]]] = {f: [] for f in foreigns}
     own_pairs: list[tuple[int, float]] = []
     errors = 0
 
     for rna, lab in used:
-        # own-head once
         own = cli.call(
             "rhobind_predict",
             {
@@ -324,6 +381,49 @@ def score_held_against_foreigns(
         "n_foreign_scored": len(metrics_rows),
         "errors": errors,
         "test_fasta": str(fasta),
+        "scoring_path": "legacy_per_call",
+    }
+
+
+def validate_complete_matrix(
+    out_dir: Path,
+    *,
+    cohort: str = "K562",
+    min_foreign_frac: float = 0.95,
+) -> dict[str, Any]:
+    """Check agent-side matrix covers planned helds × foreigns."""
+    out_dir = Path(out_dir).expanduser().resolve()
+    summary = _load_summary_rows(out_dir / SUMMARY_NAME)
+    metrics = _load_metrics_rows(out_dir / METRICS_NAME)
+    plan = plan_helds(cohort=cohort, existing_held=set(summary.keys()))
+    n_cat = max(1, plan["n_catalogue"])
+    helds = plan["held_planned"]
+    incomplete: list[dict[str, Any]] = []
+    for held in helds:
+        if held not in summary:
+            incomplete.append({"held": held, "reason": "missing_summary"})
+            continue
+        n_foreign = sum(1 for (h, f) in metrics if h == held and f != held)
+        need = n_cat - 1
+        if need > 0 and n_foreign < min_foreign_frac * need:
+            incomplete.append(
+                {
+                    "held": held,
+                    "reason": "sparse_foreigns",
+                    "n_foreign": n_foreign,
+                    "need": need,
+                }
+            )
+    ok = len(incomplete) == 0 and len(helds) > 0
+    return {
+        "ok": ok,
+        "cohort": cohort,
+        "out_dir": str(out_dir),
+        "n_held_planned": len(helds),
+        "n_summary": len(summary),
+        "n_incomplete": len(incomplete),
+        "incomplete": incomplete[:40],
+        "n_with_test_fasta": plan["n_with_test_fasta"],
     }
 
 
@@ -389,7 +489,7 @@ def expand_loo_matrix(
     *,
     out_dir: Optional[Path] = None,
     cohort: str = "K562",
-    max_seqs: int = 64,
+    max_seqs: int = 256,
     device: str = "cuda",
     rbp_chunk: int = 40,
     seed: int = 42,
@@ -397,7 +497,16 @@ def expand_loo_matrix(
     held_filter: Optional[list[str]] = None,
     skip_existing_helds: bool = False,
     list_helds_only: bool = False,
+    legacy_per_call: bool = False,
+    batch_size: int = 64,
+    validate_complete: bool = False,
+    test_data_root: Optional[str] = None,
 ) -> dict[str, Any]:
+    if test_data_root:
+        os.environ["RBP_TEST_DATA_ROOT"] = str(
+            Path(test_data_root).expanduser().resolve()
+        )
+
     out_dir = Path(out_dir or default_expanded_transfer_dir()).expanduser().resolve()
     seeded = seed_from_delivery(out_dir)
     metrics_path = out_dir / METRICS_NAME
@@ -429,7 +538,13 @@ def expand_loo_matrix(
             **{k: plan[k] for k in plan if k != "catalogue"},
             "n_catalogue": plan["n_catalogue"],
             "export_hint": f"export RBP_LOO_TRANSFER_DIR={out_dir}",
+            "test_data_root": os.environ.get("RBP_TEST_DATA_ROOT"),
         }
+        if validate_complete:
+            report["validate_complete"] = validate_complete_matrix(
+                out_dir, cohort=cohort
+            )
+            report["ok"] = bool(report["validate_complete"].get("ok"))
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return report
 
@@ -438,14 +553,15 @@ def expand_loo_matrix(
         f"with_test_fasta={plan['n_with_test_fasta']} "
         f"planned={len(helds)} "
         f"new_beyond_summary={plan['n_new_beyond_summary']} "
-        f"skip_existing={skip_existing_helds}",
+        f"skip_existing={skip_existing_helds} "
+        f"legacy={legacy_per_call} max_seqs={max_seqs}",
         flush=True,
     )
     print(f"[expand-loo] planned_helds={helds}", flush=True)
     if plan["n_with_test_fasta"] == 0:
         print(
-            "[expand-loo] WARN: no test.fasta under "
-            f"release/.../test_data/{cohort.lower()}/<ALIAS>/ — nothing to expand.",
+            "[expand-loo] WARN: no test.fasta — set RBP_TEST_DATA_ROOT or install "
+            f"release/.../test_data/{cohort.lower()}/<ALIAS>/test.fasta",
             flush=True,
         )
     elif plan["n_new_beyond_summary"] == 0 and not skip_existing_helds:
@@ -457,6 +573,8 @@ def expand_loo_matrix(
         )
 
     started = datetime.now(timezone.utc).isoformat()
+    n_total = len(helds)
+    t0 = datetime.now(timezone.utc)
     manifest.update(
         {
             "schema": "loo_expand_manifest.v1",
@@ -464,6 +582,8 @@ def expand_loo_matrix(
             "max_seqs": max_seqs,
             "device": device,
             "rbp_chunk": rbp_chunk,
+            "batch_size": batch_size,
+            "legacy_per_call": legacy_per_call,
             "seed": seed,
             "out_dir": str(out_dir),
             "seeded_from_delivery": seeded,
@@ -472,6 +592,7 @@ def expand_loo_matrix(
             "n_held_planned": len(helds),
             "held_planned": helds,
             "skip_existing_helds": skip_existing_helds,
+            "test_data_root": os.environ.get("RBP_TEST_DATA_ROOT"),
             "started_at": manifest.get("started_at") or started,
             "updated_at": started,
         }
@@ -479,11 +600,22 @@ def expand_loo_matrix(
     _save_manifest(manifest_path, manifest)
 
     ran: list[str] = []
-    for held in helds:
+    for idx, held in enumerate(helds, start=1):
         if resume and held in completed:
             continue
         foreigns = [a for a in aliases if a != held]
-        print(f"[expand-loo] held={held} foreigns={len(foreigns)} max_seqs={max_seqs}", flush=True)
+        elapsed = (datetime.now(timezone.utc) - t0).total_seconds()
+        done_before = len(ran)
+        eta = ""
+        if done_before > 0:
+            per = elapsed / done_before
+            left = n_total - len(completed) - done_before
+            eta = f" eta_s≈{int(per * max(0, left))}"
+        print(
+            f"[expand-loo] ({idx}/{n_total}) held={held} foreigns={len(foreigns)} "
+            f"max_seqs={max_seqs}{eta}",
+            flush=True,
+        )
         try:
             result = score_held_against_foreigns(
                 held,
@@ -493,6 +625,8 @@ def expand_loo_matrix(
                 device=device,
                 rbp_chunk=rbp_chunk,
                 seed=seed,
+                legacy_per_call=legacy_per_call,
+                batch_size=batch_size,
             )
         except Exception as e:  # noqa: BLE001
             result = {"ok": False, "reason": str(e)}
@@ -518,7 +652,8 @@ def expand_loo_matrix(
         _save_manifest(manifest_path, manifest)
         print(
             f"[expand-loo] OK {held} foreign_scored={result.get('n_foreign_scored')} "
-            f"best={result['summary'].get('best_foreign_rbp')}",
+            f"best={result['summary'].get('best_foreign_rbp')} "
+            f"path={result.get('scoring_path')}",
             flush=True,
         )
 
@@ -527,7 +662,7 @@ def expand_loo_matrix(
     manifest["n_ran_this_session"] = len(ran)
     _save_manifest(manifest_path, manifest)
 
-    return {
+    report: dict[str, Any] = {
         "ok": True,
         "out_dir": str(out_dir),
         "cohort": cohort,
@@ -544,15 +679,21 @@ def expand_loo_matrix(
         "manifest": str(manifest_path),
         "export_hint": f"export RBP_LOO_TRANSFER_DIR={out_dir}",
     }
+    if validate_complete:
+        v = validate_complete_matrix(out_dir, cohort=cohort)
+        report["validate_complete"] = v
+        report["ok"] = bool(v.get("ok"))
+    return report
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Expand LOO transfer matrix into rbp_eval copy")
     ap.add_argument("--out-dir", default=str(default_expanded_transfer_dir()))
     ap.add_argument("--cohort", default="K562")
-    ap.add_argument("--max-seqs", type=int, default=64)
+    ap.add_argument("--max-seqs", type=int, default=256)
     ap.add_argument("--device", default=os.environ.get("RHOBIND_DEVICE", "cuda") or "cuda")
     ap.add_argument("--rbp-chunk", type=int, default=40)
+    ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--no-resume", action="store_true")
     ap.add_argument("--held", action="append", default=None, help="Limit to alias (repeatable)")
@@ -566,6 +707,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="Dry-run: print catalogue / test.fasta / planned helds and exit",
     )
+    ap.add_argument(
+        "--legacy-per-call",
+        action="store_true",
+        help="Use slow per-RNA DeliveryToolClient instead of batch encode-once",
+    )
+    ap.add_argument(
+        "--validate-complete",
+        action="store_true",
+        help="After expand (or with --list-helds): check held×foreign coverage",
+    )
+    ap.add_argument(
+        "--test-data-root",
+        default=None,
+        help="Sets RBP_TEST_DATA_ROOT for this run (…/test_data)",
+    )
     args = ap.parse_args(argv)
     report = expand_loo_matrix(
         out_dir=Path(args.out_dir),
@@ -578,6 +734,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         held_filter=list(args.held) if args.held else None,
         skip_existing_helds=bool(args.skip_existing_helds),
         list_helds_only=bool(args.list_helds),
+        legacy_per_call=bool(args.legacy_per_call),
+        batch_size=int(args.batch_size),
+        validate_complete=bool(args.validate_complete),
+        test_data_root=args.test_data_root,
     )
     if not args.list_helds:
         print(json.dumps(report, indent=2, ensure_ascii=False))

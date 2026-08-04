@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 提供入站/出站消息类型与队列总线，使 UI channel（若启用）无需紧耦合即可与 agent loop 通信。精简后的 nanobot-bio 产品路径主要使用直接 `Nanobot.run` / CLI chat，但 bus 仍是框架核心的一部分。

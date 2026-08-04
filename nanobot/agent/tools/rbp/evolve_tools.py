@@ -82,6 +82,7 @@ class LookupProxyCacheTool(Tool):
                         "alias": alias,
                         "uniprot": uniprot,
                         "proxies": [],
+                        "stage1_bypassed": False,
                         "note": "no promoted cache entry — run Stage 1 multi-view retrieval",
                     }
                 )
@@ -92,7 +93,11 @@ class LookupProxyCacheTool(Tool):
                     "uniprot": uniprot,
                     "proxies": proxies,
                     "n": len(proxies),
-                    "note": "cache hit — skip Stage 1; predict with these proxy aliases",
+                    "stage1_bypassed": True,
+                    "note": (
+                        "cache hit — Stage 1 multi-view retrieve is hard-blocked; "
+                        "fuse/commit with these proxies"
+                    ),
                 }
             )
 
@@ -102,6 +107,14 @@ class LookupProxyCacheTool(Tool):
             return dumps(err(error, ms))
         if isinstance(out, dict):
             out["latency_ms"] = round(float(ms or 0.0), 3)
+            value = out.get("value") if out.get("status") == "ok" else out
+            if isinstance(value, dict) and value.get("hit"):
+                try:
+                    from nanobot.agent.tools.rbp.turn_guards import mark_stage1_bypassed
+
+                    mark_stage1_bypassed(list(value.get("proxies") or []))
+                except Exception:
+                    pass
         return dumps(out)
 
 
@@ -166,13 +179,15 @@ class FuseSimilarityViewsTool(Tool):
         return (
             "Fuse multi-view RbpHit lists into ranked donors using runtime "
             "fusion_weights (delivery-style: emb/seq + Foldseek structure + "
-            "domain Jaccard). Runtime blocks fuse until structure + domain "
-            "retrieves have been attempted (or honest unavailable / domain_empty "
-            "flags are set). Each donor includes an authoritative deterministic "
-            "similarity_score and breakdown for Checkpoint 1. "
-            "After fuse: select donors with commit_proxy_candidates (numeric scores "
-            "cannot be changed), then confidence_abstain, then predict_interaction "
-            "(proposal §4: fuse → commit → abstain → predict)."
+            "domain Jaccard). Auto-injects literature_cooccurrence (weight 0.1) "
+            "only for peers that corroborate hard Donors_SS — never lit-only "
+            "gap-fill or LLM-invented s_i. Runtime blocks fuse until structure "
+            "+ domain retrieves have been attempted (or honest unavailable / "
+            "domain_empty flags are set). Each donor includes an authoritative "
+            "deterministic similarity_score and breakdown for Checkpoint 1. "
+            "After fuse: select donors with commit_proxy_candidates (numeric "
+            "scores cannot be changed), then confidence_abstain, then "
+            "predict_interaction (proposal §4: fuse → commit → abstain → predict)."
         )
 
     @property
@@ -203,14 +218,14 @@ class FuseSimilarityViewsTool(Tool):
             )
             from nanobot.agent.tools.rbp.turn_guards import (
                 add_evidence_flag,
+                cache_proxies,
                 canonical_request,
                 cohort_head_aliases,
-                literature_fuse_hits,
+                corroborate_literature_hits_for_aliases,
+                register_retrieve_donors,
+                stage1_bypassed,
             )
-            from rbp_eval.scoring.fuse_hits import (
-                append_literature_gap_fill,
-                fuse_rbp_hits,
-            )
+            from rbp_eval.scoring.fuse_hits import fuse_rbp_hits
 
             # Remap common LLM aliases (seq_hits → hits_seq, …) before fuse.
             _alias_map = {
@@ -245,6 +260,8 @@ class FuseSimilarityViewsTool(Tool):
                         axes.append(part)
                 if axes:
                     hit_lists = axes
+                elif stage1_bypassed() and cache_proxies():
+                    hit_lists = [cache_proxies()]
                 else:
                     return err(
                         "provide hit_lists, or hits_emb/hits_seq(/hits_struct/…), "
@@ -269,25 +286,46 @@ class FuseSimilarityViewsTool(Tool):
                 ):
                     # accidental flat list wrapped as one dict — skip noise
                     continue
+            if not lists and stage1_bypassed() and cache_proxies():
+                lists = [cache_proxies()]
             if not lists:
                 return err(
                     "no hit lists to fuse; pass hit_lists as "
                     "[[{alias,score,...}], ...] or [{hits:[...]}, ...]"
                 )
 
-            # Auto-inject literature soft hits from this turn when not already present.
+            # Register hard-retrieve aliases (Donors_SS) then corroborate lit peers.
+            aliases_from_lists = {
+                str(hit.get("alias") or hit.get("rbp_id") or "")
+                for rows in lists
+                for hit in (rows or [])
+                if isinstance(hit, dict)
+                and (hit.get("alias") or hit.get("rbp_id"))
+                and str(hit.get("metric") or "") != "literature_cooccurrence"
+            }
+            register_retrieve_donors(aliases_from_lists)
+            lit_hits = corroborate_literature_hits_for_aliases(aliases_from_lists)
+            # Auto-inject corroborated literature soft hits only (never lit-only gap-fill).
             has_lit = any(
                 isinstance(h, dict)
                 and str(h.get("metric") or "") == "literature_cooccurrence"
                 for lst in lists
                 for h in (lst or [])
             )
-            lit_hits = literature_fuse_hits()
             explicit_lit = kwargs.get("hits_lit")
             if isinstance(explicit_lit, list) and explicit_lit and not has_lit:
-                lists.append(explicit_lit)
-                lit_hits = [h for h in explicit_lit if isinstance(h, dict)]
-                has_lit = True
+                # Accept explicit lit only for aliases already in hard Donors_SS.
+                donors_up = {a.upper() for a in aliases_from_lists if a}
+                filtered = [
+                    h
+                    for h in explicit_lit
+                    if isinstance(h, dict)
+                    and str(h.get("alias") or "").upper() in donors_up
+                ]
+                if filtered:
+                    lists.append(filtered)
+                    lit_hits = filtered
+                    has_lit = True
             elif lit_hits and not has_lit:
                 lists.append(lit_hits)
                 has_lit = True
@@ -325,26 +363,21 @@ class FuseSimilarityViewsTool(Tool):
                 use_rank_normalize=True,
                 tau_drop=tau_f,
             )
-            # Soft gap-fill: lit-mentioned panel RBPs absent from fused leaders.
+            # Lit-only peers must not gap-fill into fuse; they need seq/struct recompare.
             gap_aliases: list[str] = []
             if lit_hits:
-                donors, gap_aliases = append_literature_gap_fill(
-                    donors,
-                    lit_hits,
-                    top_k=top_k,
-                    max_gap=2,
-                    tau_drop=tau_f,
-                    exclude_aliases=excl,
-                    allowed_aliases=allowed_aliases,
-                )
-                if gap_aliases:
-                    try:
-                        add_evidence_flag("literature_gap_fill", True)
-                        add_evidence_flag(
-                            "literature_gap_fill_aliases", list(gap_aliases)
-                        )
-                    except Exception:
-                        pass
+                try:
+                    add_evidence_flag("literature_corroboration", True)
+                    add_evidence_flag(
+                        "literature_corroboration_aliases",
+                        [
+                            str(h.get("alias"))
+                            for h in lit_hits
+                            if isinstance(h, dict) and h.get("alias")
+                        ],
+                    )
+                except Exception:
+                    pass
             # Honest multi-view provenance: which delivery axes contributed hits.
             metrics_seen: set[str] = set()
             for lst in lists:

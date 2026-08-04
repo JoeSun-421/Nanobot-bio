@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.cli.common import ROOT
 
+
 def cmd_eval_plan(args: argparse.Namespace) -> int:
     """Evaluation plan: held-out LOO + ablations + metrics report."""
     from rbp_eval.plans.evaluation_plan import main as eval_main
@@ -25,7 +26,9 @@ def cmd_eval_plan(args: argparse.Namespace) -> int:
 
 
 def cmd_evolve(args: argparse.Namespace) -> int:
-    """Offline self-evolution: LOO val batch → attribution / retune / cache / report."""
+    """Offline self-evolution: scored LOO val → retune / candidate / calibration evidence."""
+    import os
+
     from app.core.paths import (
         DEFAULT_EVAL_TRACE,
         DEFAULT_EVOLVE_REPORT,
@@ -34,7 +37,12 @@ def cmd_evolve(args: argparse.Namespace) -> int:
         ensure_artifact_dirs,
     )
     from rbp_eval.evolve.orchestrator import run_self_evolution, summarize_verdicts
-    from rbp_eval.evolve.runner import load_traces, run_loo_val_batch
+    from rbp_eval.evolve.runner import (
+        load_traces,
+        run_loo_val_batch,
+        run_scored_loo_val_batch,
+        DEFAULT_VAL_RBPS,
+    )
 
     ensure_artifact_dirs()
     top_k = int(getattr(args, "top_k", 5) or 5)
@@ -43,16 +51,48 @@ def cmd_evolve(args: argparse.Namespace) -> int:
     if not out_json.is_absolute():
         out_json = ROOT / out_json
 
-    results, held_hits = run_loo_val_batch(
-        top_k=top_k,
-        trace_path=trace_path,
-        with_esm=bool(getattr(args, "with_esm", False)),
-    )
+    cohort = str(getattr(args, "cohort", "K562") or "K562")
+    max_seqs = int(getattr(args, "max_seqs", 64) or 64)
+    device = os.environ.get("RHOBIND_DEVICE") or "cuda"
+    helds = list(args.held) if getattr(args, "held", None) else None
+    if helds is None and getattr(args, "medoids", False):
+        helds = list(DEFAULT_VAL_RBPS)
+    if helds is None and not getattr(args, "retrieval_only", False):
+        helds = list(DEFAULT_VAL_RBPS)
+
+    scored_labels: list[dict] | None = None
+    if getattr(args, "retrieval_only", False):
+        results, held_hits = run_loo_val_batch(
+            top_k=top_k,
+            trace_path=trace_path,
+            with_esm=bool(getattr(args, "with_esm", False)),
+        )
+        print(
+            "note: --retrieval-only batch cannot promote candidate; "
+            "default scored path uses hide-own-head RhoBind scores"
+        )
+    else:
+        results, held_hits, scored_labels = run_scored_loo_val_batch(
+            rbps=helds,
+            top_k=top_k,
+            cohort=cohort,
+            max_seqs=max_seqs,
+            device=device,
+            trace_path=trace_path,
+            with_retrieval_hits=bool(getattr(args, "with_esm", False)) or True,
+        )
+        print(f"scored_loo: n_results={len(results)} n_labels={len(scored_labels)}")
+
     summary = summarize_verdicts(results)
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(
         json.dumps(
-            {"summary": summary, "n": len(results), "results": results},
+            {
+                "summary": summary,
+                "n": len(results),
+                "results": results,
+                "scored_labels_n": len(scored_labels or []),
+            },
             indent=2,
             ensure_ascii=False,
         )
@@ -61,12 +101,7 @@ def cmd_evolve(args: argparse.Namespace) -> int:
     )
     print("val_batch:", out_json)
     print("summary:", json.dumps(summary, ensure_ascii=False))
-    print(
-        "note: retrieval-only batch cannot promote candidate; "
-        "use heavy-loo / --with-labels for real scores"
-    )
 
-    scored_labels: list[dict] | None = None
     labels_path = getattr(args, "with_labels", None)
     if labels_path:
         lp = Path(labels_path)
@@ -81,7 +116,6 @@ def cmd_evolve(args: argparse.Namespace) -> int:
             print("WARN: --with-labels must be a JSON list of {p_hat,y}", file=sys.stderr)
 
     traces = load_traces(trace_path)
-    # Merge other agent JSONL under artifacts/traces/ (exclude the val trace itself)
     try:
         for p in sorted(TRACES.glob("*.jsonl")):
             if p.resolve() == Path(trace_path).expanduser().resolve():
@@ -89,6 +123,26 @@ def cmd_evolve(args: argparse.Namespace) -> int:
             traces.extend(load_traces(p))
     except OSError:
         pass
+
+    if getattr(args, "collect_agent_traces", False):
+        from rbp_eval.evolve.runner import collect_agent_traces
+
+        collected = collect_agent_traces(results)
+        traces.extend(load_traces(collected))
+        print("collect_agent_traces:", collected)
+
+    if getattr(args, "require_traces", False):
+        from rbp_eval.runtime.trace_schema import validate_event
+
+        n_ok = sum(1 for t in traces if isinstance(t, dict) and not validate_event(t))
+        if n_ok < 1:
+            print(
+                "WARN: --require-traces: no valid rbp_trace/v1 events found; "
+                "continuing scored path (attribution/cache may use synthetic query_end).",
+                file=sys.stderr,
+            )
+        else:
+            print(f"traces_ok: {n_ok}/{len(traces)} events pass schema")
 
     report = run_self_evolution(
         results,
@@ -98,8 +152,13 @@ def cmd_evolve(args: argparse.Namespace) -> int:
         top_k=top_k,
         write_config=True,
         require_loo_report=not bool(getattr(args, "allow_missing_loo", False)),
-        allow_retrieval_only=bool(getattr(args, "allow_retrieval_only", False)),
+        allow_retrieval_only=bool(getattr(args, "allow_retrieval_only", False))
+        or bool(getattr(args, "retrieval_only", False)),
         transfer_dir=getattr(args, "transfer_dir", None),
+        run_calibration=not bool(getattr(args, "skip_calibration", False)),
+        calibration_max_seqs=max(16, min(max_seqs, 32)),
+        calibration_cohort=cohort,
+        calibration_device=device,
     )
     print("self_evolution_report:", DEFAULT_EVOLVE_REPORT)
     print("candidate_config:", report.evolved_config_path)
@@ -113,7 +172,9 @@ def cmd_evolve(args: argparse.Namespace) -> int:
 
 
 def cmd_run_eval(args: argparse.Namespace) -> int:
-    """DESIGN run_eval harness: LOO ceiling + modality ablation."""
+    """Policy LOO eval: recovered AUPRC / gap / abstain + modality ablation."""
+    import os
+
     from rbp_eval.evolve.run_eval import run_eval
 
     held = None
@@ -125,12 +186,27 @@ def cmd_run_eval(args: argparse.Namespace) -> int:
         raw = json.loads(p.read_text(encoding="utf-8"))
         held = raw.get("held_to_hit_lists", raw) if isinstance(raw, dict) else None
     out_dir = getattr(args, "out_dir", None)
+    device = getattr(args, "device", None) or os.environ.get("RHOBIND_DEVICE") or "cuda"
     report = run_eval(
         held_to_hit_lists=held,
         top_k=int(getattr(args, "top_k", 5) or 5),
         out_dir=Path(out_dir) if out_dir else None,
+        medoids=bool(getattr(args, "medoids", False)),
+        helds=list(args.held) if getattr(args, "held", None) else None,
+        cohort=str(getattr(args, "cohort", "K562") or "K562"),
+        max_seqs=int(getattr(args, "max_seqs", 64) or 64),
+        device=str(device),
+        policy_path=Path(args.policy) if getattr(args, "policy", None) else None,
+        transfer_dir=Path(args.transfer_dir)
+        if getattr(args, "transfer_dir", None)
+        else None,
     )
-    print(json.dumps(report, indent=2, ensure_ascii=False)[:4000])
+    slim = {
+        k: v
+        for k, v in report.items()
+        if k not in ("scored_labels", "held_to_hit_lists")
+    }
+    print(json.dumps(slim, indent=2, ensure_ascii=False)[:5000])
     return 0 if report.get("ok") else 1
 
 
@@ -144,7 +220,6 @@ def cmd_evolve_eval(args: argparse.Namespace) -> int:
     elif tier_a == "false":
         tier_a_ok = False
     else:
-        # Infer from latest gate_report if present
         tier_a_ok = None
         try:
             from app.core.paths import REPORTS_JSON, find_report
@@ -227,6 +302,39 @@ def cmd_promote_evolved(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review_toolkit_proposals(args: argparse.Namespace) -> int:
+    """Human review of toolkit proposals (audit only — never installs delivery tools)."""
+    from rbp_eval.evolve.toolkit_review import (
+        DECISIONS_PATH,
+        list_proposals,
+        review_proposal,
+    )
+
+    if getattr(args, "list", False) or (
+        not getattr(args, "accept", None) and not getattr(args, "reject", None)
+    ):
+        props = list_proposals()
+        print(json.dumps({"n": len(props), "proposals": props}, indent=2, ensure_ascii=False))
+        print(
+            "Audit only — accepted proposals still require a human PR/delivery change; "
+            "no tools are installed by this CLI."
+        )
+        return 0
+    if getattr(args, "accept", None) and getattr(args, "reject", None):
+        print("provide only one of --accept / --reject", file=sys.stderr)
+        return 2
+    pid = getattr(args, "accept", None) or getattr(args, "reject", None)
+    decision = "accept" if getattr(args, "accept", None) else "reject"
+    entry = review_proposal(
+        str(pid),
+        decision=decision,
+        note=str(getattr(args, "note", "") or ""),
+    )
+    print(json.dumps(entry, indent=2, ensure_ascii=False))
+    print("decisions →", DECISIONS_PATH)
+    return 0
+
+
 def cmd_expand_loo_matrix(args: argparse.Namespace) -> int:
     """Seed + expand agent-side LOO transfer CSV copy (no delivery writes)."""
     import os
@@ -239,7 +347,7 @@ def cmd_expand_loo_matrix(args: argparse.Namespace) -> int:
     report = expand_loo_matrix(
         out_dir=Path(out_dir),
         cohort=str(getattr(args, "cohort", "K562") or "K562"),
-        max_seqs=int(getattr(args, "max_seqs", 64) or 64),
+        max_seqs=int(getattr(args, "max_seqs", 256) or 256),
         device=str(device),
         rbp_chunk=int(getattr(args, "rbp_chunk", 40) or 40),
         seed=int(getattr(args, "seed", 42) or 42),
@@ -247,6 +355,10 @@ def cmd_expand_loo_matrix(args: argparse.Namespace) -> int:
         held_filter=list(args.held) if getattr(args, "held", None) else None,
         skip_existing_helds=bool(getattr(args, "skip_existing_helds", False)),
         list_helds_only=bool(getattr(args, "list_helds", False)),
+        legacy_per_call=bool(getattr(args, "legacy_per_call", False)),
+        batch_size=int(getattr(args, "batch_size", 64) or 64),
+        validate_complete=bool(getattr(args, "validate_complete", False)),
+        test_data_root=getattr(args, "test_data_root", None),
     )
     if not getattr(args, "list_helds", False):
         print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -270,4 +382,3 @@ def cmd_loo_matrix_ab(args: argparse.Namespace) -> int:
     print(json.dumps(report.get("conclusion"), indent=2, ensure_ascii=False))
     print("report:", (report.get("paths") or {}).get("json"))
     return 0 if report.get("baseline", {}).get("status") == "ok" else 2
-

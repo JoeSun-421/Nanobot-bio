@@ -4,6 +4,8 @@ RNA-axis fusion gate helpers (delivery-aligned HOLD).
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Documents and emits the RNA fusion gate used by offline eval / promote. Delivery has **no RNA-FM axis** in the registry; the product RNA axis is `rna_blastn` / peaks homology, and fusion `rna_*` weights stay at 0 until peaks are ready. `run_rna_fm_gate` always returns `decision: HOLD` with `allow_fusion: False` and `fusion_weight: 0.0`, then calls `app.core.fusion_rna_policy.write_gate` (currently a no-op — readiness is runtime-only).

@@ -4,6 +4,8 @@ Eval / self-evolution trace hooks and structured JSONL event schema.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Provides stable trace events so offline evolve can attribute tools and promote proxy caches. `JsonlTraceHook` works without Nanobot (CI / offline). When Nanobot is installed, `nanobot_hooks.RBPTraceHook` subclasses the real `AgentHook` and records before/after tool execution. All rows should be buildable via `trace_schema.make_event` (`schema: rbp_trace/v1`).

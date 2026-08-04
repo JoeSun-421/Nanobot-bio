@@ -10,6 +10,16 @@
 
 评估专用融合数学在 [`rbp_eval/`](../../rbp_eval/README.zh.md)。交互主路径是 [`app.agent.RBPAgent`](../agent.py) → Nanobot，而不是这里的固定 pipeline。
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## 布局
 
 | 模块 | 角色 |

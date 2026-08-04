@@ -10,6 +10,16 @@ This package is the thin, stable command surface shared by console scripts and `
 
 ## Layout
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | File | Domain (stable command names) |
 |------|-------------------------------|
 | `parser.py` | Builds argparse; **names stay stable** |

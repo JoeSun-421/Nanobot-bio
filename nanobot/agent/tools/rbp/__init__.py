@@ -13,6 +13,7 @@ import os
 from nanobot.agent.tools.rbp.annotation import (
     GetFuncAnnotationTool,
     LiteratureSearchTool,
+    RecordLitPeerDecisionsTool,
 )
 from nanobot.agent.tools.rbp.catalogue import GetKnownRBPListTool
 from nanobot.agent.tools.rbp.commit_proxies import CommitProxyCandidatesTool
@@ -38,6 +39,7 @@ ALL_RBP_TOOL_CLASSES = [
     GetFuncAnnotationTool,
     PredictStructureTool,
     LiteratureSearchTool,
+    RecordLitPeerDecisionsTool,
     LookupProxyCacheTool,
     FuseSimilarityViewsTool,
     CommitProxyCandidatesTool,
@@ -69,6 +71,7 @@ __all__ = [
     "GetFuncAnnotationTool",
     "PredictStructureTool",
     "LiteratureSearchTool",
+    "RecordLitPeerDecisionsTool",
     "LookupProxyCacheTool",
     "FuseSimilarityViewsTool",
     "CommitProxyCandidatesTool",
@@ -82,15 +85,32 @@ __all__ = [
 
 
 def register_all(registry) -> list[str]:
-    """Instantiate and register all curated RBP tools on a ToolRegistry."""
+    """Instantiate and register all curated RBP tools on a ToolRegistry.
+
+    Honors ``tools.soft_disabled`` from evolved runtime config (self-evolution
+    retirement candidates): those tools are **not** registered. Delivery code
+    is never deleted.
+    """
+    skipped: set[str] = set()
+    try:
+        from app.core.runtime_config import soft_disabled_tools
+
+        skipped = {str(t) for t in soft_disabled_tools()}
+    except Exception:
+        skipped = set()
+
     names = []
     for cls in ALL_RBP_TOOL_CLASSES:
         tool = cls()
+        if tool.name in skipped:
+            continue
         registry.register(tool)
         names.append(tool.name)
     # A2: optional axes (phmmer) — only when their env flag is set.
     for cls in _optional_tools():
         tool = cls()
+        if tool.name in skipped:
+            continue
         registry.register(tool)
         names.append(tool.name)
     return names

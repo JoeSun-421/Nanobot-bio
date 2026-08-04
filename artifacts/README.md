@@ -4,6 +4,8 @@ Canonical runtime outputs for sessions, reports, caches, and diagnostics.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Features
 
 - Single gitignored tree for all run products (`app.core.paths`)

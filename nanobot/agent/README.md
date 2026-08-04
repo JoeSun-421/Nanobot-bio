@@ -4,6 +4,8 @@ Agent loop, memory/context, skills loader, and tool packages.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 This package is the heart of a Nanobot turn: build context, call the LLM provider, execute tools, stream progress, and persist memory/session side effects. For nanobot-bio, product science behaviour is driven by **RBP tools + skill**, with outbound science calls through the App delivery bridge. Operators do not invoke this package as a CLI — `RBPAgent` / `Nanobot.from_config` load it.

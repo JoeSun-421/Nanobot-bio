@@ -8,7 +8,27 @@ Offline scientific evaluation, LOO, fusion scoring, acceptance, and self-evoluti
 
 This package is the offline science lab for nanobot-bio. It measures own-head / LOO ceilings, fuses multi-view hits, calibrates transfer, and runs gated self-evolution that writes `config/evolved.candidate.yaml`. It is intentionally **off the chat hot path** — interactive UX stays in `app/` + `nanobot/`. Physical path = import path (no facade); use `python -m rbp_eval.<subpkg>.<module>`.
 
-Binding product flow for chat: [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md). Evolution policy: [`docs/product/SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md).
+Binding product flow: [`BINDING_PREDICTION_FLOW.md`](../docs/product/BINDING_PREDICTION_FLOW.md) · [中文](../docs/product/BINDING_PREDICTION_FLOW.zh.md). Evolution: [`SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md) · [中文](../docs/product/SELF_EVOLUTION.zh.md).
+
+## Self-evolution (summary)
+
+Policy and five steps: [`../docs/product/SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md).  
+Matrix expand: [`../docs/guides/LOO_EXPAND.md`](../docs/guides/LOO_EXPAND.md).
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh
+export RHOBIND_RELEASE="${RHOBIND_RELEASE:-$DELIVERY_ROOT/release/rhobind_release_v1}"
+export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 256 --skip-existing-helds
+export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
+nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR" --medoids --max-seqs 64 \
+  --collect-agent-traces --require-traces
+nanobot-bio run-eval --medoids --transfer-dir "$RBP_LOO_TRANSFER_DIR" \
+  --policy config/evolved.candidate.yaml --max-seqs 64
+nanobot-bio review-toolkit-proposals --list
+nanobot-bio promote-evolved
+```
 
 ## Layout
 
@@ -34,7 +54,7 @@ Config ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §5):
 
 ```bash
 python -m rbp_eval                          # module help
-nanobot-bio run-eval|heavy-loo|evolve|promote-evolved|eval-plan|own-head
+nanobot-bio run-eval|heavy-loo|evolve|promote-evolved|review-toolkit-proposals|eval-plan|own-head
 ```
 
 ## Code examples

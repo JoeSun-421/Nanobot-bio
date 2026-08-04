@@ -10,6 +10,16 @@ Product-runtime helpers for paths, config, capabilities, verdict JSON, and chat 
 
 Eval-only fusion math lives under [`rbp_eval/`](../../rbp_eval/README.md). The interactive agent path is [`app.agent.RBPAgent`](../agent.py) → Nanobot — not a fixed pipeline module here.
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## Layout
 
 | Module | Role |

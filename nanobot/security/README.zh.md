@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 约束工具/channel 在 workspace 下可读写的范围，并提供网络 / SSRF 相关防护。在启用遗留文件系统/web 工具时尤其重要；产品 RBP 模式仍受益于默认 workspace 策略。

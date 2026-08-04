@@ -4,11 +4,19 @@ Product shell: CLI, `RBPAgent` assembly, delivery bridge, and runtime config. Ne
 
 [English] · [中文](README.zh.md)
 
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## Purpose
 
 `app/` is the operator-facing product layer of **nanobot-bio**. It wires the in-repo Nanobot runtime, filters tools for RBP science mode, normalizes typed JSON verdicts, and bridges every science call through the read-only delivery client. Collaborators and CI should enter here (`nanobot-bio` / `rbp-agent` / `python -m app`) rather than calling Nanobot or delivery scripts ad hoc.
 
-Offline evaluation and self-evolution live in [`rbp_eval/`](../rbp_eval/README.md) and are intentionally off the chat hot path. Binding-stage semantics (Stage 0 own-head, transfer, integrate) are documented in [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md).
+Offline evaluation and self-evolution live in [`rbp_eval/`](../rbp_eval/README.md) and are intentionally off the chat hot path. Binding-stage semantics: [`BINDING_PREDICTION_FLOW.md`](../docs/product/BINDING_PREDICTION_FLOW.md) · [中文](../docs/product/BINDING_PREDICTION_FLOW.zh.md).
 
 ## Layout
 

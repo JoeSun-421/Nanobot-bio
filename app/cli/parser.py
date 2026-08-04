@@ -20,6 +20,7 @@ from app.cli.eval_cmds import (
     cmd_heavy_loo,
     cmd_loo_matrix_ab,
     cmd_promote_evolved,
+    cmd_review_toolkit_proposals,
     cmd_run_eval,
 )
 from app.cli.maint import (
@@ -209,16 +210,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dev only: allow writing candidate from retrieval-only synthetic batch",
     )
     evo.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="Use retrieval-only stub batch (not promotable; research/weight retune)",
+    )
+    evo.add_argument(
         "--transfer-dir",
         default=None,
         help="Prefer agent-side LOO matrix dir (sets RBP_LOO_TRANSFER_DIR for this run)",
     )
+    evo.add_argument("--medoids", action="store_true", help="Score LOO medoid helds (default)")
+    evo.add_argument("--held", action="append", default=None, help="Held alias (repeatable)")
+    evo.add_argument("--cohort", default="K562")
+    evo.add_argument("--max-seqs", type=int, default=64)
+    evo.add_argument(
+        "--skip-calibration",
+        action="store_true",
+        help="Skip live transfer_calibration evidence packaging after retune",
+    )
+    evo.add_argument(
+        "--collect-agent-traces",
+        action="store_true",
+        help="Write rbp_trace/v1 JSONL from scored/retrieval results (no LLM)",
+    )
+    evo.add_argument(
+        "--require-traces",
+        action="store_true",
+        help="Warn if no valid rbp_trace/v1 events (does not block scored evolve)",
+    )
     evo.set_defaults(func=cmd_evolve)
 
-    re = sub.add_parser("run-eval", help="LOO ceiling + modality ablation harness")
+    re = sub.add_parser(
+        "run-eval",
+        help="Policy eval: per-RBP recovered AUPRC / gap-to-ceiling / abstain + report",
+    )
     re.add_argument("--hits-json", default=None)
     re.add_argument("--top-k", type=int, default=5)
     re.add_argument("--out-dir", default=None)
+    re.add_argument("--medoids", action="store_true")
+    re.add_argument("--held", action="append", default=None)
+    re.add_argument("--cohort", default="K562")
+    re.add_argument("--max-seqs", type=int, default=64)
+    re.add_argument("--policy", default=None, help="evolved.yaml / candidate path")
+    re.add_argument("--transfer-dir", default=None)
+    re.add_argument("--device", default=None)
     re.set_defaults(func=cmd_run_eval)
 
     ee = sub.add_parser("evolve-eval", help="Light nested-split evolve eval")
@@ -237,6 +272,16 @@ def build_parser() -> argparse.ArgumentParser:
     pe.add_argument("--force", action="store_true")
     pe.add_argument("--seed", action="store_true")
     pe.set_defaults(func=cmd_promote_evolved)
+
+    rtp = sub.add_parser(
+        "review-toolkit-proposals",
+        help="Human review of toolkit proposals (audit only; never installs tools)",
+    )
+    rtp.add_argument("--list", action="store_true", help="List proposals JSON")
+    rtp.add_argument("--accept", default=None, help="Proposal id to accept (audit)")
+    rtp.add_argument("--reject", default=None, help="Proposal id to reject (audit)")
+    rtp.add_argument("--note", default="", help="Optional reviewer note")
+    rtp.set_defaults(func=cmd_review_toolkit_proposals)
 
     ep = sub.add_parser("eval-plan", help="Evaluation plan report")
     ep.add_argument("--with-seq", action="store_true")
@@ -262,9 +307,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     elm.add_argument("--out-dir", default=None)
     elm.add_argument("--cohort", default="K562")
-    elm.add_argument("--max-seqs", type=int, default=64)
+    elm.add_argument("--max-seqs", type=int, default=256)
     elm.add_argument("--device", default=None)
     elm.add_argument("--rbp-chunk", type=int, default=40)
+    elm.add_argument("--batch-size", type=int, default=64)
     elm.add_argument("--seed", type=int, default=42)
     elm.add_argument("--no-resume", action="store_true")
     elm.add_argument("--held", action="append", default=None, help="Limit to alias (repeatable)")
@@ -277,6 +323,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--list-helds",
         action="store_true",
         help="Dry-run: show catalogue ∩ test.fasta planned helds and exit",
+    )
+    elm.add_argument(
+        "--legacy-per-call",
+        action="store_true",
+        help="Slow per-RNA DeliveryToolClient path (default: batch encode-once)",
+    )
+    elm.add_argument(
+        "--validate-complete",
+        action="store_true",
+        help="Validate held×foreign coverage after expand / with --list-helds",
+    )
+    elm.add_argument(
+        "--test-data-root",
+        default=None,
+        help="Sets RBP_TEST_DATA_ROOT for this run (directory containing k562/…)",
     )
     elm.set_defaults(func=cmd_expand_loo_matrix)
 

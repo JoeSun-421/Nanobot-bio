@@ -8,6 +8,8 @@
 
 本包是 App 与外部科学栈对话的命名空间。当前唯一生产后端是 [`delivery/`](delivery/README.zh.md)：只读桥接到同级 `rhobind_agent_delivery`。历史 mock 后端不再作为可导入产品代码提供——支持的设置是 `RBP_BACKEND=delivery`。
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 布局
 
 | 路径 | 角色 |

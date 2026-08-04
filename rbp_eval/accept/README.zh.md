@@ -10,6 +10,16 @@
 
 ## 布局
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | 模块 | 角色 |
 |------|------|
 | `own_head.py` | 理想环境：`resolve_rbp(PTBP1)` → `rhobind_predict` 对照金标 |

@@ -6,6 +6,16 @@ Operator scripts for nanobot-bio. **Day-to-day entry:** [`nbio`](nbio).
 
 ## Features
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - **`nbio`**: portable activate / status / doctor / setup / chat / **start** (one-shot)
 - Setup: agent `.venv` + delivery science conda + AF3 stack selection
 - CI / Cert / Docker / Data helpers (unchanged filenames)

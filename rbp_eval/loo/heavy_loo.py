@@ -90,7 +90,21 @@ def subsample(
 
 
 def test_fasta_for(alias: str, cohort: str, delivery_root: Path) -> Optional[Path]:
+    """Resolve labeled test.fasta for an RBP.
+
+    Lookup order:
+    1. ``RBP_TEST_DATA_ROOT/{cohort}/{alias}/test.fasta`` (e.g. testdata_v2)
+    2. ``delivery/release/.../test_data/{cohort}/{alias}/test.fasta``
+    3. ``rglob`` under delivery for alternate layouts
+    """
+    import os
+
     c = cohort.lower()
+    root_env = (os.environ.get("RBP_TEST_DATA_ROOT") or "").strip()
+    if root_env:
+        env_path = Path(root_env).expanduser() / c / alias / "test.fasta"
+        if env_path.is_file():
+            return env_path
     rel = delivery_root / "release" / "rhobind_release_v1" / "test_data" / c / alias / "test.fasta"
     if rel.is_file():
         return rel

@@ -4,6 +4,8 @@ RNA 轴融合门禁辅助（与 delivery 对齐的 HOLD）。
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 记录并输出离线评估 / promote 使用的 RNA 融合门禁。Delivery 注册表中**没有 RNA-FM 轴**；产品 RNA 轴是 `rna_blastn` / peaks 同源，融合中的 `rna_*` 权重在 peaks 就绪前保持 0。`run_rna_fm_gate` 始终返回 `decision: HOLD`、`allow_fusion: False`、`fusion_weight: 0.0`，并调用 `app.core.fusion_rna_policy.write_gate`（当前为 no-op——就绪性仅在运行时判断）。

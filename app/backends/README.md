@@ -8,6 +8,8 @@ Backend adapters for science I/O. Product path uses the **delivery** backend onl
 
 This package is the namespace under which the App talks to external science stacks. Today the sole production backend is [`delivery/`](delivery/README.md): a read-only bridge into sibling `rhobind_agent_delivery`. Historical “mock” backends are not shipped as importable product code here — `RBP_BACKEND=delivery` is the supported setting.
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Layout
 
 | Path | Role |

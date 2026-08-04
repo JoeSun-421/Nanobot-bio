@@ -10,6 +10,16 @@ Holds **scientific** accept paths for nanobot-bio. Engineering gates (`gate` / `
 
 ## Layout
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | Module | Role |
 |--------|------|
 | `own_head.py` | Ideal-env: `resolve_rbp(PTBP1)` → `rhobind_predict` vs golden |

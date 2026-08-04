@@ -88,7 +88,7 @@ Run **in parallel intent** (batch tool calls in one turn when possible):
 | `struct_similarity` | Structure | After `structure_fetch`; US-align refine follows `axes.struct_align_refine` (default on) |
 | `domain_architecture` | Domain | Pfam-root Jaccard vs catalogue (required multi-view axis) |
 | `structure_consensus` | Structure | When multiple PDBs |
-| `literature_search` | Function context | Unseen: **≤ 1** precise CLIP/eCLIP query |
+| `literature_search` | Function / similar-RBP papers | Unseen: **≤ 1** call; craft similar-RBP query or omit for default; **after** seq/struct when possible; pairwise lit_peers → corroborate Donors_SS; lit-only → `record_lit_peer_decisions` + budgeted recompare |
 
 Raw delivery tools (`esm_embed`, `colabfold_msa`, `pymol_util`, `function_category`, …)
 are on the default full surface (`RBP_RAW_TOOLS=all`); prefer curated wrappers when

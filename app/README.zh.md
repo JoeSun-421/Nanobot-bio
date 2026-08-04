@@ -10,6 +10,16 @@
 
 离线评估与自演化在 [`rbp_eval/`](../rbp_eval/README.zh.md)，刻意不在 chat 热路径上。绑定阶段语义（Stage 0 own-head、transfer、integrate）见 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## 布局
 
 | 路径 | 角色 |

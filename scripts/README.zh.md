@@ -6,6 +6,16 @@ nanobot-bio 运维脚本。**日常入口：** [`nbio`](nbio)。
 
 ## 功能
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - **`nbio`**：可移植 activate / status / doctor / setup / chat / **start**（Linux 万能一键）
 - Setup：agent `.venv` + delivery 科学 conda + AF3 栈选型
 - CI / Cert / Docker / Data 辅助脚本（文件名未改）

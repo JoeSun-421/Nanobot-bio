@@ -4,6 +4,8 @@ Workspace access policy and network safety helpers.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Constrains what tools/channels may read or write under the workspace and applies network / SSRF-oriented guards. Important when legacy filesystem/web tools are enabled; product RBP mode still benefits from workspace policy defaults.

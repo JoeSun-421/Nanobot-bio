@@ -1,16 +1,22 @@
 # Architecture
 
+<p><b>English</b> · <a href="ARCHITECTURE.zh.md">中文</a></p>
+
 Engineering map of `nanobot-bio`: layers, workspace stores, eval/promote,
-slim-vendor policy, and release checklist. Setup: [`INSTALL.md`](INSTALL.md).
-Agent gates: [`AGENTS.md`](AGENTS.md). History: [`CHANGELOG.md`](CHANGELOG.md).
-Per-package README pairs (`README.md` + `README.zh.md`): see the package map in
-[`README.md`](README.md) / [`README.zh.md`](README.zh.md) (e.g. [`app/`](app/README.md),
-[`nanobot/`](nanobot/README.md), [`rbp_eval/`](rbp_eval/README.md),
-[`scripts/`](scripts/README.md)).
-Local proposal / maturity detail stays under git-ignored `docs/`.
-Chinese Feishu summary (progress + Nanobot-based layout + delivery bridge):
-[`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md).
-Delivery-side theory notes (RNA-FM / RNA·protein LMs / biomedical agents): [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md).
+slim-vendor policy, and release checklist. Setup: [`INSTALL.md`](INSTALL.md) /
+[`INSTALL.zh.md`](INSTALL.zh.md). Agent gates: [`AGENTS.md`](AGENTS.md).
+History: [`CHANGELOG.md`](CHANGELOG.md). Package map:
+[`README.md`](README.md) / [`README.zh.md`](README.zh.md).
+Local proposal detail may stay under git-ignored `docs/`.
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+# DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
+```
 
 ---
 
@@ -21,7 +27,7 @@ Delivery-side theory notes (RNA-FM / RNA·protein LMs / biomedical agents): [`do
 | Agent CLI + core | `app/` | Argparse CLI (`rbp-agent` / `nanobot-bio`), verdict schema, runtime config, onboarding, delivery bridge. Never computes `p_hat` itself. |
 | Runtime + skill (SoT) | `nanobot/` | Slim in-repo Nanobot **plus** `rbp-agent` skill and RBP tools. SoT == runtime — `import nanobot` must resolve here. |
 | Offline eval + evolve | `rbp_eval/` | LOO, fusion, metrics, accept, self-evolution under real subpackages. |
-| Science bundle (read-only) | `../rhobind_agent_delivery/` | Delivery tools + data. Call via App bridge; do not edit. |
+| Science bundle (read-only) | `$BIO_ROOT/rhobind_agent_delivery/` | Delivery tools + data. Call via App bridge; do not edit. |
 
 `NANOBOT_SRC` defaults to in-repo `nanobot/`. There is **no** sibling-clone runtime;
 `rbp-agent layout` asserts PA surfaces (channels/webui/cli/…) are stripped.
@@ -46,7 +52,8 @@ physical path = import path (no top-level facade).
 ## 2. Workspace: sessions vs long-term memory
 
 **Canonical store is `artifacts/`** (`workspace/sessions` and `workspace/memory`
-are symlinks only). Chinese detail: [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md).
+are symlinks only). Detail: [`docs/guides/MEMORY_AND_SESSIONS.md`](docs/guides/MEMORY_AND_SESSIONS.md) /
+[`MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md).
 
 | Store | Path | Purpose |
 |-------|------|---------|

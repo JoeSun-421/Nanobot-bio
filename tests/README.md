@@ -6,6 +6,16 @@ Pytest suite for layout, contracts, CLI/UX, delivery bridge, and offline eval lo
 
 ## Features
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - Proposal / Table compliance and slim-vendor package layout asserts
 - Capability-matrix honesty, soft-fail caveats, verdict / stage contracts
 - Chat UX, onboard, device, session date layout, memory/promotion phase checks

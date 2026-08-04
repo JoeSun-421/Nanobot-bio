@@ -8,6 +8,8 @@ Engineering maturity gates only (C5 boundary). Fast checks that do **not** repla
 
 This package answers: “Is the product tree wired correctly for CI and collaborators?” It runs ruff / pytest / SoT layout / MVP structural acceptance. Scientific scores (own-head AUPRC, transfer calibration, promote evidence) belong in [`rbp_eval/`](../../rbp_eval/README.md) and the `accept-*` / `promote-evolved` CLI commands — do not add science scoring paths here.
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Layout
 
 | Module | Role |

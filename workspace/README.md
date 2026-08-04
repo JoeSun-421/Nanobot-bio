@@ -8,6 +8,16 @@ Nanobot workspace root: synced skills and symlinked session/memory views.
 
 - Runtime workspace expected by Nanobot (`NANOBOT_WORKSPACE`)
 - Synced skill copies under `skills/` (see [`skills/README.md`](skills/README.md))
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - Symlinks `sessions` → `../artifacts/sessions`, `memory` → `../artifacts/memory` (no dual-write)
 - Short workspace bootstrap notes in `AGENTS.md`
 

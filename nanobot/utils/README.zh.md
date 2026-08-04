@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 供 Nanobot 各模块使用的小工具。nanobot-bio 产品侧 artifact **规范根目录**由 `app.core.paths` 拥有；本包仍提供框架级辅助（`ensure_dir`、`abbreviate_path`、gitstore、进度事件等）。

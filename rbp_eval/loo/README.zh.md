@@ -1,56 +1,31 @@
 # rbp_eval/loo/
 
-Leave-one-out 评估：轻量 policy LOO 与重型 hide-own-head。
+Leave-one-out：轻量 LOO、heavy hide-own-head、矩阵扩充与 A/B。
 
 [English](README.md) · [中文]
 
 ## 用途
 
-量化 catalogue head 留出时 transfer 策略的恢复能力。`loo_eval.py` 是较轻的报告路径（policy vs own-head 的 AUPRC 类摘要）。`heavy_loo.py` 跑更强认证用的昂贵 hide-own-head 协议。报告写入 `artifacts/reports/`。
+衡量隐藏 catalogue head 后的迁移表现。Agent 侧矩阵扩充**不改** delivery SoT；自演进请 `export RBP_LOO_TRANSFER_DIR=...`。
 
-## 布局
+## 模块
+
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
 
 | 模块 | 角色 |
 |------|------|
-| `loo_eval.py` | 轻量 LOO 报告 CLI；`RBP_LOO_TRANSFER_DIR` 优先 |
-| `heavy_loo.py` | 重型 hide-own-head CLI |
-| `expand_matrix.py` | 扩展 agent 侧 LOO 矩阵副本（`rbp_eval/data/transfer/`） |
+| `loo_eval.py` | 轻量 LOO / CSV 解析 |
+| `heavy_loo.py` | Heavy LOO + `test_fasta_for`（支持 `RBP_TEST_DATA_ROOT`） |
+| `batch_score_held.py` | 单进程 encode 一次 × 全 heads |
+| `expand_matrix.py` | 扩充 agent 侧 LOO 矩阵 |
 | `matrix_ab_eval.py` | delivery vs 扩展矩阵 A/B |
-| `__init__.py` | 包标记 |
 
-## 入口
-
-```bash
-nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 64
-export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
-nanobot-bio loo-matrix-ab
-python -m rbp_eval.loo.loo_eval --out artifacts/reports/json/eval_loo_report.json
-python -m rbp_eval.loo.heavy_loo --help
-nanobot-bio run-eval
-nanobot-bio heavy-loo
-```
-
-## 代码示例
-
-```bash
-python -m rbp_eval.loo.loo_eval \
-  --out artifacts/reports/json/eval_loo_report.json
-
-nanobot-bio heavy-loo --help
-```
-
-```python
-from rbp_eval.loo.loo_eval import load_loo_summary, resolve_loo_csvs
-
-print(resolve_loo_csvs)
-print(load_loo_summary)
-```
-
-## 依赖 / 环境
-
-- 有意义的数字需要 delivery LOO 产物 / 科学环境。
-- `app.dev.gate.delivery_loo_ready()` 检测 CI 何时可跑轻量断言。
-
-## 相关文档
-
-[`../README.zh.md`](../README.zh.md) · [`../scoring/README.zh.md`](../scoring/README.zh.md) · [`../../scripts/cert/README.zh.md`](../../scripts/cert/README.zh.md)
+用法见 [`../../docs/guides/LOO_EXPAND.zh.md`](../../docs/guides/LOO_EXPAND.zh.md)。

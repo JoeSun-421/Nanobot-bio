@@ -6,6 +6,16 @@ YAML defaults and evolved knobs for retrieval / fusion / runtime behaviour.
 
 ## Features
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 - Product default hyperparameters (`schema_version`, axes, fusion weights, abstain / label thresholds, integrate / predict / structure / llm blocks)
 - Optional promoted evolved overlay and gitignored candidate files
 - Constrained by `tests/test_proposal_compliance.py` against the proposal matrix

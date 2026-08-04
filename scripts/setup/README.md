@@ -4,6 +4,8 @@
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Features
 
 - One-shot (re-runnable) setup of agent `.venv` + delivery science conda + optional AF3 harden

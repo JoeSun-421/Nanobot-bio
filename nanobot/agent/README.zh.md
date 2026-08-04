@@ -4,6 +4,8 @@ Agent loop、memory/context、skills 加载与工具包。
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 本包是 Nanobot 一轮对话的核心：组装 context、调用 LLM provider、执行工具、推送进度，并持久化 memory/session 副作用。在 nanobot-bio 中，产品科学行为由 **RBP tools + skill** 驱动，出站科学调用经 App delivery 桥。操作者不把本包当 CLI——由 `RBPAgent` / `Nanobot.from_config` 加载。

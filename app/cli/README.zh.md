@@ -10,6 +10,16 @@
 
 ## 布局
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | 文件 | 领域（稳定命令名） |
 |------|-------------------|
 | `parser.py` | 构建 argparse；**名称保持稳定** |

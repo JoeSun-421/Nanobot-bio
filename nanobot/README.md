@@ -10,6 +10,16 @@ This tree is the agent framework used by the product: high-level `Nanobot` API, 
 
 Product collaborators normally enter through [`app/`](../app/README.md) (`nanobot-bio chat|agent`). Direct `python -m nanobot` is framework-oriented and not the RBP product UX. Stage discipline and tool contracts live in `skills/rbp-agent/SKILL.md` and [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md).
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## Layout
 
 | Path | Role |

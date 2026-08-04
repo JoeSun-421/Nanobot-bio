@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 实现 Proposal Evaluation Plan：隐藏 own head → 检索 donor → 用 delivery transfer CSV 计算策略级 AUPRC/AUROC（轻量）；在 RhoBind 可用时可选跑重量级实例指标。同时写出定性 faithfulness 评分 CSV，以及启发式验收分层标签（`own_head`、`in_panel_transfer`、`dark_protein`、`cross_kingdom`）。默认输出在 `artifacts/reports/{json,md,csv}/`。

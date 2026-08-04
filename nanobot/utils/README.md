@@ -4,6 +4,8 @@ Shared framework utilities (paths, helpers, artifacts, logging bridges, …).
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Small helpers used across Nanobot modules. Product artifact *canonical roots* for nanobot-bio are owned by `app.core.paths`; this package still provides framework-level helpers (`ensure_dir`, `abbreviate_path`, gitstore, progress events, etc.).

@@ -4,6 +4,8 @@ Nanobot 配置加载、路径与 schema（`Config`）。
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 加载 `~/.nanobot/config.json`（或覆盖路径），解析 `${ENV}` 占位符，并暴露类型化 `Config` 与路径辅助。产品科学旋钮（融合权重、阈值）在仓库 `config/*.yaml`，经 `app.core.runtime_config`——本包是**框架**侧 LLM/workspace 配置。

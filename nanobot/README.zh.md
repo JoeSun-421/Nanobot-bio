@@ -10,6 +10,16 @@
 
 产品协作者通常经 [`app/`](../app/README.zh.md)（`nanobot-bio chat|agent`）进入。直接 `python -m nanobot` 偏框架，不是 RBP 产品 UX。阶段纪律与工具契约见 `skills/rbp-agent/SKILL.md` 与 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 ## 布局
 
 | 路径 | 角色 |

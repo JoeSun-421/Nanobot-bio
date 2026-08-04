@@ -4,6 +4,8 @@ Nanobot CLI/chat 面的斜杠命令路由与内置处理器。
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 通过 `CommandRouter` 将会话内斜杠命令（`/…`）路由到处理器，并由 `register_builtin_commands` 注册内置命令。产品 CLI（`nanobot-bio …`）是另一套（`app.cli`）；本包是框架的会话内命令层。

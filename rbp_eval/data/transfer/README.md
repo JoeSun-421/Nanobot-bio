@@ -1,5 +1,7 @@
 # Agent-side LOO transfer matrix (experimental copy)
 
+<p><b>English</b> · <a href="README.zh.md">中文</a></p>
+
 This directory holds an **expanded LOO transfer matrix copy** for nanobot-bio
 self-evolution / A–B experiments.
 
@@ -8,9 +10,12 @@ self-evolution / A–B experiments.
 - Prefer this copy by exporting:
 
 ```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
 export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
-# optional: also point delivery tool lookup
 export TRANSFER_DIR="$RBP_LOO_TRANSFER_DIR"
+export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
 ```
 
 ## Held selection (not limited to seed ~10)

@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 功能
 
 - 一次性（可重跑）配置 agent `.venv` + delivery 科学 conda + 可选 AF3 harden
@@ -20,6 +22,8 @@
 | 兼容旧激活 | `source scripts/setup/activate_env.sh` → 转发 `nbio activate`（薄包装，勿删） |
 
 路径（`AF3_ROOT` / `ENV_PREFIX` / delivery）按本机发现，可用环境变量覆盖；见 [`../README.zh.md`](../README.zh.md)「路径发现」。
+
+Delivery 切换与备份路径见 [`../../docs/guides/DELIVERY_SWAP.zh.md`](../../docs/guides/DELIVERY_SWAP.zh.md)。
 
 `nbio` **activate 不会**自动 `pip install` CUDA/torch；缺包时 doctor 表格标红，再用 `nbio setup` 修复。
 

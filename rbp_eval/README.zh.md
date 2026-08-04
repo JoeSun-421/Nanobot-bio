@@ -8,7 +8,7 @@
 
 本包是 nanobot-bio 的离线科学实验室：测量 own-head / LOO 上限、融合多视图命中、校准 transfer，并跑写入 `config/evolved.candidate.yaml` 的门禁自演化。它刻意**不在 chat 热路径上**——交互 UX 留在 `app/` + `nanobot/`。物理路径 = import 路径（无 facade）；使用 `python -m rbp_eval.<subpkg>.<module>`。
 
-Chat 绑定产品流：[`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。演化政策：[`docs/product/SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md)。
+Chat 绑定产品流：[`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。演化政策：[`docs/product/SELF_EVOLUTION.zh.md`](../docs/product/SELF_EVOLUTION.zh.md)。
 
 ## 布局
 
@@ -30,12 +30,36 @@ Chat 绑定产品流：[`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/pr
 - 候选：`config/evolved.candidate.yaml`（gitignore）
 - 已提升：`config/evolved.yaml`（`evolved: true` 时 deep-merge）
 
+## 自演进（摘要）
+
+政策与五步：[`../docs/product/SELF_EVOLUTION.zh.md`](../docs/product/SELF_EVOLUTION.zh.md)。  
+矩阵扩充：[`../docs/guides/LOO_EXPAND.zh.md`](../docs/guides/LOO_EXPAND.zh.md)。
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh
+export RHOBIND_RELEASE="${RHOBIND_RELEASE:-$DELIVERY_ROOT/release/rhobind_release_v1}"
+export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 256 --skip-existing-helds
+export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
+nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR" --medoids --max-seqs 64 \
+  --collect-agent-traces --require-traces
+nanobot-bio run-eval --medoids --transfer-dir "$RBP_LOO_TRANSFER_DIR" \
+  --policy config/evolved.candidate.yaml --max-seqs 64
+nanobot-bio review-toolkit-proposals --list
+nanobot-bio promote-evolved
+```
+
+
+
 ## 入口
 
 ```bash
 python -m rbp_eval
-nanobot-bio run-eval|heavy-loo|evolve|promote-evolved|eval-plan|own-head
+nanobot-bio run-eval|heavy-loo|evolve|promote-evolved|review-toolkit-proposals|eval-plan|own-head
 ```
+
+
 
 ## 代码示例
 
@@ -58,6 +82,8 @@ donors = fuse_rbp_hits([
 print(donors[0]["alias"], donors[0].get("score"))
 ```
 
+
+
 ## 依赖 / 环境
 
 - 真实打分需要 `DELIVERY_ROOT` + 科学 conda。
@@ -72,4 +98,4 @@ print(donors[0]["alias"], donors[0].get("score"))
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../config/README.zh.md`](../config/README.zh.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../scripts/cert/README.zh.md`](../scripts/cert/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../config/README.zh.md`](../config/README.zh.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../docs/product/SELF_EVOLUTION.zh.md`](../docs/product/SELF_EVOLUTION.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../scripts/cert/README.zh.md`](../scripts/cert/README.zh.md)

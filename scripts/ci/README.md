@@ -4,6 +4,8 @@ Lightweight CI / local engineering gates (secret scan needs no GPU science).
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Features
 
 - Scan tracked files for private-key / API-key shaped secrets before merge

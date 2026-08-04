@@ -36,23 +36,34 @@
 | **3** | 证据核对与可选先验 → 写出 verdict |
 
 
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# $BIO_ROOT 下期望的兄弟目录：
+#   nanobot-bio/
+#   rhobind_agent_delivery/
+#   rhobind_testdata_v2/   （可选；LOO 扩充）
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
+勿写死试验机绝对路径；`nbio` 在本机发现 `DELIVERY_ROOT` / AF3 / conda。
+
 ## 快速开始
 
 ```bash
-git clone https://github.com/JoeSun-421/Nanobot-bio.git
-cd Nanobot-bio
-# 将 rhobind_agent_delivery/ 放在与本仓同级的父目录下（delivery 不在本 git 仓内）：
-#   parent/Nanobot-bio
-#   parent/rhobind_agent_delivery
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
 
 ./scripts/nbio setup              # 首次：agent .venv + 科学 conda
 nanobot-bio onboard               # 选择 LLM 厂商 + API key → .env
 ./scripts/nbio start              # 日常万能一键：路径发现 → 纠偏 AF3/.env → chat
-# ./scripts/nbio start --dry-run  # 只看 GPU/AF3 候选（可顺带 heal）
-# source scripts/nbio && nanobot-bio doctor   # 分步：激活 + 能力表
+# ./scripts/nbio start --dry-run
+# source scripts/nbio && nanobot-bio doctor
 ```
 
-逐步安装与路径说明见 [INSTALL.md](INSTALL.md)。脚本入口与可移植路径发现见 [`scripts/README.zh.md`](scripts/README.zh.md)。Delivery 桥见 [`app/backends/delivery/README.zh.md`](app/backends/delivery/README.zh.md)。
+安装：[INSTALL.zh.md](INSTALL.zh.md) · [EN](INSTALL.md)。脚本：[`scripts/README.zh.md`](scripts/README.zh.md)。Delivery 桥：[`app/backends/delivery/README.zh.md`](app/backends/delivery/README.zh.md)。
 
 一次性预测示例：
 
@@ -74,7 +85,9 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | `nanobot-bio onboard` | 写入 LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden 验收（无 LLM；`own-head` 为其别名） |
 | `nanobot-bio run-eval` | LOO 上限对照与模态消融评估 |
+| `nanobot-bio evolve` | 离线自演进 → `config/evolved.candidate.yaml` |
 | `nanobot-bio heavy-loo` | 隐藏自身 head 的 LOO：recovered AUPRC 与实例级指标 |
+| `nanobot-bio expand-loo-matrix` | 扩充 agent 侧 LOO 转移矩阵副本 |
 | `python -m rbp_eval.accept.transfer_calibration` | Transfer 校准报告（亦可 `bash scripts/cert/certify.sh --transfer`） |
 | `nanobot-bio gate` | 代码与布局门禁：ruff + pytest + layout |
 
@@ -95,13 +108,14 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 ## 包目录索引
 
-各包使用**分开的**中英文 README（`README.md` / `README.zh.md`），内容覆盖功能、实现方法、怎么使用、设计思路。
+各包使用中英文 README（`README.md` / `README.zh.md`）：职责、`$BIO_ROOT` 下 Linux 用法、上下游链接。
 
 | 路径 | 角色 | 文档 |
 |------|------|------|
 | [`app/`](app/) | CLI 与编排；[`cli/`](app/cli/)、[`backends/delivery/`](app/backends/delivery/) | [EN](app/README.md) · [中文](app/README.zh.md) |
-| [`nanobot/`](nanobot/) | 精简运行时 + skill/tools SoT；[`agent/`](nanobot/agent/)、[`sdk/`](nanobot/sdk/) | [EN](nanobot/README.md) · [中文](nanobot/README.zh.md) |
-| [`rbp_eval/`](rbp_eval/) | 离线 LOO / 验收 / 自演化 | [EN](rbp_eval/README.md) · [中文](rbp_eval/README.zh.md) |
+| [`nanobot/`](nanobot/) | 精简运行时 + skill/tools SoT；[`agent/tools/rbp/`](nanobot/agent/tools/rbp/) | [EN](nanobot/README.md) · [中文](nanobot/README.zh.md) |
+| [`rbp_eval/`](rbp_eval/) | 离线 LOO / 验收 / 自演进 | [EN](rbp_eval/README.md) · [中文](rbp_eval/README.zh.md) |
+| [`docs/`](docs/) | 产品指南（自演进、LOO、AF3、记忆等） | [EN](docs/README.md) · [中文](docs/README.zh.md) |
 | [`config/`](config/) | 默认与演化 YAML | [EN](config/README.md) · [中文](config/README.zh.md) |
 | [`scripts/`](scripts/) | 安装 / CI / 认证 / Docker / 数据脚本 | [EN](scripts/README.md) · [中文](scripts/README.zh.md) |
 | [`tests/`](tests/) | Pytest 契约 | [EN](tests/README.md) · [中文](tests/README.zh.md) |
@@ -112,11 +126,10 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 | 文档 | 内容 |
 |------|------|
-| [INSTALL.md](INSTALL.md) | 安装、环境变量、Docker、验收、CI runner |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 分层、记忆、桥接、eval/promote、slim vendor、发版 |
+| [INSTALL.zh.md](INSTALL.zh.md) · [INSTALL.md](INSTALL.md) | 安装、环境变量、Docker、验收、CI |
+| [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md) · [ARCHITECTURE.md](ARCHITECTURE.md) | 分层、记忆、桥接、eval/promote、发版 |
 | [AGENTS.md](AGENTS.md) | Agent / CI 约束 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本历史 |
-| [`docs/README.md`](docs/README.md) | 本地 docs 地图（`theory/` · `product/` · `guides/` · `eval/` · `reports/`） |
-| [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md) | Delivery 理论依据（RNA-FM / RNA·蛋白 LM / 生物医学 agent） |
-| [`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md) | 飞书汇总汇报（进度 + Nanobot 架构 + Delivery 桥；本地 `docs/`） |
-| [`docs/eval/transfer_test_prompts.md`](docs/eval/transfer_test_prompts.md) | Transfer 冒烟 prompts（20 例） |
+| [`docs/README.zh.md`](docs/README.zh.md) · [EN](docs/README.md) | 指南索引 |
+| [`docs/product/SELF_EVOLUTION.zh.md`](docs/product/SELF_EVOLUTION.zh.md) | 自演进五步 |
+| [`docs/guides/LOO_EXPAND.zh.md`](docs/guides/LOO_EXPAND.zh.md) | 扩充 agent 侧 LOO 矩阵 |

@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+
 ## 用途
 
 提供稳定的 trace 事件，供离线 evolve 做工具归因与代理缓存提升。`JsonlTraceHook` 无需 Nanobot（CI / 离线）。安装 Nanobot 时，`nanobot_hooks.RBPTraceHook` 继承真实 `AgentHook`，记录工具执行前后。所有行应通过 `trace_schema.make_event` 构建（`schema: rbp_trace/v1`）。

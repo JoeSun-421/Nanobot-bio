@@ -4,6 +4,8 @@ Proposal evaluation plan harness (light / heavy) and faithfulness sheets.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Implements the Proposal Evaluation Plan: hide own head → retrieve donors → score policy-level AUPRC/AUROC from delivery transfer CSVs (light), plus optional heavy instance metrics when RhoBind is available. Also writes a qualitative faithfulness rating CSV and heuristic acceptance strata tags (`own_head`, `in_panel_transfer`, `dark_protein`, `cross_kingdom`). Output defaults under `artifacts/reports/{json,md,csv}/`.

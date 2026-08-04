@@ -4,6 +4,8 @@ Scheduled agent tasks (cron service) for the Nanobot framework.
 
 [English] · [中文](README.zh.md)
 
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+
 ## Purpose
 
 Defines cron job types and a `CronService` that can run bound agent turns on a schedule. Product RBP evaluation / evolve loops use `rbp_eval` and shell cert scripts instead; cron remains available for framework-level scheduling when enabled.

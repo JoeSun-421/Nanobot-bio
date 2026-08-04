@@ -1,54 +1,34 @@
 # rbp_eval/loo/
 
-Leave-one-out evaluation: light policy LOO and heavy hide-own-head runs.
+Leave-one-out evaluation: light policy LOO, heavy hide-own-head, matrix expand, A/B.
 
 [English] · [中文](README.zh.md)
 
 ## Purpose
 
-Quantifies how well transfer policies recover when a catalogue head is held out. `loo_eval.py` is the lighter report path (policy vs own-head AUPRC-style summaries). `heavy_loo.py` exercises the expensive hide-own-head protocol used for stronger certification. Reports land under `artifacts/reports/`.
+Quantifies transfer when a catalogue head is held out. Agent-side matrix expand never edits delivery SoT; set `RBP_LOO_TRANSFER_DIR` for evolve / run-eval.
 
 ## Layout
 
 | Module | Role |
 |--------|------|
-| `loo_eval.py` | Light LOO report CLI (`python -m rbp_eval.loo.loo_eval`) |
-| `heavy_loo.py` | Heavy hide-own-head CLI |
-| `__init__.py` | Package marker |
+| `loo_eval.py` | Light LOO report / CSV resolve |
+| `heavy_loo.py` | Heavy hide-own-head + `test_fasta_for` (`RBP_TEST_DATA_ROOT`) |
+| `batch_score_held.py` | Encode-once × all heads (rhobind env) |
+| `expand_matrix.py` | Expand agent-side LOO matrix (resume, validate) |
+| `matrix_ab_eval.py` | Delivery vs expanded matrix A/B |
 
 ## Entry points
 
 ```bash
-python -m rbp_eval.loo.loo_eval --out artifacts/reports/json/eval_loo_report.json
-python -m rbp_eval.loo.heavy_loo --help
-nanobot-bio run-eval
-nanobot-bio heavy-loo
+# After source scripts/nbio.sh in nanobot-bio:
+export BIO_ROOT="${BIO_ROOT:-$(cd .. && pwd)}"
+export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
+
+nanobot-bio expand-loo-matrix --cohort K562 --list-helds
+nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 256 --skip-existing-helds
+nanobot-bio heavy-loo --medoids --max-seqs 64
+nanobot-bio loo-matrix-ab
 ```
 
-## Code examples
-
-```bash
-# Light LOO (needs prior delivery LOO CSVs / summaries on disk)
-python -m rbp_eval.loo.loo_eval \
-  --out artifacts/reports/json/eval_loo_report.json
-
-# Heavy path via product CLI wrapper
-nanobot-bio heavy-loo --help
-```
-
-```python
-from rbp_eval.loo.loo_eval import load_loo_summary, resolve_loo_csvs
-
-# Helpers used by the CLI when assembling the report
-print(resolve_loo_csvs)
-print(load_loo_summary)
-```
-
-## Dependencies / env
-
-- Needs delivery LOO artifacts / science envs for meaningful numbers.
-- `app.dev.gate.delivery_loo_ready()` detects when light asserts can run in CI.
-
-## See also
-
-[`../README.md`](../README.md) · [`../scoring/README.md`](../scoring/README.md) · [`../../scripts/cert/README.md`](../../scripts/cert/README.md)
+See [`../../docs/guides/LOO_EXPAND.md`](../../docs/guides/LOO_EXPAND.md) · [中文](../../docs/guides/LOO_EXPAND.zh.md).

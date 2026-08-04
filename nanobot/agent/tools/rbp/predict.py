@@ -862,6 +862,14 @@ class PredictInteractionTool(Tool):
                 set_authoritative_score,
             )
 
+            if p_hat is not None:
+                try:
+                    from app.core.runtime_config import apply_logit_scale
+
+                    p_hat = float(apply_logit_scale(float(p_hat)))
+                except Exception:
+                    pass
+
             set_authoritative_score(
                 p_hat,
                 source=score_source,

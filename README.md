@@ -36,23 +36,34 @@ Prediction pipeline overview:
 | **3** | Evidence checklist + optional priors → write verdict |
 
 
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Expected siblings under $BIO_ROOT:
+#   nanobot-bio/
+#   rhobind_agent_delivery/
+#   rhobind_testdata_v2/   (optional; LOO expand)
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
+Do not hardcode a trial-machine absolute path; `nbio` discovers `DELIVERY_ROOT` / AF3 / conda on the host.
+
 ## Quick start
 
 ```bash
-git clone https://github.com/JoeSun-421/Nanobot-bio.git
-cd Nanobot-bio
-# Place rhobind_agent_delivery/ next to this repo (sibling; not in this git repo):
-#   parent/Nanobot-bio
-#   parent/rhobind_agent_delivery
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
 
 ./scripts/nbio setup              # first-time: agent .venv + science conda
 nanobot-bio onboard               # pick LLM provider + API key → .env + config refs
 ./scripts/nbio start              # daily one-shot: discover paths → heal AF3/.env → chat
-# ./scripts/nbio start --dry-run  # show GPU/AF3 candidates only (optional heal)
-# source scripts/nbio && nanobot-bio doctor   # step-wise activate + capability table
+# ./scripts/nbio start --dry-run
+# source scripts/nbio && nanobot-bio doctor
 ```
 
-Step-by-step install and path notes: [INSTALL.md](INSTALL.md). Scripts entry and portable path discovery: [`scripts/README.md`](scripts/README.md). Delivery bridge: [`app/backends/delivery/README.md`](app/backends/delivery/README.md).
+Install: [INSTALL.md](INSTALL.md) · [中文](INSTALL.zh.md). Scripts: [`scripts/README.md`](scripts/README.md). Delivery bridge: [`app/backends/delivery/README.md`](app/backends/delivery/README.md).
 
 One-shot prediction example:
 
@@ -74,7 +85,9 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | `nanobot-bio onboard` | Write LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden acceptance (no LLM; `own-head` is its alias) |
 | `nanobot-bio run-eval` | LOO ceiling comparison and modality ablation |
+| `nanobot-bio evolve` | Offline self-evolution → `config/evolved.candidate.yaml` |
 | `nanobot-bio heavy-loo` | Hide-own-head LOO: recovered AUPRC and instance-level metrics |
+| `nanobot-bio expand-loo-matrix` | Expand agent-side LOO transfer CSV copy |
 | `python -m rbp_eval.accept.transfer_calibration` | Transfer calibration report (also `bash scripts/cert/certify.sh --transfer`) |
 | `nanobot-bio gate` | Code/layout gate: ruff + pytest + layout |
 
@@ -95,13 +108,14 @@ Env vars, Docker, and more detailed install paths: [INSTALL.md](INSTALL.md).
 
 ## Package map
 
-Each package has a separate English + Chinese README pair (`README.md` / `README.zh.md`) covering features, implementation, usage, and design rationale.
+Each package has English + Chinese README (`README.md` / `README.zh.md`): role, Linux usage under `$BIO_ROOT`, and links upstream/downstream.
 
 | Path | Role | Docs |
 |------|------|------|
 | [`app/`](app/) | CLI + orchestration; [`cli/`](app/cli/), [`backends/delivery/`](app/backends/delivery/) | [EN](app/README.md) · [中文](app/README.zh.md) |
-| [`nanobot/`](nanobot/) | Slim runtime + skill/tools SoT; [`agent/`](nanobot/agent/), [`sdk/`](nanobot/sdk/) | [EN](nanobot/README.md) · [中文](nanobot/README.zh.md) |
+| [`nanobot/`](nanobot/) | Slim runtime + skill/tools SoT; [`agent/tools/rbp/`](nanobot/agent/tools/rbp/) | [EN](nanobot/README.md) · [中文](nanobot/README.zh.md) |
 | [`rbp_eval/`](rbp_eval/) | Offline LOO / accept / evolve | [EN](rbp_eval/README.md) · [中文](rbp_eval/README.zh.md) |
+| [`docs/`](docs/) | Product guides (self-evolution, LOO, AF3, memory, …) | [EN](docs/README.md) · [中文](docs/README.zh.md) |
 | [`config/`](config/) | Defaults + evolved YAML | [EN](config/README.md) · [中文](config/README.zh.md) |
 | [`scripts/`](scripts/) | Setup / CI / cert / Docker / data helpers | [EN](scripts/README.md) · [中文](scripts/README.zh.md) |
 | [`tests/`](tests/) | Pytest contracts | [EN](tests/README.md) · [中文](tests/README.zh.md) |
@@ -112,11 +126,10 @@ Each package has a separate English + Chinese README pair (`README.md` / `README
 
 | Doc | Contents |
 |-----|----------|
-| [INSTALL.md](INSTALL.md) | Setup, env vars, Docker, acceptance, CI runners |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, memory, bridge, eval/promote, slim vendor, release |
+| [INSTALL.md](INSTALL.md) · [INSTALL.zh.md](INSTALL.zh.md) | Setup, env vars, Docker, acceptance, CI |
+| [ARCHITECTURE.md](ARCHITECTURE.md) · [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md) | Layers, memory, bridge, eval/promote, release |
 | [AGENTS.md](AGENTS.md) | Agent / CI must / must-not |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [`docs/README.md`](docs/README.md) | Local docs map (`theory/` · `product/` · `guides/` · `eval/` · `reports/`) |
-| [`docs/theory/DELIVERY_THEORY_BASIS.zh.md`](docs/theory/DELIVERY_THEORY_BASIS.zh.md) | Delivery-side theory (RNA-FM / RNA·protein LMs / biomedical agents) |
-| [`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md) | Feishu summary report (progress + Nanobot architecture + delivery bridge; local `docs/`) |
-| [`docs/eval/transfer_test_prompts.md`](docs/eval/transfer_test_prompts.md) | Transfer smoke prompts (20 cases) |
+| [`docs/README.md`](docs/README.md) · [中文](docs/README.zh.md) | Guides index |
+| [`docs/product/SELF_EVOLUTION.md`](docs/product/SELF_EVOLUTION.md) | Self-evolution five steps |
+| [`docs/guides/LOO_EXPAND.md`](docs/guides/LOO_EXPAND.md) | Expand agent-side LOO matrix |

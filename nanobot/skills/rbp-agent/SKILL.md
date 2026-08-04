@@ -65,7 +65,7 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 
 1. **Registered science tools only** — use any tool exposed in the registry / [§9 Tool map](#9-tool-map) (full delivery surface by default).  
    **Never:** `exec`, shell, `pip`, editors, `web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`.  
-   Papers → `literature_search` only (**≤ 1** call per query; prefer omit `query` for related-protein default).  
+   Papers → `literature_search` only (**≤ 1** call per query; you may craft a similar-RBP Europe PMC `query`, or omit for `default_literature_query`).  
    **Path paste:** `.fasta`/`.fa` → `score_binding_fasta` (must include RBP); prompt-suite `.md` under `docs/eval/` (e.g. `transfer_test_prompts.md`, `UNSEEN_RBP_TEST_PROMPTS_20.md`) or “run this file …” → **`run_prompt_suite`** (outer-loop batch; one turn per case); other allowlisted `.md` under docs/skills → `read_project_doc` (chunk via `next_offset` if `eof=false`). Do **not** use `read_project_doc` for FASTA or for suite runs.
 2. **No fabricated biology** — do not invent sequences, pLDDT, citations, or probabilities. Never put a UniProt ID in a `sequence` field.
 3. **Catalogue addressing** — prefer `alias` / `uniprot` on seq / struct / domain tools. `resolve_rbp` already returns `sequence` when matched.
@@ -152,7 +152,7 @@ Full playbooks: [`references/stages.md`](references/stages.md).
 | --- | --- |
 | **Stage 0** Own-head | `resolve_rbp` → `in_panel=true` → `predict_interaction` **once** → JSON → **STOP** |
 | **Near-known** | `check_near_known` (exact catalogue AA **or** ≥95% id / exact resolve) → **own-head Fast Path** on the matched headed catalogue RBP; disclose near_match; STOP (do not force multi-donor transfer). **`force_transfer=true` (LOO):** disables near-match own-head; foreign donors only (single foreign donor OK); never predict on the query/target’s own head; disclose near_match in caveats |
-| **Stage 1** Retrieve | `lookup_proxy_cache` → characterize → parallel retrieve (**seq + struct + function** = UniProt annotation + literature peer retrieve) → `fuse_similarity_views` (authoritative numeric `s_i`; lit soft hits auto-injected at weight 0.1) → **`commit_proxy_candidates`** (selection only; never invent `s_i`) → **`confidence_abstain`** |
+| **Stage 1** Retrieve | `lookup_proxy_cache` → characterize → **seq + struct + domain first** → `literature_search` (craft or default query) → optional `record_lit_peer_decisions` + budgeted seq/struct recompare for lit-only peers → `fuse_similarity_views` (authoritative `s_i`; lit corroboration weight 0.1 only for Donors_SS overlap) → **`commit_proxy_candidates`** (selection only; never invent `s_i`) → **`confidence_abstain`** |
 | **Stage 2** Predict | Batched `predict_interaction` on committed donors (after abstain). Default aggregate **`weighted`**. No invent / no retry on OOM |
 | **Stage 3** Integrate | Evidence checklist (≥2 fails → `confidence=low`; surface **caveats**); optional `transfer_prior_lookup` / `donor_quality_prior`. `p_hat` already from weighted aggregation — do not replace with invented numbers |
 
@@ -165,7 +165,7 @@ Full playbooks: [`references/stages.md`](references/stages.md).
 6. **Sequence-only / anonymous targets** (no accession): skip tools that require UniProt (or call only with clear **donor/homolog** attribution); structure path = AFDB miss → `predict_structure` ≤ 1. Do not thrash `get_func_annotation` / `literature_search` on homolog IDs without labeling them as donor/homolog annotations.
 **Sequence:** ESM-C + MMseqs dual axes. **Aggregate default:** `weighted` — delivery `similarity_weighted_vote`: `Σ(s_i × tprior_i × quality_i × prob_i) / Σ(s_i × tprior_i × quality_i)`. `s_i` = committed proxy similarity; `tprior_i` / `quality_i` from `transfer_prior_lookup` / `donor_quality_prior` (auto-fetched in `predict_interaction` when enabled). Verdict `confidence` is rule-based (Stage-3 checklist), not per-donor weighting.
 **`p_hat`:** raw from predict tools only (weighted over committed proxies on transfer).
-**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** retrieve axes on the unseen path. Prefer omitting `literature_search.query` (server default targets **proteins similar/related** to the RBP — family/paralogs/homologs — not ultra-narrow CLIP+year filters). Literature returns paper snippets **and** low-weight catalogue co-mention soft hits (`literature_cooccurrence`, weight 0.1) that `fuse_similarity_views` auto-injects under the Function peer view when `axis_usable`. Off-topic papers → empty soft hits + `literature_off_topic` / `literature_axis_unusable` (caveat only; do not invent `s_i`). Literature is a **peer retrieve axis**, not only a Stage-3 remedy, and never a raw-abstract binding vote. If a tool errors, surface `literature_unavailable` as a **caveat only** — do **not** substitute model-memory annotations.
+**Function/annotation axis (unseen path):** `get_func_annotation` and `literature_search` are **required** on the unseen path. Prefer **seq/struct/domain before** `literature_search` so Donors_SS exist for corroboration. You may **craft** a Europe PMC `query` aimed at similar/related RBPs (family/paralogs/function); omit `query` for `default_literature_query`. Rule extract requires **same-paper query AND catalogue peer** (+ function cues raise `rule_score` evidence strength only). Soft fuse hits (`literature_cooccurrence`, weight 0.1) apply **only** when the peer is already in Donors_SS (functional corroboration — not a new similarity). Lit-only peers (≤3): call `record_lit_peer_decisions` (`recompare_seq` / `recompare_struct` / `drop` + rationale), then budgeted seq/struct; **only tool scores** enter fuse — never invent `s_i`. Off-topic → empty soft hits + `literature_off_topic` / `literature_axis_unusable` (caveat only). On tool error → `literature_unavailable` caveat only — do **not** substitute model-memory annotations.
 
 ---
 
@@ -210,7 +210,7 @@ Unseen-path Stage 2/3 integrate tools (`transfer_prior_lookup`, `donor_quality_p
 
 | Tool | When to use |
 | --- | --- |
-| `lookup_proxy_cache` | Before multi-view; hit → skip retrieve (still abstain before predict) |
+| `lookup_proxy_cache` | Before multi-view; **hit hard-blocks Stage-1 retrieve** (`stage1_bypassed`) → fuse/commit with cached proxies (still abstain before predict). Tools listed in promoted `tools.soft_disabled` are skipped / return `disabled_by_evolution` (offline self-evolution; see `docs/product/SELF_EVOLUTION.md`) |
 | `check_near_known` | Stage 0 near-known Fast Path (≥95% identity) |
 | `seq_similarity` | Dual-axis `hits_emb` + `hits_seq` |
 | `rna_blastn` | Peaks / Delivery RNA search (proposal Table 1 optional RNA axis) |
@@ -225,7 +225,8 @@ Unseen-path Stage 2/3 integrate tools (`transfer_prior_lookup`, `donor_quality_p
 | `get_func_annotation` | Function + category + optional PDB ≤ 1 / UniProt. **Required on the unseen path** — function/category/RNA-motif annotations cited in the explanation must come from here (or `literature_search`), never from model memory |
 | `function_category` | Raw delivery category (also merged into get_func_annotation) |
 | `pdb_metadata` | Optional PDB annotation |
-| `literature_search` | ≤ 1 paper search for **related/similar RBPs** (prefer omit `query`). Returns snippets + soft `hits_lit` (`literature_cooccurrence`) for low-weight fuse; also feeds Checkpoint 1/2 narrative. **Required on unseen path**; on error → `literature_unavailable`; off-topic → `axis_usable=false`, empty soft hits, `literature_off_topic` (caveat only) |
+| `literature_search` | ≤ 1 paper search for **related/similar RBPs** (craft `query` or omit for default). Returns papers + `lit_peers` / `corroborated` / `lit_only_peers`. Soft `hits_lit` = corroboration of Donors_SS only (weight 0.1). **Required on unseen path**; on error → `literature_unavailable`; off-topic → `axis_usable=false`, empty soft hits, `literature_off_topic` (caveat only) |
+| `record_lit_peer_decisions` | After `lit_only_peers`: record `recompare_seq` / `recompare_struct` / `drop` + rationale (≤3); then call seq/struct if recompare — never invent scores |
 | `score_binding_fasta` | User pasted an allowlisted `.fasta`/`.fa` path + RBP → batch own-head scores; returns AUPRC/AUROC summary + CSV path (not full sequences in chat). CLI: `nanobot-bio agent --query RBP --fasta path` |
 | `run_prompt_suite` | User pasted a **prompt-suite** path under `docs/eval/` (or “run this file”) → parse fenced cases and run outer-loop batch (one agent turn / case → JSONL/summary). Do **not** predict all cases in the current turn. CLI: `nanobot-bio batch-prompts`; chat: paste path or `/suite PATH` |
 | `read_project_doc` | User pasted an allowlisted `.md` path under `docs/` or `skills/` → return text chunk; continue with `offset=next_offset` until `eof`. Not for suite batch runs (use `run_prompt_suite`). Not general `read_file` |
@@ -281,7 +282,7 @@ Any `predict_interaction` killed / timeout → **no retry** → `"p_hat": null`,
 - [ ] RNA axis uses `rna_blastn` when enabled (never claim RNA-FM)?
 - [ ] Checklist failures ≥ 2 → low confidence?
 - [ ] Unseen path includes `caveats`?
-- [ ] Unseen path called `get_func_annotation` + `literature_search` (or surfaced `literature_unavailable`); no motif/annotation from model memory?
+- [ ] Unseen path called `get_func_annotation` + `literature_search` (or surfaced `literature_unavailable`); lit corroboration only for Donors_SS; lit-only via `record_lit_peer_decisions` + tool recompare (no invented `s_i`); no motif/annotation from model memory?
 - [ ] AFDB miss / no-UniProt QUERY → `predict_structure` once with `sequence=` (not a homolog UniProt) → else `structure_axis_unavailable`; never sim=`0`?
 - [ ] `domain_architecture` `domain_source:"none"` → `domain_empty` caveat?
 - [ ] Final message is **only** the JSON object (no fences)?

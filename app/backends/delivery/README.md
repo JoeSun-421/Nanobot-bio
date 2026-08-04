@@ -6,6 +6,16 @@ Read-only bridge from the agent process into sibling `rhobind_agent_delivery`.
 
 ## Purpose
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 All science I/O from the product agent must pass through this package. Light tools may run in-process; heavy tools spawn `conda run` subprocesses with JSON payloads. Mapping is fail-closed against delivery’s `agent/tools/registry.json` — stale bindings hard-fail rather than calling the wrong script. This package never invents binding scores when an env or binary is missing.
 
 End-to-end stage flow (own-head → retrieve → fuse → predict → integrate) is described in [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md). Aggregation authority for transfer `p_hat` remains delivery `similarity_weighted_vote`.

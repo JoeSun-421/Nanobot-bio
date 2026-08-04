@@ -10,6 +10,16 @@ Implements multi-view fusion used when ranking donor RBPs and aggregating transf
 
 ## Layout
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | Module | Role |
 |--------|------|
 | `fuse_hits.py` | `fuse_rbp_hits`, `fuse_proxy_candidates`, `aggregate_p_hat`, `label_from_p_hat` |

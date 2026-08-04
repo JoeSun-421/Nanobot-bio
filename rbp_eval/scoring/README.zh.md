@@ -10,6 +10,16 @@
 
 ## 布局
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 | 模块 | 角色 |
 |------|------|
 | `fuse_hits.py` | `fuse_rbp_hits`、`fuse_proxy_candidates`、`aggregate_p_hat`、`label_from_p_hat` |

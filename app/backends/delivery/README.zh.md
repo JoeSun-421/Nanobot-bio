@@ -6,6 +6,16 @@
 
 ## 用途
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "$BIO_ROOT/nanobot-bio"
+source scripts/nbio.sh
+```
+
 产品 agent 的全部科学 I/O 必须经本包。轻量工具可进程内执行；重工具以 JSON payload 走 `conda run` 子进程。mapping 相对 delivery 的 `agent/tools/registry.json` **失败即关闭**——陈旧绑定硬失败，而不是调用错误脚本。环境或二进制缺失时，本包绝不编造绑定分数。
 
 端到端阶段流（own-head → retrieve → fuse → predict → integrate）见 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)。transfer `p_hat` 的聚合权威仍是 delivery 的 `similarity_weighted_vote`。
