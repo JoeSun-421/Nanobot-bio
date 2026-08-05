@@ -52,7 +52,7 @@ build_parser().print_help()
 **日常用户路径**
 
 ```bash
-source scripts/nbio                 # 可选日常激活
+source scripts/nbio.sh                 # 可选日常激活
 nanobot-bio doctor                  # 能力表；--verbose 打印路径
 nanobot-bio onboard                 # 交互式 LLM 配置
 nanobot-bio chat                    # 多轮

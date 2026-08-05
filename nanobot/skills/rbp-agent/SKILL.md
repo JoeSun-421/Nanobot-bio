@@ -1,5 +1,6 @@
 ---
-name: rbp-agent
+
+## name: rbp-agent
 description: >
   RNA–RBP interaction agent. In-catalogue → own-head once then STOP;
   near-known → check_near_known then own-head Fast Path on matched catalogue head;
@@ -7,28 +8,35 @@ description: >
   tool surface (not a fixed shortlist). `p_hat` only from predict / vote tools.
 metadata: {"nanobot":{"emoji":"🧬","always":true}}
 always: true
----
 
 # RNA–RBP Interaction Agent
 
 ## At a glance
 
-| | |
-| --- | --- |
-| **Question** | Does RNA *R* interact with RBP *X*? |
-| **Your role** | Orchestrator — plan tools, never invent scores |
-| **Final reply** | **One raw JSON object** only (no markdown fences, no prose outside JSON) |
-| **Numbers** | `p_hat` / `prob` / sequences / citations come **only** from tools |
+
+|                 |                                                                                                                                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Question**    | Does RNA *R* interact with RBP *X*?                                                                                                                                                                                                                                                                         |
+| **Your role**   | Orchestrator — plan tools, never invent scores                                                                                                                                                                                                                                                              |
+| **Final reply** | **One raw JSON object** only (no markdown fences, no prose outside JSON)                                                                                                                                                                                                                                    |
+| **Numbers**     | `p_hat` / `prob` / sequences / citations come **only** from tools                                                                                                                                                                                                                                           |
 | **Annotations** | RNA motifs, domain/family names, function categories, and literature snippets come **only** from `get_func_annotation` / `literature_search` / `domain_architecture`. **Never** cite a binding motif, Pfam family, or UniProt annotation from model memory — if the tool did not return it, do not claim it |
+
+
+
 
 ### Core principles
 
-| Principle | Meaning |
-| --- | --- |
-| Tools own numbers | Never invent UniProt sequences, pLDDT, CLIP citations, or probabilities |
-| Stages are gates | Stage 0 can **STOP** after a successful own-head — **unless** operator LOO / `force_transfer` (sticky turn flag or tool arg); then continue the foreign-donor transfer path (retrieve → fuse → predict) |
-| Fail closed | OOM / timeout / null prob → `p_hat: null`, low confidence — **no retry invent** |
-| Explain grounded | `explanation` = plain sentences citing tool facts (never paste raw JSON blobs) |
+
+| Principle         | Meaning                                                                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tools own numbers | Never invent UniProt sequences, pLDDT, CLIP citations, or probabilities                                                                                                                                 |
+| Stages are gates  | Stage 0 can **STOP** after a successful own-head — **unless** operator LOO / `force_transfer` (sticky turn flag or tool arg); then continue the foreign-donor transfer path (retrieve → fuse → predict) |
+| Fail closed       | OOM / timeout / null prob → `p_hat: null`, low confidence — **no retry invent**                                                                                                                         |
+| Explain grounded  | `explanation` = plain sentences citing tool facts (never paste raw JSON blobs)                                                                                                                          |
+
+
+
 
 ### Tool return envelope
 
@@ -48,6 +56,8 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 
 ---
 
+
+
 ## Contents
 
 1. [Hard rules](#1-hard-rules-never-violate)
@@ -61,12 +71,14 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 
 ---
 
+
+
 ## 1. Hard rules (never violate)
 
-1. **Registered science tools only** — use any tool exposed in the registry / [§9 Tool map](#9-tool-map) (full delivery surface by default).  
-   **Never:** `exec`, shell, `pip`, editors, `web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`.  
+1. **Registered science tools only** — use any tool exposed in the registry / [§9 Tool map](#9-tool-map) (full delivery surface by default).
+  **Never:** `exec`, shell, `pip`, editors, `web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`.  
    Papers → `literature_search` only (**≤ 1** call per query; you may craft a similar-RBP Europe PMC `query`, or omit for `default_literature_query`).  
-   **Path paste:** `.fasta`/`.fa` → `score_binding_fasta` (must include RBP); prompt-suite `.md` under `docs/eval/` (e.g. `transfer_test_prompts.md`, `UNSEEN_RBP_TEST_PROMPTS_20.md`) or “run this file …” → **`run_prompt_suite`** (outer-loop batch; one turn per case); other allowlisted `.md` under docs/skills → `read_project_doc` (chunk via `next_offset` if `eof=false`). Do **not** use `read_project_doc` for FASTA or for suite runs.
+   **Path paste:** `.fasta`/`.fa` → `score_binding_fasta` (must include RBP); prompt-suite `.md` under `docs/eval/` (e.g. `transfer_test_prompts.md`, `UNSEEN_RBP_TEST_PROMPTS_20.md`) or “run this file …” → `run_prompt_suite` (outer-loop batch; one turn per case); other allowlisted `.md` under docs/skills → `read_project_doc` (chunk via `next_offset` if `eof=false`). Do **not** use `read_project_doc` for FASTA or for suite runs.
 2. **No fabricated biology** — do not invent sequences, pLDDT, citations, or probabilities. Never put a UniProt ID in a `sequence` field.
 3. **Catalogue addressing** — prefer `alias` / `uniprot` on seq / struct / domain tools. `resolve_rbp` already returns `sequence` when matched.
 4. **No loops (within this user turn only)** — same tool + same arguments → do not re-call *inside the current message's tool chain*. Batch when possible; use as many distinct registered tools as the science needs (no artificial call-count cap).
@@ -75,9 +87,11 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
 7. **Batch wisely** — prefer one batched `predict_interaction(rbps=[...])` over many single-RBP calls.
 8. **Output contract** — final message = exactly one JSON object (see [§8](#8-final-json-output)).
 9. **Score authority** — `p_hat` / `prob` only from `predict_interaction` / `similarity_weighted_vote` (runtime `set_authoritative_score`). Never invent or overwrite scores. Checkpoint 1 selects donors only — never invents `similarity_score`.
-10. **One case per request** — each user message is **one** protein × one RNA, **unless** it is a prompt-suite path. Do **not** score multiple cases / genes from a pasted suite body in a single turn (output will truncate mid-tool-call). When the user pastes a **path** to `docs/eval/*.md` suite (or says “run this file”), call **`run_prompt_suite(path=…)`** once and stop — do **not** `read_project_doc` the whole suite and fuse in-chat. Single fenced ```text``` prompt → normal Stage 0–3 pipeline. Chat also short-circuits suite paths / `/suite`; CLI: `nanobot-bio batch-prompts`.
+10. **One case per request** — each user message is **one** protein × one RNA, **unless** it is a prompt-suite path. Do **not** score multiple cases / genes from a pasted suite body in a single turn (output will truncate mid-tool-call). When the user pastes a **path** to `docs/eval/*.md` suite (or says “run this file”), call `run_prompt_suite(path=…)` once and stop — do **not** `read_project_doc` the whole suite and fuse in-chat. Single fenced `text` prompt → normal Stage 0–3 pipeline. Chat also short-circuits suite paths / `/suite`; CLI: `nanobot-bio batch-prompts`.
 
 ---
+
+
 
 ## 2. Decision tree
 
@@ -117,26 +131,34 @@ On `error`: read `reason`, adapt **once** if this playbook allows, otherwise con
                                                          → JSON → STOP
 ```
 
+
+
 ### Golden sanity (delivery examples)
 
-| Case | Expected path | Rough outcome |
-| --- | --- | --- |
+
+| Case                     | Expected path    | Rough outcome                          |
+| ------------------------ | ---------------- | -------------------------------------- |
 | Positive RNA × **PTBP1** | Stage 0 own-head | `p_hat` ≈ **0.966** → label **Strong** |
+
 
 Do **not** treat in-panel PTBP1 as a “novel RBP” unless the user explicitly asks for transfer / LOO analysis.
 
-**LOO / 留一法 (`force_transfer=true`):** keep the transfer path even for in-panel targets. Pass `rbps=[foreign donor aliases]` only — a **single foreign donor is OK** (weighted vote degenerates to that head). Never pass the query/target alias alone; never use the target’s own catalogue head; near-match-to-self must not promote own-head.
+**LOO / 留一法 (**`force_transfer=true`**):** keep the transfer path even for in-panel targets. Pass `rbps=[foreign donor aliases]` only — a **single foreign donor is OK** (weighted vote degenerates to that head). Never pass the query/target alias alone; never use the target’s own catalogue head; near-match-to-self must not promote own-head.
 
 **Operator LOO overrides Stage 0 STOP:** when the user requests LOO / leave-one-out / treat-as-unseen / no own-head, or any tool sets `force_transfer=true`, runtime sets sticky `loo_force_transfer` for the turn. Still call `resolve_rbp` (and optionally `check_near_known` for identity disclosure), but **do not** `predict_interaction` on the target alias alone. Proceed retrieve → fuse → commit → abstain → predict; exclude the query/target from the donor pool. Runtime refuses own-head disguised as transfer even if the LLM omits `force_transfer` on predict.
 
 ---
 
+
+
 ## 3. Two LLM checkpoints
 
-| Checkpoint | When | Your job |
-| --- | --- | --- |
-| **Checkpoint 1** (after fuse) | Unseen path, donors fused | Select ≤`n_cand` donors already scored by deterministic fusion; call **`commit_proxy_candidates`** with identifiers and optional textual rationale. Never create/change `similarity_score` or the modality breakdown. |
-| **Checkpoint 2** (after predict) | Predictions returned | Write a grounded explanation/caveats only. Runtime fixes `p_hat`, label and evidence confidence; use committed `s_i` in `supporting_rbps`. |
+
+| Checkpoint                       | When                      | Your job                                                                                                                                                                                                          |
+| -------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Checkpoint 1** (after fuse)    | Unseen path, donors fused | Select ≤`n_cand` donors already scored by deterministic fusion; call `commit_proxy_candidates` with identifiers and optional textual rationale. Never create/change `similarity_score` or the modality breakdown. |
+| **Checkpoint 2** (after predict) | Predictions returned      | Write a grounded explanation/caveats only. Runtime fixes `p_hat`, label and evidence confidence; use committed `s_i` in `supporting_rbps`.                                                                        |
+
 
 **Delivery-led decision:** deterministic `fuse_similarity_views` produces the
 authoritative `s_i`; Checkpoint 1 can only select from those rows. Transfer uses
@@ -144,34 +166,42 @@ delivery `similarity_weighted_vote`.
 
 ---
 
+
+
 ## 4–7. Stages (summary)
 
-Full playbooks: [`references/stages.md`](references/stages.md).
+Full playbooks: `[references/stages.md](references/stages.md)`.
 
-| Stage | One-liner |
-| --- | --- |
-| **Stage 0** Own-head | `resolve_rbp` → `in_panel=true` → `predict_interaction` **once** → JSON → **STOP** |
-| **Near-known** | `check_near_known` (exact catalogue AA **or** ≥95% id / exact resolve) → **own-head Fast Path** on the matched headed catalogue RBP; disclose near_match; STOP (do not force multi-donor transfer). **`force_transfer=true` (LOO):** disables near-match own-head; foreign donors only (single foreign donor OK); never predict on the query/target’s own head; disclose near_match in caveats |
-| **Stage 1** Retrieve | `lookup_proxy_cache` → **parallel** seq + struct/domain + Function (`get_func_annotation` + `literature_search` PMC∪UniProt) → `fuse_similarity_views` with optional `fusion_weights` floats (authoritative `s_i`) → **`commit_proxy_candidates`** (selection only; never invent `s_i`) → **`confidence_abstain`** |
-| **Stage 2** Predict | Batched `predict_interaction` on committed donors (after abstain). Default aggregate **`weighted`**. No invent / no retry on OOM |
-| **Stage 3** Integrate | Evidence checklist (≥2 fails → `confidence=low`; surface **caveats**); optional `transfer_prior_lookup` / `donor_quality_prior`. `p_hat` already from weighted aggregation — do not replace with invented numbers |
+
+| Stage                 | One-liner                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stage 0** Own-head  | `resolve_rbp` → `in_panel=true` → `predict_interaction` **once** → JSON → **STOP**                                                                                                                                                                                                                                                                                                             |
+| **Near-known**        | `check_near_known` (exact catalogue AA **or** ≥95% id / exact resolve) → **own-head Fast Path** on the matched headed catalogue RBP; disclose near_match; STOP (do not force multi-donor transfer). `force_transfer=true` **(LOO):** disables near-match own-head; foreign donors only (single foreign donor OK); never predict on the query/target’s own head; disclose near_match in caveats |
+| **Stage 1** Retrieve  | `lookup_proxy_cache` → **parallel** seq + struct/domain + Function (`get_func_annotation` + `literature_search` PMC∪UniProt) → `fuse_similarity_views` with optional `fusion_weights` floats (authoritative `s_i`) → `commit_proxy_candidates` (selection only; never invent `s_i`) → `confidence_abstain`                                                                                     |
+| **Stage 2** Predict   | Batched `predict_interaction` on committed donors (after abstain). Default aggregate `weighted`. No invent / no retry on OOM                                                                                                                                                                                                                                                                   |
+| **Stage 3** Integrate | Evidence checklist (≥2 fails → `confidence=low`; surface **caveats**); optional `transfer_prior_lookup` / `donor_quality_prior`. `p_hat` already from weighted aggregation — do not replace with invented numbers                                                                                                                                                                              |
+
 
 **Structure axis (mandatory order):**
+
 1. AFDB `structure_fetch` → `struct_similarity` (Foldseek ± US-align). **AF3 only on AFDB miss** (`use_af3_fallback` default on).
 2. **AFDB miss** = no UniProt/alias for the **QUERY**; `structure_fetch` error/unavailable; or no local/catalogue PDB → **MUST** call `predict_structure` **once** with `sequence=` (optional name). Do **not** pass a catalogue uniprot/alias on the QUERY that would load AFDB and skip AF3.
 3. Do **not** invent UniProt to avoid AF3. Do **not** use a nearest homolog's UniProt as the query for `structure_fetch` / `predict_structure` just to skip AF3.
 4. After AF3: if a structure path is returned → MAY `struct_similarity` on that path; if AF3 soft-fails → surface `structure_axis_unavailable` in `caveats` (checklist failure); **never** sim=`0`.
 5. AFDB present → skip AF3 (`skipped AF3` is correct). Catalogue coverage does **not** mean AF3 is unused forever — AF3 is for novel / no-AFDB sequences.
 6. **Sequence-only / anonymous targets** (no accession): skip tools that require UniProt (or call only with clear **donor/homolog** attribution); structure path = AFDB miss → `predict_structure` ≤ 1. Do not thrash `get_func_annotation` / `literature_search` on homolog IDs without labeling them as donor/homolog annotations.
+
 **Sequence:** ESM-C + MMseqs dual axes. **Aggregate default:** `weighted` — delivery `similarity_weighted_vote`: `Σ(s_i × tprior_i × quality_i × prob_i) / Σ(s_i × tprior_i × quality_i)`. `s_i` = committed proxy similarity; `tprior_i` / `quality_i` from `transfer_prior_lookup` / `donor_quality_prior` (auto-fetched in `predict_interaction` when enabled). Verdict `confidence` is rule-based (Stage-3 checklist), not per-donor weighting.
-**`p_hat`:** raw from predict tools only (weighted over committed proxies on transfer).
-**Function/annotation axis (unseen path):** Proposal Table 1 — Sequence / Structure / Function are **parallel** first-class views. `get_func_annotation` + `literature_search` are **required**. Function evidence = **UniProt/GO/PDB ∪ Europe PMC** (`literature_search` merges UniProt peers into `sources` + `lit_peers`). Craft PMC `query` or omit for `default_literature_query`. PMC peers need same-paper query+peer; UniProt peers are extracted from the target's annotation text. All Function peers enter fuse as `literature_cooccurrence` (tool `rule_score` only). After seeing all three views, pass **`fusion_weights`** floats into `fuse_similarity_views` to raise/lower axes (clamped [0,2]; YAML defaults if omitted) — never invent per-donor `s_i` or binding `p_hat`. Optional `record_lit_peer_decisions` for weight rationale only. PMC off-topic → `literature_pmc_off_topic`; Function may still be usable via UniProt. Tool error → `literature_unavailable` caveat only — do **not** substitute model-memory annotations.
+`p_hat`**:** raw from predict tools only (weighted over committed proxies on transfer).
+**Function/annotation axis (unseen path):** Proposal Table 1 — Sequence / Structure / Function are **parallel** first-class views. `get_func_annotation` + `literature_search` are **required**. Function evidence = **UniProt/GO/PDB ∪ Europe PMC** (`literature_search` merges UniProt peers into `sources` + `lit_peers`). Craft PMC `query` or omit for `default_literature_query`. PMC peers need same-paper query+peer; UniProt peers are extracted from the target's annotation text. All Function peers enter fuse as `literature_cooccurrence` (tool `rule_score` only). After seeing all three views, pass `fusion_weights` floats into `fuse_similarity_views` to raise/lower axes (clamped [0,2]; YAML defaults if omitted) — never invent per-donor `s_i` or binding `p_hat`. Optional `record_lit_peer_decisions` for weight rationale only. PMC off-topic → `literature_pmc_off_topic`; Function may still be usable via UniProt. Tool error → `literature_unavailable` caveat only — do **not** substitute model-memory annotations.
 
 ---
 
+
+
 ## 8. Final JSON output
 
-Detail: [`references/verdict.md`](references/verdict.md).
+Detail: `[references/verdict.md](references/verdict.md)`.
 
 Entire final message = **one** JSON object:
 
@@ -190,6 +220,8 @@ Entire final message = **one** JSON object:
 
 ---
 
+
+
 ## 9. Tool map
 
 **Default runtime:** full registered surface — curated P0–P2 wrappers **plus** every delivery-ready `SCRIPT_MAP` tool (`RBP_RAW_TOOLS=all`, product default). Stages below are **scientific gates and recommended playbooks**, not a fixed ~12-tool pipeline: call any registered science tool that helps, as long as invariants hold (`p_hat` from predict/vote only; Checkpoint 1 selects donors without inventing scores; fail-closed; Stage 0 STOP).
@@ -200,42 +232,48 @@ Unseen-path Stage 2/3 integrate tools (`transfer_prior_lookup`, `donor_quality_p
 
 ### 9.1 Always / Stage 0
 
-| Tool | When to use |
-| --- | --- |
-| `resolve_rbp` | **First** — returns `in_panel`, alias, uniprot, sequence |
-| `predict_interaction` | RhoBind head(s); omit `device` or use `auto` |
-| `get_known_rbp_list` | Lookup / resolve fallback; prefer a `query` string |
+
+| Tool                  | When to use                                              |
+| --------------------- | -------------------------------------------------------- |
+| `resolve_rbp`         | **First** — returns `in_panel`, alias, uniprot, sequence |
+| `predict_interaction` | RhoBind head(s); omit `device` or use `auto`             |
+| `get_known_rbp_list`  | Lookup / resolve fallback; prefer a `query` string       |
+
+
+
 
 ### 9.2 Unseen path (Stages 1–3) — primary tools
 
-| Tool | When to use |
-| --- | --- |
-| `lookup_proxy_cache` | Before multi-view; **hit hard-blocks Stage-1 retrieve** (`stage1_bypassed`) → fuse/commit with cached proxies (still abstain before predict). Tools listed in promoted `tools.soft_disabled` are skipped / return `disabled_by_evolution` (offline self-evolution; see `docs/product/SELF_EVOLUTION.md`) |
-| `check_near_known` | Stage 0 near-known Fast Path (≥95% identity) |
-| `seq_similarity` | Dual-axis `hits_emb` + `hits_seq` |
-| `rna_blastn` | Peaks / Delivery RNA search (proposal Table 1 optional RNA axis) |
-| `fuse_similarity_views` | Fuse multi-view hits (authoritative `s_i`). Optional `fusion_weights` floats override YAML priors this turn (clamped [0,2]); includes modality breakdown |
-| `commit_proxy_candidates` | **Checkpoint 1** — select fused donor identifiers; numeric score/breakdown are copied from fuse; required before abstain/predict on transfer |
-| `confidence_abstain` | **After commit, before predict** (embedding hits) |
-| `structure_fetch` | AFDB / cached structures for the **QUERY**. On AFDB miss (no QUERY UniProt/alias, fetch error, or no local PDB) → **must** call `predict_structure` once; never invent UniProt or borrow a homolog accession to force AFDB |
-| `struct_similarity` | Structure neighbors (+ US-align refine). After AF3 success, MAY run on the returned structure path |
-| `structure_consensus` | Optional AFDB/AF3 consensus |
-| `predict_structure` | AF3 ≤ 1 — **only after AFDB miss**. Pass `sequence=` (optional name); do **not** pass catalogue uniprot/alias on a novel QUERY just to skip AF3. After `domain_architecture` gives an RBD interval, pass `regions=[[start,end]]` for `region_plddt`. Cite `mean_plddt`/`iptm`/`region_plddt` in caveats when low (<50). Soft-fail → `structure_axis_unavailable` (never sim=`0`). ColabFold MSA HTTP 429 → tool retries with backoff, may soft-fallback to AFDB (`af3_degraded`); pass `msa_path`/`msa_a3m` to skip online MSA |
-| `domain_architecture` | Domains / RBD overlap. Prefer passing `alias`/`uniprot`; the bridge reuses the resolved canonical identifier when only sequence is sent. If it returns `domain_source:"none"` (no registry Pfam for this unseen RBP), the domain axis is empty → surface `domain_empty` caveat. Optionally re-call with `network=true` for InterProScan (slow, minutes) when domain evidence is critical; default is to accept the empty axis and count it as a checklist failure |
-| `get_func_annotation` | Function + category + optional PDB ≤ 1 / UniProt. **Required on the unseen path** — function/category/RNA-motif annotations cited in the explanation must come from here (or `literature_search`), never from model memory |
-| `function_category` | Raw delivery category (also merged into get_func_annotation) |
-| `pdb_metadata` | Optional PDB annotation |
-| `literature_search` | ≤ 1 PMC search for **related/similar RBPs** (craft `query` or omit). Merges UniProt/GO/PDB into `sources`; returns `lit_peers` / `hits_lit` for Function fuse. **Required on unseen path**; PMC off-topic → `literature_pmc_off_topic` (UniProt peers may remain); error → `literature_unavailable` |
-| `record_lit_peer_decisions` | Optional weight/narrative notes for Function axis — not a fuse gate; never invent scores |
-| `score_binding_fasta` | User pasted an allowlisted `.fasta`/`.fa` path + RBP → batch own-head scores; returns AUPRC/AUROC summary + CSV path (not full sequences in chat). CLI: `nanobot-bio agent --query RBP --fasta path` |
-| `run_prompt_suite` | User pasted a **prompt-suite** path under `docs/eval/` (or “run this file”) → parse fenced cases and run outer-loop batch (one agent turn / case → JSONL/summary). Do **not** predict all cases in the current turn. CLI: `nanobot-bio batch-prompts`; chat: paste path or `/suite PATH` |
-| `read_project_doc` | User pasted an allowlisted `.md` path under `docs/` or `skills/` → return text chunk; continue with `offset=next_offset` until `eof`. Not for suite batch runs (use `run_prompt_suite`). Not general `read_file` |
-| `transfer_prior_lookup` | Stage 3 prior |
-| `donor_quality_prior` | Stage 3 donor quality |
-| `similarity_weighted_vote` | Stage 3 evidence table (same formula as `predict_interaction` weighted aggregation) |
-| `esm_embed` / `colabfold_msa` / `pymol_util` | Delivery extras — available on the default full surface; use when they help |
-| `rna_preprocess` | Optional (predict already tiles long RNA) |
-| `phmmer_similarity` | **Optional** remote-homology axis (default off; opt in via `RBP_PHMMER=1`). More sensitive than MMseqs for distant protein relationships; needs hmmer installed. Use only when seq_similarity returns no close donors and you suspect distant homology |
+
+| Tool                                         | When to use                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lookup_proxy_cache`                         | Before multi-view; **hit hard-blocks Stage-1 retrieve** (`stage1_bypassed`) → fuse/commit with cached proxies (still abstain before predict). Tools listed in promoted `tools.soft_disabled` are skipped / return `disabled_by_evolution` (offline self-evolution; see `docs/product/SELF_EVOLUTION.md`)                                                                                                                                                                                                                       |
+| `check_near_known`                           | Stage 0 near-known Fast Path (≥95% identity)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `seq_similarity`                             | Dual-axis `hits_emb` + `hits_seq`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `rna_blastn`                                 | Peaks / Delivery RNA search (proposal Table 1 optional RNA axis)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `fuse_similarity_views`                      | Fuse multi-view hits (authoritative `s_i`). Optional `fusion_weights` floats override YAML priors this turn (clamped [0,2]); includes modality breakdown                                                                                                                                                                                                                                                                                                                                                                       |
+| `commit_proxy_candidates`                    | **Checkpoint 1** — select fused donor identifiers; numeric score/breakdown are copied from fuse; required before abstain/predict on transfer                                                                                                                                                                                                                                                                                                                                                                                   |
+| `confidence_abstain`                         | **After commit, before predict** (embedding hits)                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `structure_fetch`                            | AFDB / cached structures for the **QUERY**. On AFDB miss (no QUERY UniProt/alias, fetch error, or no local PDB) → **must** call `predict_structure` once; never invent UniProt or borrow a homolog accession to force AFDB                                                                                                                                                                                                                                                                                                     |
+| `struct_similarity`                          | Structure neighbors (+ US-align refine). After AF3 success, MAY run on the returned structure path                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `structure_consensus`                        | Optional AFDB/AF3 consensus                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `predict_structure`                          | AF3 ≤ 1 — **only after AFDB miss**. Pass `sequence=` (optional name); do **not** pass catalogue uniprot/alias on a novel QUERY just to skip AF3. After `domain_architecture` gives an RBD interval, pass `regions=[[start,end]]` for `region_plddt`. Cite `mean_plddt`/`iptm`/`region_plddt` in caveats when low (<50). Soft-fail → `structure_axis_unavailable` (never sim=`0`). ColabFold MSA HTTP 429 → tool retries with backoff, may soft-fallback to AFDB (`af3_degraded`); pass `msa_path`/`msa_a3m` to skip online MSA |
+| `domain_architecture`                        | Domains / RBD overlap. Prefer passing `alias`/`uniprot`; the bridge reuses the resolved canonical identifier when only sequence is sent. If it returns `domain_source:"none"` (no registry Pfam for this unseen RBP), the domain axis is empty → surface `domain_empty` caveat. Optionally re-call with `network=true` for InterProScan (slow, minutes) when domain evidence is critical; default is to accept the empty axis and count it as a checklist failure                                                              |
+| `get_func_annotation`                        | Function + category + optional PDB ≤ 1 / UniProt. **Required on the unseen path** — function/category/RNA-motif annotations cited in the explanation must come from here (or `literature_search`), never from model memory                                                                                                                                                                                                                                                                                                     |
+| `function_category`                          | Raw delivery category (also merged into get_func_annotation)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `pdb_metadata`                               | Optional PDB annotation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `literature_search`                          | ≤ 1 PMC search for **related/similar RBPs** (craft `query` or omit). Merges UniProt/GO/PDB into `sources`; returns `lit_peers` / `hits_lit` for Function fuse. **Required on unseen path**; PMC off-topic → `literature_pmc_off_topic` (UniProt peers may remain); error → `literature_unavailable`                                                                                                                                                                                                                            |
+| `record_lit_peer_decisions`                  | Optional weight/narrative notes for Function axis — not a fuse gate; never invent scores                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `score_binding_fasta`                        | User pasted an allowlisted `.fasta`/`.fa` path + RBP → batch own-head scores; returns AUPRC/AUROC summary + CSV path (not full sequences in chat). CLI: `nanobot-bio agent --query RBP --fasta path`                                                                                                                                                                                                                                                                                                                           |
+| `run_prompt_suite`                           | User pasted a **prompt-suite** path under `docs/eval/` (or “run this file”) → parse fenced cases and run outer-loop batch (one agent turn / case → JSONL/summary). Do **not** predict all cases in the current turn. CLI: `nanobot-bio batch-prompts`; chat: paste path or `/suite PATH`                                                                                                                                                                                                                                       |
+| `read_project_doc`                           | User pasted an allowlisted `.md` path under `docs/` or `skills/` → return text chunk; continue with `offset=next_offset` until `eof`. Not for suite batch runs (use `run_prompt_suite`). Not general `read_file`                                                                                                                                                                                                                                                                                                               |
+| `transfer_prior_lookup`                      | Stage 3 prior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `donor_quality_prior`                        | Stage 3 donor quality                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `similarity_weighted_vote`                   | Stage 3 evidence table (same formula as `predict_interaction` weighted aggregation)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `esm_embed` / `colabfold_msa` / `pymol_util` | Delivery extras — available on the default full surface; use when they help                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `rna_preprocess`                             | Optional (predict already tiles long RNA)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `phmmer_similarity`                          | **Optional** remote-homology axis (default off; opt in via `RBP_PHMMER=1`). More sensitive than MMseqs for distant protein relationships; needs hmmer installed. Use only when seq_similarity returns no close donors and you suspect distant homology                                                                                                                                                                                                                                                                         |
+
 
 Other delivery-ready tools in the registry (beyond this table) may be used when they advance evidence — still never invent scores, and never call non-science OS/web tools (§9.3).
 
@@ -243,11 +281,15 @@ Other delivery-ready tools in the registry (beyond this table) may be used when 
 
 `web_search`, `web_fetch`, `read_file`, `grep`, `list_dir`, `find_files`, shell / `exec` are not registered for the RBP agent — do not attempt to call them. Use `literature_search` for papers, `read_project_doc` for allowlisted markdown, `run_prompt_suite` for docs/eval prompt suites, `score_binding_fasta` for allowlisted FASTA paths, and registered science tools for resolution. (`RBP_RAW_TOOLS` only toggles delivery science tools, never these.)
 
-Guide: [`docs/guides/BATCH_FASTA_SCORE.zh.md`](../../../../docs/guides/BATCH_FASTA_SCORE.zh.md) (readable via `read_project_doc`).
+Guide: `[docs/guides/BATCH_FASTA_SCORE.zh.md](../../../../docs/guides/BATCH_FASTA_SCORE.zh.md)` (readable via `read_project_doc`).
 
 ---
 
+
+
 ## 10. Worked examples
+
+
 
 ### A. In-catalogue (Stage 0)
 
@@ -257,22 +299,28 @@ Guide: [`docs/guides/BATCH_FASTA_SCORE.zh.md`](../../../../docs/guides/BATCH_FAS
 2. `predict_interaction` once → `prob≈0.966`
 3. JSON with `label=Strong`, explanation says **own-head** → **STOP**
 
+
+
 ### B. Unseen UniProt
 
 **User:** novel UniProt + RNA
 
 1. `resolve_rbp` → `in_panel=false`
 2. `lookup_proxy_cache` → miss
-3. Stage 1 multi-view → `fuse_similarity_views` → **`commit_proxy_candidates`** (≤ 5, sim ≥ 0.30)
+3. Stage 1 multi-view → `fuse_similarity_views` → `commit_proxy_candidates` (≤ 5, sim ≥ 0.30)
 4. `confidence_abstain` → Stage 2 batch predict (`aggregate=weighted`)
 5. Stage 3 explanation + checklist (expect `prior_missing` → low confidence)
 6. JSON with triage caveat in `explanation` / `caveats`
+
+
 
 ### C. Predict OOM
 
 Any `predict_interaction` killed / timeout → **no retry** → `"p_hat": null`, low confidence, explain tool failure honestly.
 
 ---
+
+
 
 ## 11. Self-check before sending JSON
 
@@ -289,4 +337,4 @@ Any `predict_interaction` killed / timeout → **no retry** → `"p_hat": null`,
 
 ---
 
-*Maintainer accept evidence: `nanobot-bio dev gap-closure` / `accept-golden` / `accept-llm` → `~/.nanobot-bio/artifacts/reports/{json,md}/`.*
+*Maintainer accept evidence:* `nanobot-bio dev gap-closure` */* `accept-golden` */* `accept-llm` *→* `~/.nanobot-bio/artifacts/reports/{json,md}/`*.*

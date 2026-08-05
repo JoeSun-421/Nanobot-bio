@@ -577,7 +577,6 @@ class DeliveryToolClient:
             os.path.expanduser("~/anaconda3"),
             os.path.expanduser("~/mambaforge"),
             os.path.expanduser("~/miniforge3"),
-            "/root/autodl-tmp/conda",  # optional host layout
         ):
             if base:
                 envs_roots.append(Path(base) / "envs")
@@ -585,6 +584,18 @@ class DeliveryToolClient:
                 p = Path(base)
                 if p.name != "envs" and (p.parent / "envs").is_dir():
                     envs_roots.append(p.parent / "envs")
+        # Portable: conda trees next to BIO_ROOT / this checkout.
+        try:
+            bio_agent = Path(__file__).resolve().parents[4]
+            for root in (bio_agent.parent / "conda", bio_agent / "conda"):
+                envs_roots.append(root / "envs")
+        except IndexError:
+            pass
+        bio = os.environ.get("BIO_ROOT")
+        if bio:
+            bp = Path(bio).expanduser()
+            for root in (bp.parent / "conda", bp / "conda"):
+                envs_roots.append(root / "envs")
         seen: set[str] = set()
         for root in envs_roots:
             key = str(root)

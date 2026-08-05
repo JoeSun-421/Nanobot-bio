@@ -17,8 +17,8 @@
 
 | 场景 | 命令 |
 |------|------|
-| **日常** | `./scripts/nbio start`（或 `source scripts/nbio` → chat） |
-| **首次 / 空壳修复** | `./scripts/nbio setup`（或本目录 `setup_all.sh`） |
+| **日常** | `./scripts/nbio.sh start`（或 `source scripts/nbio.sh` → chat） |
+| **首次 / 空壳修复** | `./scripts/nbio.sh setup`（或本目录 `setup_all.sh`） |
 | 兼容旧激活 | `source scripts/setup/activate_env.sh` → 转发 `nbio activate`（薄包装，勿删） |
 
 路径（`AF3_ROOT` / `ENV_PREFIX` / delivery）按本机发现，可用环境变量覆盖；见 [`../README.zh.md`](../README.zh.md)「路径发现」。
@@ -41,13 +41,13 @@ Delivery 切换与备份路径见 [`../../docs/guides/DELIVERY_SWAP.zh.md`](../.
 ## 怎么使用
 
 ```bash
-./scripts/nbio setup
-./scripts/nbio setup --skip-conda
+./scripts/nbio.sh setup
+./scripts/nbio.sh setup --skip-conda
 bash scripts/setup/setup_all_blackwell.sh
 
-./scripts/nbio start                 # 日常：路径发现 → 纠偏 AF3 → chat
-# source scripts/nbio && nanobot-bio doctor
-./scripts/nbio status
+./scripts/nbio.sh start                 # 日常：路径发现 → 纠偏 AF3 → chat
+# source scripts/nbio.sh && nanobot-bio doctor
+./scripts/nbio.sh status
 ```
 
 完整说明见 [`INSTALL.md`](../../INSTALL.md)。

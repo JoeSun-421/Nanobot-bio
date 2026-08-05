@@ -6,8 +6,8 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 
 ### Added — portable launcher & path discovery
 
-- **`./scripts/nbio start` / `up`:** one-click adaptive launcher — host path discovery, GPU classic vs Blackwell AF3 selection, heal `.env` (backup), then chat. `--dry-run` prints candidates only.
-- **Portable path discovery:** `AF3_BLACKWELL_ROOT` / conda / delivery candidates are host-relative; AutoDL absolute paths are optional last-resort candidates, not the sole source of truth. Canonical entry is `scripts/nbio`; Ampere/Blackwell/`activate_env.sh` remain thin compat wrappers.
+- **`./scripts/nbio.sh start` / `up`:** one-click adaptive launcher — host path discovery, GPU classic vs Blackwell AF3 selection, heal `.env` (backup), then chat. `--dry-run` prints candidates only.
+- **Portable path discovery:** `AF3_BLACKWELL_ROOT` / conda / delivery candidates are host-relative; AutoDL absolute paths are optional last-resort candidates, not the sole source of truth. Canonical entry is `scripts/nbio.sh`; Ampere/Blackwell/`activate_env.sh` remain thin compat wrappers.
 
 ### Changed — AF3 skill policy (AFDB → miss → AF3)
 

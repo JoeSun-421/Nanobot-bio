@@ -60,7 +60,7 @@ rbp-agent chat
 **CLI 一次性 agent**
 
 ```bash
-# 先激活环境（见 INSTALL.md / scripts/nbio）
+# 先激活环境（见 INSTALL.md / scripts/nbio.sh）
 nanobot-bio doctor
 nanobot-bio agent --query "Does this RNA bind PTBP1?" --example
 # 或指定 RNA 文件：

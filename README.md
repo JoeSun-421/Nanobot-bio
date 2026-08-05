@@ -56,11 +56,11 @@ Do not hardcode a trial-machine absolute path; `nbio` discovers `DELIVERY_ROOT` 
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
 cd "$BIO_ROOT/nanobot-bio"
 
-./scripts/nbio setup              # first-time: agent .venv + science conda
+./scripts/nbio.sh setup              # first-time: agent .venv + science conda
 nanobot-bio onboard               # pick LLM provider + API key → .env + config refs
-./scripts/nbio start              # daily one-shot: discover paths → heal AF3/.env → chat
-# ./scripts/nbio start --dry-run
-# source scripts/nbio && nanobot-bio doctor
+./scripts/nbio.sh start              # daily one-shot: discover paths → heal AF3/.env → chat
+# ./scripts/nbio.sh start --dry-run
+# source scripts/nbio.sh && nanobot-bio doctor
 ```
 
 Install: [INSTALL.md](INSTALL.md) · [中文](INSTALL.zh.md). Scripts: [`scripts/README.md`](scripts/README.md). Delivery bridge: [`app/backends/delivery/README.md`](app/backends/delivery/README.md).
@@ -77,11 +77,11 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 | Command | Purpose |
 |---------|---------|
-| `./scripts/nbio start` | Daily one-shot: path discovery → GPU/AF3 adapt → heal `.env` → chat (`up` alias) |
+| `./scripts/nbio.sh start` | Daily one-shot: path discovery → GPU/AF3 adapt → heal `.env` → chat (`up` alias) |
 | `nanobot-bio chat` | Multi-turn session; in-chat `/status`, `/help`, `/tools`, `/quit` |
 | `nanobot-bio agent --message "..."` | One-shot prediction (also `--query` / `--rna-file` / `--example`) |
 | `nanobot-bio doctor` | Capability table: paths, rhobind/ESM/RNA/AF3/LLM (`--verbose` for dumps) |
-| `source scripts/nbio` | Portable activate only (also `status` / `setup` / `chat`; thin wrappers under `scripts/setup/`) |
+| `source scripts/nbio.sh` | Portable activate only (also `status` / `setup` / `chat`; thin wrappers under `scripts/setup/`) |
 | `nanobot-bio onboard` | Write LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden acceptance (no LLM; `own-head` is its alias) |
 | `nanobot-bio run-eval` | LOO ceiling comparison and modality ablation |
@@ -96,7 +96,7 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | Item | Notes |
 |------|-------|
 | Layout | `rhobind_agent_delivery/` **sibling** to this repo; override with `DELIVERY_ROOT` |
-| Agent env | `.venv` via `./scripts/nbio setup` (wraps `setup_all.sh`) |
+| Agent env | `.venv` via `./scripts/nbio.sh setup` (wraps `setup_all.sh`) |
 | Science conda | delivery: `protein_embed` / `rna` / `rhobind` / `af3` |
 | Paths | `nbio` discovers `BIO_ROOT` / `AF3_BLACKWELL_ROOT` / conda on the host; AutoDL layouts are candidates only |
 | Structure | Skill: AFDB `structure_fetch` first; AF3 `predict_structure` only on AFDB miss (sequence-only must call it) |

@@ -45,22 +45,22 @@ mkdir -p "$BIO_ROOT"
 #   $BIO_ROOT/rhobind_agent_delivery/
 cd "$BIO_ROOT/nanobot-bio"
 
-./scripts/nbio setup                  # full science stack + agent venv (= setup_all.sh)
+./scripts/nbio.sh setup                  # full science stack + agent venv (= setup_all.sh)
 # Optional GPU-specific thin wrappers (still call setup_all.sh):
 # bash scripts/setup/setup_all_ampere_or_older.sh   # A100/H100/4090… → classic af3
 # bash scripts/setup/setup_all_blackwell.sh         # CC12 → af3_blackwell
 # Agent layer only (no conda):
-# ./scripts/nbio setup --skip-conda
+# ./scripts/nbio.sh setup --skip-conda
 
 nanobot-bio onboard                   # pick LLM provider + key → .env
-./scripts/nbio start                  # daily one-shot: heal AF3 → chat
-# ./scripts/nbio start --dry-run
-# source scripts/nbio && nanobot-bio doctor
+./scripts/nbio.sh start                  # daily one-shot: heal AF3 → chat
+# ./scripts/nbio.sh start --dry-run
+# source scripts/nbio.sh && nanobot-bio doctor
 ```
 
 `setup_all.sh` (via `nbio setup`) uses in-repo slim `nanobot/`. `pip install -e .` installs the in-repo package; do **not** also install `nanobot-ai` (it steals `import nanobot`). GPU selection: [docs/guides/AF3_RUNTIME_AND_RELEASE.md](docs/guides/AF3_RUNTIME_AND_RELEASE.md). Scripts map: [`scripts/README.md`](scripts/README.md).
 
-**Env name present ≠ deps installed.** Delivery `setup_envs.sh` only creates missing conda **names**; a bare `conda create -n rhobind` leaves a hollow env. `nbio setup` / `setup_all.sh` run **import-level checks** and heal. Daily use `./scripts/nbio start` (or `source scripts/nbio` + `nanobot-bio chat`) — you need not re-run setup every time. `start` auto-discovers AF3 / conda on the host (`$AF3_BLACKWELL_ROOT`, sibling `af3_blackwell`, `~/af3_blackwell`, `conda info --base`, …). Use `start --dry-run` to list candidates only.
+**Env name present ≠ deps installed.** Delivery `setup_envs.sh` only creates missing conda **names**; a bare `conda create -n rhobind` leaves a hollow env. `nbio setup` / `setup_all.sh` run **import-level checks** and heal. Daily use `./scripts/nbio.sh start` (or `source scripts/nbio.sh` + `nanobot-bio chat`) — you need not re-run setup every time. `start` auto-discovers AF3 / conda on the host (`$AF3_BLACKWELL_ROOT`, sibling `af3_blackwell`, `~/af3_blackwell`, `conda info --base`, …). Use `start --dry-run` to list candidates only.
 
 ### Path B: Docker (isolated; good for operators who do not develop)
 
@@ -141,8 +141,8 @@ Workspace stores, slim-vendor residuals, and tool allowlists: [ARCHITECTURE.md](
 
 ```bash
 bash scripts/setup/setup_all_blackwell.sh
-./scripts/nbio start --dry-run    # list AF3_BLACKWELL_ROOT / AF3_PYTHON candidates
-./scripts/nbio start --heal       # write discovered paths into .env (backup first)
+./scripts/nbio.sh start --dry-run    # list AF3_BLACKWELL_ROOT / AF3_PYTHON candidates
+./scripts/nbio.sh start --heal       # write discovered paths into .env (backup first)
 ```
 
 Do **not** hand-copy another machine’s absolute paths. Details: [docs/guides/AF3_RUNTIME_AND_RELEASE.md](docs/guides/AF3_RUNTIME_AND_RELEASE.md).

@@ -124,7 +124,8 @@ def conda_env_python(name: str) -> Optional[Path]:
     envs_roots: list[Path] = []
     for key in ("CONDA_ENVS_PATH", "CONDA_ENVS_DIRS"):
         raw = os.environ.get(key) or ""
-        for part in raw.split(os.pathsep):
+        # Keyword sep: basedpyright mis-types positional os.pathsep vs split overloads.
+        for part in raw.split(sep=os.pathsep):
             if part.strip():
                 envs_roots.append(Path(part.strip()))
     try:
@@ -147,14 +148,24 @@ def conda_env_python(name: str) -> Optional[Path]:
         os.path.expanduser("~/anaconda3"),
         os.path.expanduser("~/mambaforge"),
         os.path.expanduser("~/miniforge3"),
-        # Host-specific data-disk layouts (optional; not required).
-        "/root/autodl-tmp/conda",
     ):
         if base:
             envs_roots.append(Path(base) / "envs")
             p = Path(base)
             if p.name != "envs" and (p.parent / "envs").is_dir():
                 envs_roots.append(p.parent / "envs")
+    # Portable: conda trees next to BIO_ROOT / this checkout (…/bio_agent/../conda).
+    try:
+        bio_agent = Path(__file__).resolve().parents[4]
+        for root in (bio_agent.parent / "conda", bio_agent / "conda"):
+            envs_roots.append(root / "envs")
+    except IndexError:
+        pass
+    bio = os.environ.get("BIO_ROOT")
+    if bio:
+        bp = Path(bio).expanduser()
+        for root in (bp.parent / "conda", bp / "conda"):
+            envs_roots.append(root / "envs")
     seen: set[str] = set()
     for root in envs_roots:
         key = str(root)
@@ -234,7 +245,7 @@ def apply_delivery_env() -> dict[str, str]:
         "USALIGN": str(root / "agent_db" / "bin" / "USalign"),
         "AF3_DIR": str(root / "agent" / "third_party" / "alphafold3"),
         "AF3_PARAMS": str(root / "af3_assets" / "alphafold_param"),
-        # ESM / HF: AutoDL often cannot reach huggingface.co — use local cache + mirror
+        # ESM / HF: prefer local cache; default mirror helps restricted networks
         "HF_HOME": hf_home,
         "HUGGINGFACE_HUB_CACHE": str(Path(hf_home) / "hub"),
         "TRANSFORMERS_CACHE": str(Path(hf_home) / "transformers"),
@@ -244,7 +255,7 @@ def apply_delivery_env() -> dict[str, str]:
     # Isolated Blackwell stack wins over stale .env unless AF3_FORCE_CLASSIC=1
     # (ignored on compute_cap 12.* — classic jax cannot run on Blackwell).
     # Discovery is portable: AF3_BLACKWELL_ROOT → adjacent to BIO_ROOT / checkout →
-    # ~/af3_blackwell → /opt → host-specific (e.g. AutoDL) last.
+    # ~/af3_blackwell → /opt/af3_blackwell. No host-specific absolute paths.
     # Never treat delivery classic AF3_DIR (…/third_party/alphafold3) as blackwell.
     def _gpu_compute_cap() -> Optional[str]:
         try:
@@ -303,8 +314,6 @@ def apply_delivery_env() -> dict[str, str]:
             [
                 home / "af3_blackwell" / "alphafold3",
                 Path("/opt/af3_blackwell/alphafold3"),
-                # Optional host-specific layout (not authoritative).
-                Path("/root/autodl-tmp/af3_blackwell/alphafold3"),
             ]
         )
         seen: set[str] = set()

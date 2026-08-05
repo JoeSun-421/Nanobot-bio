@@ -44,22 +44,22 @@ export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
 #   $BIO_ROOT/rhobind_agent_delivery/
 cd "$BIO_ROOT/nanobot-bio"
 
-./scripts/nbio setup                  # full 科学栈 + agent venv（= setup_all.sh）
+./scripts/nbio.sh setup                  # full 科学栈 + agent venv（= setup_all.sh）
 # 已知机型也可显式选（薄包装，内部仍调 setup_all.sh）：
 # bash scripts/setup/setup_all_ampere_or_older.sh   # A100/H100/4090… → 经典 af3
 # bash scripts/setup/setup_all_blackwell.sh         # RTX 5090 / CC12 → af3_blackwell
 # 或仅 agent 层（无 conda）：
-# ./scripts/nbio setup --skip-conda
+# ./scripts/nbio.sh setup --skip-conda
 
 nanobot-bio onboard                   # 显式选择 LLM 厂商 + key（写入 .env）
-./scripts/nbio start                  # 日常万能一键：纠偏 AF3 → chat
-# ./scripts/nbio start --dry-run      # 只看路径/GPU 适配（可顺带 heal .env）
-# source scripts/nbio && nanobot-bio doctor   # 分步：激活 + 能力表
+./scripts/nbio.sh start                  # 日常万能一键：纠偏 AF3 → chat
+# ./scripts/nbio.sh start --dry-run      # 只看路径/GPU 适配（可顺带 heal .env）
+# source scripts/nbio.sh && nanobot-bio doctor   # 分步：激活 + 能力表
 ```
 
-`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio`](scripts/nbio)。
+`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio.sh`](scripts/nbio.sh)。
 
-**环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常用 `./scripts/nbio start`（或 `source scripts/nbio` + `nanobot-bio chat`），**不必每次** setup。`start` 在本机**自动搜寻** AF3 / conda 路径（`$AF3_BLACKWELL_ROOT`、BIO 旁 `af3_blackwell`、`~/af3_blackwell`、`conda info --base` 等；AutoDL 布局只是候选之一），CC12 上纠偏 classic→blackwell，默认备份后改写 `.env`。用 `start --dry-run` 可只看候选列表。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
+**环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常用 `./scripts/nbio.sh start`（或 `source scripts/nbio.sh` + `nanobot-bio chat`），**不必每次** setup。`start` 在本机**自动搜寻** AF3 / conda 路径（`$AF3_BLACKWELL_ROOT`、BIO 旁 `af3_blackwell`、`~/af3_blackwell`、`conda info --base` 等；AutoDL 布局只是候选之一），CC12 上纠偏 classic→blackwell，默认备份后改写 `.env`。用 `start --dry-run` 可只看候选列表。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
 
 ### 路径 B：Docker（隔离环境，推荐给只跑不开发的协作方）
 
@@ -162,8 +162,8 @@ bash scripts/setup/setup_all_blackwell.sh    # = setup_all.sh --af3-stack=blackw
 然后让本机路径写入 `.env`（权重仍用 delivery 的 `AF3_PARAMS`）。**不要**手抄试验机 AutoDL 绝对路径；用发现结果：
 
 ```bash
-./scripts/nbio start --dry-run    # 查看本机 AF3_BLACKWELL_ROOT / AF3_PYTHON 候选
-./scripts/nbio start --heal       # 将本机探测路径写入 .env（先备份）
+./scripts/nbio.sh start --dry-run    # 查看本机 AF3_BLACKWELL_ROOT / AF3_PYTHON 候选
+./scripts/nbio.sh start --heal       # 将本机探测路径写入 .env（先备份）
 # 或手动（示例占位，换成 dry-run 打印的路径）：
 # AF3_DIR=$AF3_BLACKWELL_ROOT/alphafold3
 # AF3_PYTHON=$(conda info --base)/envs/af3_blackwell/bin/python

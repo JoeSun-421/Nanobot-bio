@@ -56,11 +56,11 @@ source scripts/nbio.sh
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
 cd "$BIO_ROOT/nanobot-bio"
 
-./scripts/nbio setup              # 首次：agent .venv + 科学 conda
+./scripts/nbio.sh setup              # 首次：agent .venv + 科学 conda
 nanobot-bio onboard               # 选择 LLM 厂商 + API key → .env
-./scripts/nbio start              # 日常万能一键：路径发现 → 纠偏 AF3/.env → chat
-# ./scripts/nbio start --dry-run
-# source scripts/nbio && nanobot-bio doctor
+./scripts/nbio.sh start              # 日常万能一键：路径发现 → 纠偏 AF3/.env → chat
+# ./scripts/nbio.sh start --dry-run
+# source scripts/nbio.sh && nanobot-bio doctor
 ```
 
 安装：[INSTALL.zh.md](INSTALL.zh.md) · [EN](INSTALL.md)。脚本：[`scripts/README.zh.md`](scripts/README.zh.md)。Delivery 桥：[`app/backends/delivery/README.zh.md`](app/backends/delivery/README.zh.md)。
@@ -77,11 +77,11 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 
 | 命令 | 用途 |
 |------|------|
-| `./scripts/nbio start` | 日常万能一键：路径发现 → GPU/AF3 适配 → heal `.env` → chat（`up` 别名） |
+| `./scripts/nbio.sh start` | 日常万能一键：路径发现 → GPU/AF3 适配 → heal `.env` → chat（`up` 别名） |
 | `nanobot-bio chat` | 多轮交互；会话内 `/status`、`/help`、`/tools`、`/quit` |
 | `nanobot-bio agent --message "..."` | 一次性预测（亦支持 `--query` / `--rna-file` / `--example`） |
 | `nanobot-bio doctor` | 功能能力表：路径 / rhobind / ESM / RNA / AF3 / LLM（`--verbose` 看明细） |
-| `source scripts/nbio` | 仅可移植激活（另有 `status` / `setup` / `chat`；`scripts/setup/` 下为兼容薄包装） |
+| `source scripts/nbio.sh` | 仅可移植激活（另有 `status` / `setup` / `chat`；`scripts/setup/` 下为兼容薄包装） |
 | `nanobot-bio onboard` | 写入 LLM provider / API key / model |
 | `nanobot-bio accept-golden` | Own-head golden 验收（无 LLM；`own-head` 为其别名） |
 | `nanobot-bio run-eval` | LOO 上限对照与模态消融评估 |
@@ -96,7 +96,7 @@ nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt --device auto
 | 项 | 说明 |
 |----|------|
 | 目录布局 | `rhobind_agent_delivery/` 与本仓库**同级**；可用 `DELIVERY_ROOT` 覆盖 |
-| Agent 环境 | `.venv`，经 `./scripts/nbio setup`（内部调用 `setup_all.sh`） |
+| Agent 环境 | `.venv`，经 `./scripts/nbio.sh setup`（内部调用 `setup_all.sh`） |
 | 科学 conda | delivery：`protein_embed` / `rna` / `rhobind` / `af3` |
 | 路径 | `nbio` 在本机发现 `BIO_ROOT` / `AF3_BLACKWELL_ROOT` / conda；AutoDL 布局仅为候选之一 |
 | 结构轴 | Skill：先 AFDB `structure_fetch`；仅 AFDB miss 时 AF3 `predict_structure`（仅序列目标必须调用） |

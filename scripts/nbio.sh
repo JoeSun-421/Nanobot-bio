@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # nanobot-bio — single portable entry for Linux
-#   activate / status / doctor / setup / chat / start (万能一键)
+#   activate / status / doctor / setup / chat / start (all-in-one)
 #
 # Daily:
-#   source scripts/nbio
-#   source scripts/nbio activate
-#   ./scripts/nbio doctor
-#   ./scripts/nbio chat
-#   ./scripts/nbio start              # 一键：探测路径 + AF3 纠偏 + chat
-#   ./scripts/nbio start --dry-run    # 只看自动适配结果，不启动 chat
+#   source scripts/nbio.sh
+#   source scripts/nbio.sh activate
+#   ./scripts/nbio.sh doctor
+#   ./scripts/nbio.sh chat
+#   ./scripts/nbio.sh start              # one-shot: probe paths + AF3 heal + chat
+#   ./scripts/nbio.sh start --dry-run    # print auto-adapt result only; no chat
 #
 # First-time / repair (explicit; does NOT run on activate):
-#   ./scripts/nbio setup
-#   ./scripts/nbio setup --skip-conda
+#   ./scripts/nbio.sh setup
+#   ./scripts/nbio.sh setup --skip-conda
 #
 # Detect-only (no venv activate required for status when python available):
-#   ./scripts/nbio status
+#   ./scripts/nbio.sh status
 #
 # Safe by design: activate never pip-installs CUDA/torch. Fix hollow envs via `setup`.
 
@@ -69,7 +69,7 @@ _nbio_prefer_blackwell() {
   esac
 }
 
-# Candidate roots for af3_blackwell (portable). AutoDL path is last, not SoT.
+# Candidate roots for af3_blackwell (portable Linux layouts only).
 _nbio_blackwell_root_candidates() {
   local parent agent_parent
   parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
@@ -85,8 +85,7 @@ _nbio_blackwell_root_candidates() {
     "${agent_parent}/af3_blackwell" \
     "${parent}/af3_blackwell" \
     "${HOME}/af3_blackwell" \
-    "/opt/af3_blackwell" \
-    "/root/autodl-tmp/af3_blackwell"
+    "/opt/af3_blackwell"
 }
 
 _nbio_find_blackwell_root() {
@@ -105,10 +104,11 @@ _nbio_find_blackwell_root() {
   return 1
 }
 
-# Candidate python binaries for a named conda env (portable). AutoDL last.
+# Candidate python binaries for a named conda env (portable Linux layouts).
 _nbio_af3_python_candidates() {
   local name="$1"
-  local _d _base _py
+  local _d _base _py parent
+  parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
   # Explicit ENV_PREFIX when it is this env.
   if [[ -n "${ENV_PREFIX:-}" ]]; then
     case "${ENV_PREFIX}" in
@@ -144,7 +144,9 @@ _nbio_af3_python_candidates() {
     "${HOME}/miniconda3" \
     "${HOME}/miniforge3" \
     "${HOME}/mambaforge" \
-    "${HOME}/anaconda3"
+    "${HOME}/anaconda3" \
+    "${parent}/conda" \
+    "$_BIO_ROOT/conda"
   do
     [[ -n "$_base" ]] || continue
     # CONDA_PREFIX may be an env itself → sibling envs live next door.
@@ -156,8 +158,6 @@ _nbio_af3_python_candidates() {
       printf '%s\n' "$(dirname "${_base%/}")/envs/${name}/bin/python"
     fi
   done
-  # Host-specific layouts (e.g. AutoDL data disk) — one of many, not required.
-  printf '%s\n' "/root/autodl-tmp/conda/envs/${name}/bin/python"
 }
 
 _nbio_find_af3_python_named() {
@@ -234,7 +234,7 @@ _nbio_reconcile_roots() {
     export BIO_ROOT="$_BIO_ROOT"
   elif [[ ! -d "${BIO_ROOT}/rhobind_agent_delivery" && ! -d "${BIO_ROOT}/nanobot-bio" \
         && "${BIO_ROOT}" != "$_BIO_ROOT" ]]; then
-    echo "[nbio] WARN: .env BIO_ROOT=${BIO_ROOT} 在本机无效 → 使用 $_BIO_ROOT" >&2
+    echo "[nbio] WARN: .env BIO_ROOT=${BIO_ROOT} is invalid on this host → using $_BIO_ROOT" >&2
     export BIO_ROOT="$_BIO_ROOT"
   fi
   _BIO_ROOT="$BIO_ROOT"
@@ -250,7 +250,7 @@ _nbio_reconcile_roots() {
   export NANOBOT_WORKSPACE="${NANOBOT_WORKSPACE:-$_AGENT_ROOT/workspace}"
 }
 
-# Portable AF3 interpreter discovery (no autodl hardcode-only).
+# Portable AF3 interpreter discovery (checkout-relative + standard conda layouts).
 _nbio_discover_af3_python() {
   if [[ -n "${AF3_PYTHON:-}" && "${AF3_PYTHON}" != "/bin/false" && -x "${AF3_PYTHON}" ]]; then
     # Keep an explicit valid interpreter unless prefer_bw says we must switch.
@@ -295,7 +295,7 @@ _nbio_apply_af3_env() {
   if [[ "$cc" == 12.* ]]; then
     case "${AF3_FORCE_CLASSIC:-}" in
       1|true|yes|TRUE|YES)
-        echo "[nbio] WARN: 忽略 AF3_FORCE_CLASSIC（compute_cap=$cc 必须用 blackwell）" >&2
+        echo "[nbio] WARN: ignoring AF3_FORCE_CLASSIC (compute_cap=$cc requires blackwell)" >&2
         ;;
     esac
     unset AF3_FORCE_CLASSIC || true
@@ -316,8 +316,8 @@ _nbio_apply_af3_env() {
       mkdir -p "$AF3_CACHE" 2>/dev/null || true
       return 0
     fi
-    echo "[nbio] WARN: 本机偏好 blackwell，但栈不完整 (root=${bw_root:-missing} py=${bw_py:-missing})" >&2
-    echo "[nbio]        修复: ./scripts/nbio setup  或  bash scripts/setup/setup_all_blackwell.sh" >&2
+    echo "[nbio] WARN: prefer blackwell on this host, but stack incomplete (root=${bw_root:-missing} py=${bw_py:-missing})" >&2
+    echo "[nbio]        fix: ./scripts/nbio.sh setup  or  bash scripts/setup/setup_all_blackwell.sh" >&2
   fi
 
   # Classic (or blackwell incomplete fallback): delivery tree + af3 conda.
@@ -429,23 +429,23 @@ _nbio_heal_layout_env() {
   if [[ "$mode" != "force" ]] && ! _nbio_layout_env_needs_heal; then
     return 0
   fi
-  echo "[nbio] 检测到 .env 布局路径与本机 checkout 不一致（将按脚本位置纠偏）"
+  echo "[nbio] .env layout paths disagree with this checkout (will reconcile from script location)"
   echo "[nbio]   → BIO_ROOT=$_BIO_ROOT"
   echo "[nbio]   → NANOBOT_BIO_ROOT=$_AGENT_ROOT"
   echo "[nbio]   → DELIVERY_ROOT=${_DELIVERY_ROOT}"
   if [[ "$mode" == "ask" ]]; then
     if [[ ! -t 0 ]]; then
-      echo "[nbio] 非交互终端，跳过 layout heal（改用 --heal）" >&2
+      echo "[nbio] non-interactive tty: skipping layout heal (use --heal)" >&2
       return 0
     fi
-    read -r -p "[nbio] 写入 .env 布局路径并备份？[Y/n] " ans || ans=n
+    read -r -p "[nbio] write .env layout paths and backup? [Y/n] " ans || ans=n
     case "${ans:-Y}" in
-      n|N|no|NO) echo "[nbio] 已跳过 layout heal"; return 0 ;;
+      n|N|no|NO) echo "[nbio] skipped layout heal"; return 0 ;;
     esac
   fi
   bak="${envf}.bak.nbio.$(date +%Y%m%d_%H%M%S)"
   cp -a "$envf" "$bak"
-  echo "[nbio] 已备份 → $bak"
+  echo "[nbio] backed up → $bak"
   _nbio_envf_upsert "$envf" "BIO_ROOT" "$_BIO_ROOT"
   _nbio_envf_upsert "$envf" "NANOBOT_BIO_ROOT" "$_AGENT_ROOT"
   _nbio_envf_upsert "$envf" "NANOBOT_SRC" "$_AGENT_ROOT/nanobot"
@@ -453,7 +453,7 @@ _nbio_heal_layout_env() {
   if [[ -d "$_DELIVERY_ROOT" ]]; then
     _nbio_envf_upsert "$envf" "DELIVERY_ROOT" "$_DELIVERY_ROOT"
   fi
-  echo "[nbio] 已 heal .env 布局路径（本机）"
+  echo "[nbio] healed .env layout paths (this host)"
   return 0
 }
 
@@ -468,45 +468,45 @@ _nbio_heal_af3_env() {
     return 0
   fi
   if [[ ! -f "$envf" ]]; then
-    echo "[nbio] 无 .env，跳过 heal（先 ./scripts/nbio setup 或手动创建）" >&2
+    echo "[nbio] no .env; skipping heal (run ./scripts/nbio.sh setup or create one manually)" >&2
     return 0
   fi
   if [[ "$mode" != "force" ]] && ! _nbio_af3_env_needs_heal; then
     return 0
   fi
   if ! _nbio_prefer_blackwell; then
-    echo "[nbio] .env AF3 路径可疑，但本机非 blackwell 偏好；跳过写入 .env" >&2
-    echo "[nbio]        （会话内仍会 export 纠偏后的 AF3_*；classic 机勿强行 --heal）" >&2
+    echo "[nbio] .env AF3 paths look wrong, but this host does not prefer blackwell; not writing .env" >&2
+    echo "[nbio]        (session still exports corrected AF3_*; do not force --heal on classic GPUs)" >&2
     return 0
   fi
 
   bw_root="$(_nbio_find_blackwell_root 2>/dev/null || true)"
   bw_py="$(_nbio_find_af3_python_named af3_blackwell 2>/dev/null || true)"
   if [[ -z "$bw_root" || -z "$bw_py" ]]; then
-    echo "[nbio] WARN: 无法 heal — blackwell 栈未找到（已扫描本机候选，非仅 AutoDL）" >&2
+    echo "[nbio] WARN: cannot heal — blackwell stack not found (scanned local candidates, not AutoDL-only)" >&2
     return 1
   fi
 
-  echo "[nbio] 检测到 .env AF3 不一致（将写入本机探测路径）："
-  echo "[nbio]   当前 AF3_DIR=$(grep -E '^AF3_DIR=' "$envf" 2>/dev/null | head -1 | cut -d= -f2- || echo unset)"
-  echo "[nbio]   当前 AF3_PYTHON=$(grep -E '^AF3_PYTHON=' "$envf" 2>/dev/null | head -1 | cut -d= -f2- || echo unset)"
-  echo "[nbio]   将改为 AF3_DIR=$bw_root/alphafold3"
-  echo "[nbio]   将改为 AF3_PYTHON=$bw_py"
+  echo "[nbio] .env AF3 mismatch detected (will write host-discovered paths):"
+  echo "[nbio]   current AF3_DIR=$(grep -E '^AF3_DIR=' "$envf" 2>/dev/null | head -1 | cut -d= -f2- || echo unset)"
+  echo "[nbio]   current AF3_PYTHON=$(grep -E '^AF3_PYTHON=' "$envf" 2>/dev/null | head -1 | cut -d= -f2- || echo unset)"
+  echo "[nbio]   will set AF3_DIR=$bw_root/alphafold3"
+  echo "[nbio]   will set AF3_PYTHON=$bw_py"
 
   if [[ "$mode" == "ask" ]]; then
     if [[ ! -t 0 ]]; then
-      echo "[nbio] 非交互终端，跳过 heal（改用 --heal）" >&2
+      echo "[nbio] non-interactive tty: skipping heal (use --heal)" >&2
       return 0
     fi
-    read -r -p "[nbio] 写入 .env 并备份？[Y/n] " ans || ans=n
+    read -r -p "[nbio] write .env and backup? [Y/n] " ans || ans=n
     case "${ans:-Y}" in
-      n|N|no|NO) echo "[nbio] 已跳过 heal"; return 0 ;;
+      n|N|no|NO) echo "[nbio] skipped heal"; return 0 ;;
     esac
   fi
 
   bak="${envf}.bak.nbio.$(date +%Y%m%d_%H%M%S)"
   cp -a "$envf" "$bak"
-  echo "[nbio] 已备份 → $bak"
+  echo "[nbio] backed up → $bak"
 
   params="${AF3_PARAMS:-$_DELIVERY_ROOT/af3_assets/alphafold_param}"
   _nbio_envf_upsert "$envf" "AF3_BLACKWELL_ROOT" "$bw_root"
@@ -515,7 +515,7 @@ _nbio_heal_af3_env() {
   _nbio_envf_upsert "$envf" "AF3_CACHE" "$bw_root/alphafold_cache"
   _nbio_envf_upsert "$envf" "AF3_PARAMS" "$params"
   _nbio_envf_delete_key "$envf" "AF3_FORCE_CLASSIC"
-  echo "[nbio] 已 heal .env AF3_*（blackwell @ 本机路径）"
+  echo "[nbio] healed .env AF3_* (blackwell @ host paths)"
   return 0
 }
 
@@ -540,7 +540,7 @@ _nbio_print_af3_status() {
     if [[ "${AF3_DIR:-}" == *"af3_blackwell"* && "${AF3_PYTHON:-}" == *"af3_blackwell"* ]]; then
       printf '%-28s %-6s %s\n' "AF3 coherence" "OK" "DIR+PYTHON both blackwell"
     else
-      printf '%-28s %-6s %s\n' "AF3 coherence" "WARN" "DIR/PYTHON 未对齐 blackwell（start 可 heal）"
+      printf '%-28s %-6s %s\n' "AF3 coherence" "WARN" "DIR/PYTHON not aligned to blackwell (start can heal)"
     fi
   fi
 }
@@ -551,7 +551,7 @@ _nbio_activate() {
 
   if [[ ! -f "$_AGENT_ROOT/.setup_complete" ]]; then
     echo "[nbio] WARN: full setup not finished (missing $_AGENT_ROOT/.setup_complete)" >&2
-    echo "[nbio]        First time:  $_AGENT_ROOT/scripts/nbio setup" >&2
+    echo "[nbio]        First time:  $_AGENT_ROOT/scripts/nbio.sh setup" >&2
   fi
 
   if [[ -f "$_DELIVERY_ROOT/agent/setup.sh" ]]; then
@@ -563,7 +563,7 @@ _nbio_activate() {
   fi
 
   if [[ ! -f "$_AGENT_ROOT/.venv/bin/activate" ]]; then
-    _nbio_die "missing $_AGENT_ROOT/.venv — run: $_AGENT_ROOT/scripts/nbio setup"
+    _nbio_die "missing $_AGENT_ROOT/.venv — run: $_AGENT_ROOT/scripts/nbio.sh setup"
     return $?
   fi
   # shellcheck disable=SC1091
@@ -631,7 +631,7 @@ PY
   elif command -v rbp-agent >/dev/null 2>&1; then
     echo "[nbio] rbp-agent=$(command -v rbp-agent)"
   else
-    echo "[nbio] tip: ACTIVATE_HEAVY=1 source scripts/nbio  # or: pip install -e \$NANOBOT_BIO_ROOT"
+    echo "[nbio] tip: ACTIVATE_HEAVY=1 source scripts/nbio.sh  # or: pip install -e \$NANOBOT_BIO_ROOT"
   fi
 }
 
@@ -679,7 +679,7 @@ _nbio_status() {
   printf '%-28s %-6s %s\n' "NANOBOT_BIO_ROOT" "INFO" "$_AGENT_ROOT"
   _nbio_print_af3_status
   if _nbio_af3_env_needs_heal; then
-    printf '%-28s %-6s %s\n' ".env AF3 heal" "WARN" "run: ./scripts/nbio start --dry-run 或 start --heal"
+    printf '%-28s %-6s %s\n' ".env AF3 heal" "WARN" "run: ./scripts/nbio.sh start --dry-run or start --heal"
   else
     printf '%-28s %-6s %s\n' ".env AF3 heal" "OK" "aligned or N/A"
   fi
@@ -696,7 +696,7 @@ _nbio_status() {
   fi
 
   if [[ "$venv_ok" != "OK" || "$delivery_ok" != "OK" ]]; then
-    echo "fix: $_AGENT_ROOT/scripts/nbio setup"
+    echo "fix: $_AGENT_ROOT/scripts/nbio.sh setup"
     return 1
   fi
   return 0
@@ -704,7 +704,7 @@ _nbio_status() {
 
 _nbio_doctor() {
   if [[ ! -f "$_AGENT_ROOT/.venv/bin/activate" ]]; then
-    _nbio_die "missing .venv — run: $_AGENT_ROOT/scripts/nbio setup"
+    _nbio_die "missing .venv — run: $_AGENT_ROOT/scripts/nbio.sh setup"
     return $?
   fi
   # shellcheck disable=SC1091
@@ -768,21 +768,21 @@ _nbio_start() {
       --no-doctor) run_doctor=0; shift ;;
       -h|--help)
         cat <<EOF
-Usage: ./scripts/nbio start|up [options] [-- chat-args...]
+Usage: ./scripts/nbio.sh start|up [options] [-- chat-args...]
 
-  万能一键：探测 BIO_ROOT / delivery / .venv，按 GPU 纠偏 AF3_*，再启动 chat。
+  One-shot: discover BIO_ROOT / delivery / .venv, fix AF3_* for GPU, then start chat.
 
 Options:
-  --dry-run       只打印自动适配结果（可 heal），不启动 chat
-  --status-only   同 --dry-run
-  --heal          强制写入 .env AF3_*（先备份 .env.bak.nbio.*）
-  --no-heal       不改 .env（仍对本会话 export 正确 AF3_*）
-  --ask           heal 前交互确认
-  --doctor        启动 chat 前跑 nanobot-bio doctor
-  --no-doctor     默认；跳过 doctor
-  --              之后参数原样传给 nanobot-bio chat
+  --dry-run       print auto-adapt results (may heal); do not start chat
+  --status-only   same as --dry-run
+  --heal          force-write .env AF3_* (backup .env.bak.nbio.* first)
+  --no-heal       leave .env unchanged (still export correct AF3_* for this session)
+  --ask           confirm interactively before heal
+  --doctor        run nanobot-bio doctor before chat
+  --no-doctor     default; skip doctor
+  --              pass remaining args through to nanobot-bio chat
 
-Defaults: CC12 且存在 blackwell 栈时自动 heal（带备份）；从不在 CC12 上保留 AF3_FORCE_CLASSIC。
+Defaults: auto-heal on CC12 when blackwell stack exists (with backup); never keep AF3_FORCE_CLASSIC on CC12.
 EOF
         return 0
         ;;
@@ -798,7 +798,7 @@ EOF
     esac
   done
 
-  echo "[nbio] === start: 环境自动适配（本机路径发现）==="
+  echo "[nbio] === start: auto-adapt env (host path discovery) ==="
   echo "[nbio] AGENT_ROOT=$_AGENT_ROOT"
   echo "[nbio] BIO_ROOT=$_BIO_ROOT"
   echo "[nbio] DELIVERY_ROOT=$_DELIVERY_ROOT"
@@ -817,7 +817,7 @@ EOF
   _nbio_print_af3_status
 
   if [[ "$heal_mode" == "no" ]]; then
-    echo "[nbio] --no-heal：不改 .env（会话内仍使用上方纠偏后的路径）"
+    echo "[nbio] --no-heal: leaving .env unchanged (session still uses corrected paths above)"
   else
     if [[ "$heal_mode" == "force" ]] || _nbio_layout_env_needs_heal; then
       _nbio_heal_layout_env "$heal_mode"
@@ -828,7 +828,7 @@ EOF
     elif _nbio_af3_env_needs_heal; then
       _nbio_heal_af3_env "$heal_mode"
     else
-      echo "[nbio] .env AF3_* 已对齐本机探测结果，无需 heal"
+      echo "[nbio] .env AF3_* already matches host discovery; heal not needed"
     fi
   fi
 
@@ -843,9 +843,9 @@ EOF
   _nbio_apply_af3_env
 
   if [[ "$dry_run" == "1" || "$status_only" == "1" ]]; then
-    echo "[nbio] === dry-run / status-only（不启动 chat）==="
+    echo "[nbio] === dry-run / status-only (not starting chat) ==="
     _nbio_status || true
-    echo "[nbio] 会话将使用（本机发现）:"
+    echo "[nbio] session would use (host discovery):"
     echo "[nbio]   BIO_ROOT=$BIO_ROOT"
     echo "[nbio]   DELIVERY_ROOT=$DELIVERY_ROOT"
     echo "[nbio]   AF3_DIR=$AF3_DIR"
@@ -885,12 +885,12 @@ EOF
 _nbio_usage() {
   cat <<EOF
 Usage:
-  source scripts/nbio [activate]     Activate agent .venv + export paths (daily)
-  ./scripts/nbio status              Detect layout / venv / delivery / AF3 (table)
-  ./scripts/nbio doctor [--verbose]  Capability table (nanobot-bio doctor)
-  ./scripts/nbio setup [args...]     First-time / repair → setup_all.sh
-  ./scripts/nbio chat [args...]      Activate then nanobot-bio chat
-  ./scripts/nbio start|up [opts]     万能一键：AF3 纠偏(+heal) → status → chat
+  source scripts/nbio.sh [activate]     Activate agent .venv + export paths (daily)
+  ./scripts/nbio.sh status              Detect layout / venv / delivery / AF3 (table)
+  ./scripts/nbio.sh doctor [--verbose]  Capability table (nanobot-bio doctor)
+  ./scripts/nbio.sh setup [args...]     First-time / repair → setup_all.sh
+  ./scripts/nbio.sh chat [args...]      Activate then nanobot-bio chat
+  ./scripts/nbio.sh start|up [opts]     one-shot: AF3 fix(+heal) → status → chat
                                      opts: --dry-run --heal --no-heal --ask --doctor
 
 Environment overrides: BIO_ROOT, DELIVERY_ROOT, AF3_PYTHON, AF3_BLACKWELL_ROOT,

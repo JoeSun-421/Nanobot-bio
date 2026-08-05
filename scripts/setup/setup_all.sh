@@ -2,16 +2,16 @@
 # =============================================================================
 # nanobot-bio — sole environment setup entry (Linux / SSH)
 # =============================================================================
-# 智能默认：按 nvidia-smi 的 compute capability 自动选 AF3 栈
-#   - CC 12.*（Blackwell，如 RTX 5090）→ 仓外 af3_blackwell + jax≥0.10
-#   - 其它（Ampere/Ada/Hopper 等）→ delivery 经典 conda env `af3`（jax 0.4.x）
+# Smart default: pick AF3 stack from nvidia-smi compute capability
+#   - CC 12.* (Blackwell, e.g. RTX 5090) → out-of-tree af3_blackwell + jax≥0.10
+#   - Other (Ampere/Ada/Hopper, …) → delivery classic conda env `af3` (jax 0.4.x)
 #
 # First-time (science conda + agent + optional AF3 hardening):
 #   bash scripts/setup/setup_all.sh
 #
-# 明确机型入口（薄包装，推荐协作方按 GPU 选用）：
-#   bash scripts/setup/setup_all_ampere_or_older.sh   # 经典 af3（A100/H100/4090…）
-#   bash scripts/setup/setup_all_blackwell.sh         # 强制 Blackwell 隔离栈
+# Explicit machine entrypoints (thin wrappers; prefer by GPU):
+#   bash scripts/setup/setup_all_ampere_or_older.sh   # classic af3 (A100/H100/4090…)
+#   bash scripts/setup/setup_all_blackwell.sh         # force Blackwell isolated stack
 #
 # Day-to-day (standard venv; CLI loads .env automatically):
 #   source $BIO_ROOT/nanobot-bio/.venv/bin/activate
@@ -22,7 +22,7 @@
 #   --skip-smoke     skip doctor smoke check
 #   --skip-af3       skip AF3 hardening (default on; 10-minute budget)
 #   --af3-stack=auto|classic|blackwell
-#                    AF3 栈选择（也可用环境变量 AF3_STACK；默认 auto）
+#                    AF3 stack selection (or env AF3_STACK; default auto)
 #   AF3_BUDGET_SEC=600  AF3 hardening timeout (then deferred)
 #
 # After delivery setup_envs, import/probe-verifies rhobind (torch+transformers),
@@ -34,7 +34,7 @@ set -euo pipefail
 WITH_CONDA=1
 SKIP_SMOKE=0
 SKIP_AF3=0
-# auto = 按 GPU CC 探测；classic = delivery `af3`；blackwell = 隔离栈
+# auto = probe GPU CC; classic = delivery `af3`; blackwell = isolated stack
 AF3_STACK="${AF3_STACK:-auto}"
 for arg in "$@"; do
   case "$arg" in
@@ -158,7 +158,7 @@ _setup_af3() {
   echo "[af3] AF3_STACK=${AF3_STACK:-auto}"
   # Delivery's pinned JAX cannot execute on Blackwell (compute capability 12).
   # Keep its official env untouched and use the isolated agent-side stack.
-  # AF3_STACK: auto → CC 12.* 用 blackwell；classic / blackwell 可强制覆盖探测结果。
+  # AF3_STACK: auto → blackwell on CC 12.*; classic / blackwell force-override probe.
   local GPU_CC
   GPU_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | awk 'NR==1{print; exit}' || true)"
   local use_blackwell=0
@@ -171,8 +171,8 @@ _setup_af3() {
       fi
       ;;
   esac
-  if (( use_blackwell )); then
-    # Portable discovery (AutoDL path is only one optional candidate).
+    if (( use_blackwell )); then
+    # Portable discovery relative to BIO_ROOT / home /opt.
     local BW_ROOT="" BW_ENV="" _r _base _parent
     _parent="$(cd "$BIO_ROOT/.." 2>/dev/null && pwd || true)"
     for _r in \
@@ -181,8 +181,7 @@ _setup_af3() {
       "$BIO_ROOT/af3_blackwell" \
       "${_parent}/af3_blackwell" \
       "${HOME}/af3_blackwell" \
-      "/opt/af3_blackwell" \
-      "/root/autodl-tmp/af3_blackwell"
+      "/opt/af3_blackwell"
     do
       [[ -n "$_r" && -f "${_r%/}/alphafold3/run_alphafold.py" ]] || continue
       BW_ROOT="${_r%/}"
@@ -206,7 +205,8 @@ _setup_af3() {
           "${HOME}/miniforge3" \
           "${HOME}/mambaforge" \
           "${HOME}/anaconda3" \
-          "/root/autodl-tmp/conda"
+          "${_parent}/conda" \
+          "$BIO_ROOT/conda"
         do
           [[ -n "$_base" && -x "${_base%/}/envs/af3_blackwell/bin/python" ]] || continue
           BW_ENV="${_base%/}/envs/af3_blackwell"
@@ -697,7 +697,7 @@ echo "[5/6] .env + workspace skill ..."
 _AF3_PY="${AF3_PYTHON:-/bin/false}"
 _af3_py_ok=0
 if [[ -x "$_AF3_PY" && "$_AF3_PY" != *"/.venv/"* ]]; then
-  # classic: .../envs/af3/bin/python（路径含 /af3/）；blackwell: .../af3_blackwell/...
+  # classic: .../envs/af3/bin/python (path contains /af3/); blackwell: .../af3_blackwell/...
   if [[ "$_AF3_PY" == *"af3_blackwell"* && "${AF3_STACK:-auto}" != "classic" ]]; then
     _af3_py_ok=1
   elif [[ "$_AF3_PY" == *"/af3/"* && "$_AF3_PY" != *"af3_blackwell"* && "${AF3_STACK:-auto}" != "blackwell" ]]; then
@@ -706,7 +706,8 @@ if [[ -x "$_AF3_PY" && "$_AF3_PY" != *"/.venv/"* ]]; then
 fi
 if [[ "$_af3_py_ok" != "1" ]]; then
   _AF3_PY="/bin/false"
-  # 候选顺序跟随 AF3_STACK，避免 classic 机写进 blackwell 解释器（或相反）。
+  # Candidate order follows AF3_STACK so classic machines do not pick a
+  # blackwell interpreter (and vice versa).
   _af3_cands=()
   _gpu_cc="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | awk 'NR==1{print; exit}' || true)"
   case "${AF3_STACK:-auto}" in

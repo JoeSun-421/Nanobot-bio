@@ -98,7 +98,7 @@ python scripts/cert/smoke_delivery_tools.py --network --af3
 | `RBP_BACKEND` | 产品路径为 `delivery` |
 | `RBP_RAW_TOOLS` | `all`（默认）/ `whitelist`（窄 MVP 收窄）/ `none` |
 
-子环境会清理 agent `.venv`，避免 torch / jax 栈混用。完整表见 [`INSTALL.md`](../../../INSTALL.md)。运维路径发现 / AF3 heal：`./scripts/nbio start`（见 [`scripts/README.zh.md`](../../../scripts/README.zh.md)）；AutoDL 路径仅为候选之一。
+子环境会清理 agent `.venv`，避免 torch / jax 栈混用。完整表见 [`INSTALL.md`](../../../INSTALL.md)。运维路径发现 / AF3 heal：`./scripts/nbio.sh start`（见 [`scripts/README.zh.md`](../../../scripts/README.zh.md)）；AutoDL 路径仅为候选之一。
 
 ## 设计思路
 

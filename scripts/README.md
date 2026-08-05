@@ -20,17 +20,17 @@ source scripts/nbio.sh
 - Setup: agent `.venv` + delivery science conda + AF3 stack selection
 - CI / Cert / Docker / Data helpers (unchanged filenames)
 
-## Path discovery (not AutoDL-specific)
+## Path discovery (portable Linux)
 
-`nbio` / `setup_*` **discover paths on the current host**. Trial-machine absolutes such as `/root/autodl-tmp/...` are optional last-resort candidates, never the only source of truth:
+`nbio` / `setup_*` **discover paths relative to the checkout and standard env vars** — no host-vendor absolute paths:
 
 | Target | Candidate order (summary) |
 |--------|---------------------------|
-| `BIO_ROOT` / delivery | Relative to `scripts/nbio` checkout → `$BIO_ROOT` / `$DELIVERY_ROOT` (only if still present) |
-| `AF3_BLACKWELL_ROOT` | `$AF3_BLACKWELL_ROOT` → `$BIO_ROOT/af3_blackwell` → sibling of BIO parent → `~/af3_blackwell` → `/opt/af3_blackwell` → other host layouts (incl. AutoDL) |
-| `AF3_PYTHON` | `$ENV_PREFIX` → `conda info --base` → `$CONDA_PREFIX` / common miniconda·anaconda → host-specific |
+| `BIO_ROOT` / delivery | Relative to `scripts/nbio.sh` checkout → `$BIO_ROOT` / `$DELIVERY_ROOT` (only if still present) |
+| `AF3_BLACKWELL_ROOT` | `$AF3_BLACKWELL_ROOT` → `$BIO_ROOT/af3_blackwell` → sibling of BIO parent → `~/af3_blackwell` → `/opt/af3_blackwell` |
+| `AF3_PYTHON` | `$ENV_PREFIX` → `conda info --base` → `$CONDA_PREFIX` / common miniconda·anaconda → `$BIO_ROOT/../conda` or `$BIO_ROOT/conda` |
 
-`./scripts/nbio start` (or `--dry-run`) prints the candidate list and selection, then heals `.env` for this machine (backup `.env.bak.nbio.*`). On a new host: place delivery (+ optional af3_blackwell), then `nbio setup` → `nbio start` — no need to hand-copy AutoDL absolute paths.
+`./scripts/nbio.sh start` (or `--dry-run`) prints the candidate list and selection, then heals `.env` for this machine (backup `.env.bak.nbio.*`). On a new host: place delivery (+ optional af3_blackwell), then `nbio setup` → `nbio start`.
 
 ## Implementation
 
@@ -55,10 +55,10 @@ scripts/
 ```bash
 git clone https://github.com/JoeSun-421/Nanobot-bio.git
 cd Nanobot-bio
-./scripts/nbio setup                 # first time
-./scripts/nbio start                 # one-shot: discover paths → heal AF3 → chat
-# ./scripts/nbio start --dry-run     # show candidate list + adaptation only
-# source scripts/nbio && nanobot-bio chat
+./scripts/nbio.sh setup                 # first time
+./scripts/nbio.sh start                 # one-shot: discover paths → heal AF3 → chat
+# ./scripts/nbio.sh start --dry-run     # show candidate list + adaptation only
+# source scripts/nbio.sh && nanobot-bio chat
 ```
 
 `start` / `up` picks classic vs blackwell from GPU `compute_cap`, then aligns `AF3_DIR` / `AF3_PYTHON` / `AF3_CACHE` (default: heal `.env` with backup; `--no-heal` = session-only). Install narrative: [`INSTALL.md`](../INSTALL.md).

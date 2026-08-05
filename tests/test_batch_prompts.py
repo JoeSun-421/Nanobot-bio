@@ -191,7 +191,7 @@ def test_parse_suite_message_last_three_chinese_user_style():
     from rbp_eval.accept.batch_prompts import parse_prompt_cases, select_prompt_cases
 
     msg = (
-        "'/root/autodl-tmp/bio_agent/nanobot-bio/docs/eval/transfer_test_prompts.md'"
+        "'/home/user/bio_agent/nanobot-bio/docs/eval/transfer_test_prompts.md'"
         "读取最后三条测试语句进行预测"
     )
     path = extract_suite_path_candidate(msg)

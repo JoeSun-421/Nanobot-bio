@@ -52,7 +52,7 @@ build_parser().print_help()
 **Daily user path**
 
 ```bash
-source scripts/nbio                 # optional daily activate helper
+source scripts/nbio.sh                 # optional daily activate helper
 nanobot-bio doctor                  # capability table; --verbose for path dumps
 nanobot-bio onboard                 # interactive LLM setup
 nanobot-bio chat                    # multi-turn

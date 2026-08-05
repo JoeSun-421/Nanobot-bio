@@ -98,7 +98,7 @@ python scripts/cert/smoke_delivery_tools.py --network --af3
 | `RBP_BACKEND` | Product path is `delivery` |
 | `RBP_RAW_TOOLS` | `all` (default) / `whitelist` (narrow MVP opt-out) / `none` |
 
-Child envs scrub the agent `.venv` so torch / jax stacks do not mix. Full table: [`INSTALL.md`](../../../INSTALL.md). Operator path discovery / AF3 heal: `./scripts/nbio start` (see [`scripts/README.md`](../../../scripts/README.md)); AutoDL paths are candidates only.
+Child envs scrub the agent `.venv` so torch / jax stacks do not mix. Full table: [`INSTALL.md`](../../../INSTALL.md). Operator path discovery / AF3 heal: `./scripts/nbio.sh start` (see [`scripts/README.md`](../../../scripts/README.md)); AutoDL paths are candidates only.
 
 ## Design rationale
 

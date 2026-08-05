@@ -58,7 +58,7 @@ rbp-agent chat
 **One-shot agent via CLI**
 
 ```bash
-# Activate env first (see INSTALL.md / scripts/nbio)
+# Activate env first (see INSTALL.md / scripts/nbio.sh)
 nanobot-bio doctor
 nanobot-bio agent --query "Does this RNA bind PTBP1?" --example
 # or with explicit RNA file:

@@ -20,17 +20,17 @@ source scripts/nbio.sh
 - Setup：agent `.venv` + delivery 科学 conda + AF3 栈选型
 - CI / Cert / Docker / Data 辅助脚本（文件名未改）
 
-## 路径发现（非 AutoDL 专用）
+## 路径发现（通用 Linux）
 
-`nbio` / `setup_*` **在本机自动搜寻**路径，不把试验机（如 `/root/autodl-tmp/...`）当作唯一真相：
+`nbio` / `setup_*` **按 checkout 与标准环境变量发现路径**，不含厂商机绝对路径：
 
 | 目标 | 候选顺序（摘要） |
 |------|------------------|
-| `BIO_ROOT` / delivery | 相对 `scripts/nbio` 的 checkout → `$BIO_ROOT` / `$DELIVERY_ROOT`（仅当目录仍存在） |
-| `AF3_BLACKWELL_ROOT` | `$AF3_BLACKWELL_ROOT` → `$BIO_ROOT/af3_blackwell` → BIO 父目录旁 → `~/af3_blackwell` → `/opt/af3_blackwell` → 其它主机布局（含 AutoDL） |
-| `AF3_PYTHON` | `$ENV_PREFIX` → `conda info --base` → `$CONDA_PREFIX` / 常见 miniconda·anaconda → 主机特例 |
+| `BIO_ROOT` / delivery | 相对 `scripts/nbio.sh` 的 checkout → `$BIO_ROOT` / `$DELIVERY_ROOT`（仅当目录仍存在） |
+| `AF3_BLACKWELL_ROOT` | `$AF3_BLACKWELL_ROOT` → `$BIO_ROOT/af3_blackwell` → BIO 父目录旁 → `~/af3_blackwell` → `/opt/af3_blackwell` |
+| `AF3_PYTHON` | `$ENV_PREFIX` → `conda info --base` → `$CONDA_PREFIX` / 常见 miniconda·anaconda → `$BIO_ROOT/../conda` 或 `$BIO_ROOT/conda` |
 
-`./scripts/nbio start`（或 `--dry-run`）会打印候选列表与选中项，并按本机结果 heal `.env`（先备份 `.env.bak.nbio.*`）。新机器：放好 delivery 与（可选）af3_blackwell 后执行 `nbio setup` → `nbio start` 即可，无需手写 AutoDL 绝对路径。
+`./scripts/nbio.sh start`（或 `--dry-run`）会打印候选列表与选中项，并按本机结果 heal `.env`（先备份 `.env.bak.nbio.*`）。新机器：放好 delivery 与（可选）af3_blackwell 后执行 `nbio setup` → `nbio start`。
 
 ## 实现方法
 
@@ -55,10 +55,10 @@ scripts/
 ```bash
 git clone https://github.com/JoeSun-421/Nanobot-bio.git
 cd Nanobot-bio
-./scripts/nbio setup                 # 首次
-./scripts/nbio start                 # 日常万能一键：本机路径发现 → 纠偏 AF3 → chat
-# ./scripts/nbio start --dry-run     # 只看候选列表与自动适配，不启动
-# source scripts/nbio && nanobot-bio chat   # 等价分步
+./scripts/nbio.sh setup                 # 首次
+./scripts/nbio.sh start                 # 日常万能一键：本机路径发现 → 纠偏 AF3 → chat
+# ./scripts/nbio.sh start --dry-run     # 只看候选列表与自动适配，不启动
+# source scripts/nbio.sh && nanobot-bio chat   # 等价分步
 ```
 
 `start` / `up` 会按 `compute_cap` 选择 classic / blackwell，纠偏 `AF3_DIR`·`AF3_PYTHON`·`AF3_CACHE`（默认 heal `.env` 并备份；`--no-heal` 仅会话生效）。安装说明见 [`INSTALL.md`](../INSTALL.md)。

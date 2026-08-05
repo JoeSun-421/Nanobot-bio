@@ -17,8 +17,8 @@
 
 | Scenario | Command |
 |----------|---------|
-| **Daily** | `./scripts/nbio start` (or `source scripts/nbio` → chat) |
-| **First / hollow-env repair** | `./scripts/nbio setup` (or `setup_all.sh` here) |
+| **Daily** | `./scripts/nbio.sh start` (or `source scripts/nbio.sh` → chat) |
+| **First / hollow-env repair** | `./scripts/nbio.sh setup` (or `setup_all.sh` here) |
 | Legacy activate | `source scripts/setup/activate_env.sh` → forwards to `nbio activate` |
 
 Paths (`AF3_ROOT` / `ENV_PREFIX` / delivery) are discovered on the host; see [`../README.md`](../README.md) “Path discovery”. AutoDL layouts are candidates only.
@@ -39,13 +39,13 @@ Paths (`AF3_ROOT` / `ENV_PREFIX` / delivery) are discovered on the host; see [`.
 ## How to use
 
 ```bash
-./scripts/nbio setup
-./scripts/nbio setup --skip-conda
+./scripts/nbio.sh setup
+./scripts/nbio.sh setup --skip-conda
 bash scripts/setup/setup_all_blackwell.sh
 
-./scripts/nbio start                 # daily: discover → heal AF3 → chat
-# source scripts/nbio && nanobot-bio doctor
-./scripts/nbio status
+./scripts/nbio.sh start                 # daily: discover → heal AF3 → chat
+# source scripts/nbio.sh && nanobot-bio doctor
+./scripts/nbio.sh status
 ```
 
 Full narrative: [`INSTALL.md`](../../INSTALL.md).
