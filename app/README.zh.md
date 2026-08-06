@@ -8,7 +8,7 @@
 
 `app/` 是 **nanobot-bio** 面向操作者的产品层。它对接仓内 Nanobot 运行时、为 RBP 科学模式过滤工具、规范化 JSON verdict，并把每一次科学调用经只读 delivery 客户端桥出。协作者与 CI 应从这里进入（`nanobot-bio` / `rbp-agent` / `python -m app`），而不是临时直连 Nanobot 或 delivery 脚本。
 
-离线评估与自演化在 [`rbp_eval/`](../rbp_eval/README.zh.md)，刻意不在 chat 热路径上。绑定阶段语义（Stage 0 own-head、transfer、integrate）见 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
+离线评估与自演化在 [`rbp_eval/`](../rbp_eval/README.zh.md)，刻意不在 chat 热路径上。绑定阶段语义（Stage 0 own-head、transfer、integrate）见 [rbp-agent SKILL.md](../nanobot/skills/rbp-agent/SKILL.md)。
 
 
 
@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -38,10 +39,10 @@ source scripts/nbio.sh
 
 ```
 用户 CLI (app/cli)
-  → app.agent.RBPAgent
-      → nanobot/ (loop · tools · skill)
-          → app.backends.delivery
-              → ../rhobind_agent_delivery (只读)
+ → app.agent.RBPAgent
+ → nanobot/ (loop · tools · skill)
+ → app.backends.delivery
+ → ../rhobind_agent_delivery (只读)
 离线评估 → rbp_eval/（不经 chat 主路径）
 ```
 
@@ -60,11 +61,11 @@ rbp-agent chat
 **CLI 一次性 agent**
 
 ```bash
-# 先激活环境（见 INSTALL.md / scripts/nbio.sh）
+# 先激活环境（见 INSTALL.zh.md / scripts/nbio.sh）
 nanobot-bio doctor
-nanobot-bio agent --query "Does this RNA bind PTBP1?" --example
-# 或指定 RNA 文件：
-nanobot-bio agent --rna-file /path/to/rna.fa --query "Predict binding to PTBP1"
+nanobot-bio agent --example pos
+# 或指定 RBP id + RNA 文件：
+nanobot-bio agent --query PTBP1 --rna-file /path/to/rna.fa --device auto
 ```
 
 **编程调用 `RBPAgent`**
@@ -72,7 +73,7 @@ nanobot-bio agent --rna-file /path/to/rna.fa --query "Predict binding to PTBP1"
 ```python
 from app.agent import RBPAgent
 
-agent = RBPAgent()  # 应用 delivery 环境并注册 RBP tools
+agent = RBPAgent() # 应用 delivery 环境并注册 RBP tools
 result = agent.run_sync("Predict whether the sample RNA binds PTBP1.")
 print(result.verdict_valid, result.verdict)
 print(result.tools_used)
@@ -105,4 +106,4 @@ nanobot-bio doctor
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../nanobot/README.zh.md`](../nanobot/README.zh.md) · [`../artifacts/README.zh.md`](../artifacts/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [rbp-agent SKILL.md](../nanobot/skills/rbp-agent/SKILL.md) · [`../nanobot/README.zh.md`](../nanobot/README.zh.md) · [`../artifacts/README.zh.md`](../artifacts/README.zh.md)

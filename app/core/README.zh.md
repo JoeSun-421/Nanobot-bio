@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -54,8 +55,8 @@ from app.core import normalize_verdict, validate_verdict
 ```python
 from app.core.paths import ensure_artifact_dirs, report_path, find_report
 
-dirs = ensure_artifact_dirs()  # 创建 artifacts/sessions, reports/json, …
-out = report_path("eval_loo_report.json")  # → artifacts/reports/json/…
+dirs = ensure_artifact_dirs() # 创建 artifacts/sessions, reports/json, …
+out = report_path("eval_loo_report.json") # → artifacts/reports/json/…
 existing = find_report("eval_loo_report.json")
 ```
 
@@ -65,8 +66,8 @@ existing = find_report("eval_loo_report.json")
 from app.core.runtime_config import load_runtime_config, fusion_weights, config_source
 
 cfg = load_runtime_config(prefer_evolved=True)
-print(config_source())          # 当前生效的 YAML 层
-print(fusion_weights())         # rna_peak_homology 可能被强制为 0
+print(config_source()) # 当前生效的 YAML 层
+print(fusion_weights()) # rna_peak_homology 可能被强制为 0
 ```
 
 **Verdict 规整 / 校验**
@@ -87,4 +88,4 @@ assert ok, errors
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../config/README.zh.md`](../../config/README.zh.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
+[`../README.zh.md`](../README.zh.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../config/README.zh.md`](../../config/README.zh.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)

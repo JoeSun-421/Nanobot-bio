@@ -3,6 +3,10 @@
 To add a new backend, implement a function with the signature:
     _wrap_<name>(command: str, workspace: str, cwd: str) -> str
 and register it in _BACKENDS below.
+
+CLI examples:
+  nanobot-bio chat
+  source scripts/nbio.sh
 """
 
 import shlex

@@ -4,7 +4,7 @@
 
 [English](README.md) · [中文]
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 用途
 
@@ -23,14 +23,14 @@
 nanobot-bio eval-plan [--with-seq]
 python -m rbp_eval.plans.evaluation_plan
 python -m rbp_eval.plans.evaluation_plan --with-seq
-python -m rbp_eval.plans.evaluation_plan --heavy   # 需要 ≥8 GiB + rhobind
+python -m rbp_eval.plans.evaluation_plan --heavy # 需要 ≥8 GiB + rhobind
 ```
 
 ```python
 from rbp_eval.plans.evaluation_plan import (
-    assign_strata,
-    run_light_evaluation_plan,
-    write_faithfulness_sheet,
+ assign_strata,
+ run_light_evaluation_plan,
+ write_faithfulness_sheet,
 )
 ```
 
@@ -40,9 +40,9 @@ from rbp_eval.plans.evaluation_plan import (
 
 ```bash
 python -m rbp_eval.plans.evaluation_plan \
-  --out artifacts/reports/json/evaluation_plan_report.json \
-  --md artifacts/reports/md/evaluation_plan_report.md \
-  --qual artifacts/reports/csv/faithfulness_rating_sheet.csv
+ --out artifacts/reports/json/evaluation_plan_report.json \
+ --md artifacts/reports/md/evaluation_plan_report.md \
+ --qual artifacts/reports/csv/faithfulness_rating_sheet.csv
 ```
 
 **分层辅助**
@@ -51,7 +51,7 @@ python -m rbp_eval.plans.evaluation_plan \
 from rbp_eval.plans.evaluation_plan import assign_strata, strata_bucket_schema
 
 tags = assign_strata(in_panel=True, mode="transfer", dark=False)
-print(tags)  # 例如含 in_panel_transfer / own_head 启发式
+print(tags) # 例如含 in_panel_transfer / own_head 启发式
 print(list(strata_bucket_schema().keys())[:4])
 ```
 

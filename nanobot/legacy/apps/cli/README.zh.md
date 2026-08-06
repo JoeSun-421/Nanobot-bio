@@ -38,7 +38,7 @@ assert mgr.mentioned_installed_apps("@echo hello") == []
 from nanobot.legacy.apps.cli.utils import session_extra
 
 assert session_extra({"cli_apps": [{"name": "echo"}]}) == {
-    "cli_apps": [{"name": "echo"}]
+ "cli_apps": [{"name": "echo"}]
 }
 assert session_extra({}) == {}
 ```

@@ -4,7 +4,7 @@ Agent loop, memory/context, skills loader, and tool packages.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -52,7 +52,7 @@ from nanobot.agent.tools.rbp import register_all
 
 reg = ToolRegistry()
 names = register_all(reg)
-print(names)  # predict_interaction, seq_similarity, …
+print(names) # predict_interaction, seq_similarity, …
 ```
 
 **Defaults after product chat start**
@@ -78,4 +78,4 @@ pytest tests/test_proposal_compliance.py tests/test_package_layout.py
 
 ## See also
 
-[`../README.md`](../README.md) · [`tools/rbp/README.md`](tools/rbp/README.md) · [`../sdk/README.md`](../sdk/README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../app/README.md`](../../app/README.md)
+[`../README.md`](../README.md) · [`tools/rbp/README.md`](tools/rbp/README.md) · [`../sdk/README.md`](../sdk/README.md) · [rbp-agent SKILL.md](../skills/rbp-agent/SKILL.md) · [`../../app/README.md`](../../app/README.md)

@@ -8,7 +8,7 @@
 
 本包回答：「产品树对 CI / 协作者是否接线正确？」它跑 ruff / pytest / SoT 布局 / MVP 结构验收。科学分数（own-head AUPRC、transfer 校准、promote 证据）属于 [`rbp_eval/`](../../rbp_eval/README.zh.md) 以及 `accept-*` / `promote-evolved` CLI——不要在这里加科学打分路径。
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 布局
 
@@ -52,8 +52,8 @@ assert rc == 0
 
 # 可选：delivery LOO 就绪时才断言报告形状
 if delivery_loo_ready():
-    from app.dev.gate import assert_loo_report
-    assert_loo_report()
+ from app.dev.gate import assert_loo_report
+ assert_loo_report()
 ```
 
 **布局断言（SoT）**

@@ -12,6 +12,12 @@ RhoBind, Foldseek, ESM, or literature retrieval. Responsibilities:
 
 Invariant: probs, similarities, and sequences come from delivery or upstream
 tool results. This file is orchestration glue only.
+
+CLI examples:
+  nanobot-bio doctor
+  python -m app.sync_overlay
+  nanobot-bio nanobot-smoke
+  source scripts/nbio.sh
 """
 
 from __future__ import annotations

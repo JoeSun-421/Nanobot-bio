@@ -2,13 +2,13 @@
 
 <p><b>English</b> · <a href="INSTALL.zh.md">中文</a></p>
 
-> **Single entry for install / env / acceptance.** Overview: [README.md](README.md) / [README.zh.md](README.zh.md). Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) / [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md). Agent gates: [AGENTS.md](AGENTS.md).
+> **Single entry for install / env / acceptance.** Overview: [README.md](README.md) / [README.zh.md](README.zh.md). Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) / [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md). Agent gates: [AGENTS.md](AGENTS.md). Hand-off: [HANDOFF.md](HANDOFF.md).
 
 ## Portable layout (Linux)
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 # Conventions (discovered by nbio, or export explicitly):
 #   DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
@@ -41,9 +41,9 @@ Do **not** treat a trial-machine absolute path as the only source of truth; `nbi
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
 mkdir -p "$BIO_ROOT"
 # Place this repo and delivery as siblings:
-#   $BIO_ROOT/nanobot-bio/
+#   $BIO_ROOT/Nanobot-bio/   # or nanobot-bio/
 #   $BIO_ROOT/rhobind_agent_delivery/
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 
 ./scripts/nbio.sh setup                  # full science stack + agent venv (= setup_all.sh)
 # Optional GPU-specific thin wrappers (still call setup_all.sh):
@@ -58,14 +58,14 @@ nanobot-bio onboard                   # pick LLM provider + key → .env
 # source scripts/nbio.sh && nanobot-bio doctor
 ```
 
-`setup_all.sh` (via `nbio setup`) uses in-repo slim `nanobot/`. `pip install -e .` installs the in-repo package; do **not** also install `nanobot-ai` (it steals `import nanobot`). GPU selection: [docs/guides/AF3_RUNTIME_AND_RELEASE.md](docs/guides/AF3_RUNTIME_AND_RELEASE.md). Scripts map: [`scripts/README.md`](scripts/README.md).
+`setup_all.sh` (via `nbio setup`) uses in-repo slim `nanobot/`. `pip install -e .` installs the in-repo package; do **not** also install `nanobot-ai` (it steals `import nanobot`). GPU selection: [ARCHITECTURE.md](ARCHITECTURE.md) (AF3 notes) · [scripts/nbio.sh](scripts/nbio.sh). Scripts map: [`scripts/README.md`](scripts/README.md).
 
 **Env name present ≠ deps installed.** Delivery `setup_envs.sh` only creates missing conda **names**; a bare `conda create -n rhobind` leaves a hollow env. `nbio setup` / `setup_all.sh` run **import-level checks** and heal. Daily use `./scripts/nbio.sh start` (or `source scripts/nbio.sh` + `nanobot-bio chat`) — you need not re-run setup every time. `start` auto-discovers AF3 / conda on the host (`$AF3_BLACKWELL_ROOT`, sibling `af3_blackwell`, `~/af3_blackwell`, `conda info --base`, …). Use `start --dry-run` to list candidates only.
 
 ### Path B: Docker (isolated; good for operators who do not develop)
 
 ```bash
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 docker compose build                              # agent-only (light)
 # docker compose --profile full build             # full science (heavy; GPU)
 docker compose run --rm app onboard
@@ -84,7 +84,7 @@ Data bundles mount via volumes (see `docker-compose.yml`), not baked into the im
 cd "$BIO_ROOT/rhobind_agent_delivery"
 bash agent/setup_envs.sh             # protein_embed / rna / rhobind / af3
 
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
@@ -145,7 +145,7 @@ bash scripts/setup/setup_all_blackwell.sh
 ./scripts/nbio.sh start --heal       # write discovered paths into .env (backup first)
 ```
 
-Do **not** hand-copy another machine’s absolute paths. Details: [docs/guides/AF3_RUNTIME_AND_RELEASE.md](docs/guides/AF3_RUNTIME_AND_RELEASE.md).
+Do **not** hand-copy another machine’s absolute paths. Details: [ARCHITECTURE.md](ARCHITECTURE.md) (AF3 notes) · [scripts/nbio.sh](scripts/nbio.sh).
 
 ---
 
@@ -182,7 +182,7 @@ nanobot-bio gap-closure      # 4. Stage-0 / unseen fixture pack
 nanobot-bio gate             # 5. ruff + pytest + layout (+ optional LOO)
 ```
 
-Reports land under `artifacts/reports/{json,md,csv}/`. Sessions / PA memory / domain memory (`proxy_map`): [docs/guides/MEMORY_AND_SESSIONS.md](docs/guides/MEMORY_AND_SESSIONS.md).
+Reports land under `artifacts/reports/{json,md,csv}/`. Sessions / PA memory / domain memory (`proxy_map`): [ARCHITECTURE.md](ARCHITECTURE.md) §2.
 
 ### 4.1 CI and self-hosted runners
 

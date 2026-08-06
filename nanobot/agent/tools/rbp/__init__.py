@@ -20,6 +20,12 @@ Module map:
 
 Invariant across tools: never invent ``s_i`` / ``p_hat``; probs and
 similarities come from delivery or upstream tool results only.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio chat
+  nanobot-bio doctor
 """
 
 import os

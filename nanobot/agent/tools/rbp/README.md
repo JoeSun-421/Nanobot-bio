@@ -6,7 +6,7 @@ Product RBP toolkit (SoT). Tool subclasses call delivery for scores; the LLM onl
 
 ## Purpose
 
-These tools implement the scientific stages described in [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md): catalogue resolve / own-head predict, multi-view retrieve, fuse, structure, annotation, and evolve helpers. Numbers (`prob`, similarities, sequences, citations) come **only** from tool returns — never from model memory. Registration is curated via `ALL_RBP_TOOL_CLASSES` + optional `RBP_PHMMER`.
+These tools implement the scientific stages described in [rbp-agent SKILL.md](../../../skills/rbp-agent/SKILL.md): catalogue resolve / own-head predict, multi-view retrieve, fuse, structure, annotation, and evolve helpers. Numbers (`prob`, similarities, sequences, citations) come **only** from tool returns — never from model memory. Registration is curated via `ALL_RBP_TOOL_CLASSES` + optional `RBP_PHMMER`.
 
 ## Layout
 
@@ -16,7 +16,8 @@ These tools implement the scientific stages described in [`docs/product/BINDING_
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -34,7 +35,7 @@ source scripts/nbio.sh
 | `path_guard.py` | Allowlisted path resolution for FASTA / markdown tools |
 | `fasta_score.py` | `ScoreBindingFastaTool` — allowlisted FASTA batch own-head + AUPRC |
 | `project_doc.py` | `ReadProjectDocTool` — allowlisted `.md` chunked reads |
-| `prompt_suite.py` | `RunPromptSuiteTool` — docs/eval suite → outer-loop batch-prompts |
+| `prompt_suite.py` | `RunPromptSuiteTool` — eval suite → outer-loop batch-prompts |
 | `common.py` | Shared helpers / envelopes |
 | `stage_contract.py` | Stage contracts / guards |
 | `turn_guards.py` | Per-turn safety guards |
@@ -45,9 +46,9 @@ source scripts/nbio.sh
 
 ```python
 from nanobot.agent.tools.rbp import (
-    register_all,
-    ALL_RBP_TOOL_CLASSES,
-    PredictInteractionTool,
+ register_all,
+ ALL_RBP_TOOL_CLASSES,
+ PredictInteractionTool,
 )
 from nanobot.agent.tools.rbp.register import register_rbp_tools
 ```
@@ -72,7 +73,7 @@ from nanobot.agent.tools import ToolRegistry
 from nanobot.agent.tools.rbp.register import register_rbp_tools
 
 reg = ToolRegistry()
-_, names = register_rbp_tools(reg)  # default include_raw_delivery="all"
+_, names = register_rbp_tools(reg) # default include_raw_delivery="all"
 print(len(names), "tools mounted")
 # Narrow MVP: include_raw_delivery="whitelist" or RBP_RAW_TOOLS=whitelist
 ```
@@ -99,4 +100,4 @@ pytest tests/test_proposal_compliance.py
 
 ## See also
 
-[`../README.md`](../README.md) · [`../../../skills/README.md`](../../../skills/README.md) · [`../../../../app/backends/delivery/README.md`](../../../../app/backends/delivery/README.md) · [`../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.md`](../README.md) · [`../../../skills/README.md`](../../../skills/README.md) · [`../../../../app/backends/delivery/README.md`](../../../../app/backends/delivery/README.md) · [rbp-agent SKILL.md](../../../skills/rbp-agent/SKILL.md)

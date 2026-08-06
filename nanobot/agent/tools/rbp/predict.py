@@ -12,6 +12,12 @@ Bridges the nanobot Tool to delivery ``rhobind_predict``
 Invariant: never invent ``p_hat``. On error/OOM return null and do not retry.
 Per-turn call/cache guards prevent anti-loops; cache hits re-apply Stage
 guard side-effects (own-head STOP, low-head-coverage flags).
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --example neg
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
 """
 
 from __future__ import annotations

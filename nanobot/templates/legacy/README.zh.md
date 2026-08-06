@@ -25,7 +25,7 @@
 ```python
 from nanobot.utils.prompt_templates import render_template
 
-render_template("agent/identity.md")  # 活跃路径
+render_template("agent/identity.md") # 活跃路径
 ```
 
 ## 代码示例
@@ -35,10 +35,10 @@ from importlib.resources import files
 
 legacy = files("nanobot") / "templates" / "legacy" / "HEARTBEAT.md"
 try:
-    text = legacy.read_text(encoding="utf-8")
-    print("legacy HEARTBEAT lines:", len(text.splitlines()))
+ text = legacy.read_text(encoding="utf-8")
+ print("legacy HEARTBEAT lines:", len(text.splitlines()))
 except Exception as exc:
-    print("not packaged or unreadable:", type(exc).__name__)
+ print("not packaged or unreadable:", type(exc).__name__)
 ```
 
 ## 依赖 / 环境

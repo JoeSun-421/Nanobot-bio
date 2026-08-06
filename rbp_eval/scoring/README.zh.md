@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -31,10 +32,10 @@ source scripts/nbio.sh
 
 ```python
 from rbp_eval.scoring.fuse_hits import (
-    fuse_rbp_hits,
-    aggregate_p_hat,
-    fuse_proxy_candidates,
-    DEFAULT_WEIGHTS,
+ fuse_rbp_hits,
+ aggregate_p_hat,
+ fuse_proxy_candidates,
+ DEFAULT_WEIGHTS,
 )
 ```
 
@@ -44,11 +45,11 @@ from rbp_eval.scoring.fuse_hits import (
 from rbp_eval.scoring.fuse_hits import fuse_rbp_hits, label_from_p_hat
 
 hits = fuse_rbp_hits(
-    [
-        [{"alias": "HNRNPA1", "metric": "esm_cosine", "score": 0.9}],
-        [{"alias": "HNRNPA1", "metric": "domain_jaccard", "score": 0.6}],
-    ],
-    top_k=5,
+ [
+ [{"alias": "HNRNPA1", "metric": "esm_cosine", "score": 0.9}],
+ [{"alias": "HNRNPA1", "metric": "domain_jaccard", "score": 0.6}],
+ ],
+ top_k=5,
 )
 print(hits[0]["alias"], hits[0].get("vote_similarity"), hits[0].get("score"))
 ```
@@ -64,4 +65,4 @@ python -m rbp_eval.loo.loo_eval --out artifacts/reports/json/eval_loo_report.jso
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../loo/README.zh.md`](../loo/README.zh.md) · [`../../config/README.zh.md`](../../config/README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../loo/README.zh.md`](../loo/README.zh.md) · [`../../config/README.zh.md`](../../config/README.zh.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md)

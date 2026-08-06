@@ -8,24 +8,24 @@ Offline scientific evaluation, LOO, fusion scoring, acceptance, and self-evoluti
 
 This package is the offline science lab for nanobot-bio. It measures own-head / LOO ceilings, fuses multi-view hits, calibrates transfer, and runs gated self-evolution that writes `config/evolved.candidate.yaml`. It is intentionally **off the chat hot path** — interactive UX stays in `app/` + `nanobot/`. Physical path = import path (no facade); use `python -m rbp_eval.<subpkg>.<module>`.
 
-Binding product flow: [`BINDING_PREDICTION_FLOW.md`](../docs/product/BINDING_PREDICTION_FLOW.md) · [中文](../docs/product/BINDING_PREDICTION_FLOW.zh.md). Evolution: [`SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md) · [中文](../docs/product/SELF_EVOLUTION.zh.md).
+Binding product flow: [rbp-agent/SKILL.md](../nanobot/skills/rbp-agent/SKILL.md). Evolution: [self-evolution (evolve)](evolve/README.md) · [中文](evolve/README.zh.md).
 
 ## Self-evolution (summary)
 
-Policy and five steps: [`../docs/product/SELF_EVOLUTION.md`](../docs/product/SELF_EVOLUTION.md).  
-Matrix expand: [`../docs/guides/LOO_EXPAND.md`](../docs/guides/LOO_EXPAND.md).
+Policy and five steps: [self-evolution (evolve)](evolve/README.md). 
+Matrix expand: [LOO expand](loo/README.md).
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh
 export RHOBIND_RELEASE="${RHOBIND_RELEASE:-$DELIVERY_ROOT/release/rhobind_release_v1}"
 export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
 nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 256 --skip-existing-helds
 export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
 nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR" --medoids --max-seqs 64 \
-  --collect-agent-traces --require-traces
+ --collect-agent-traces --require-traces
 nanobot-bio run-eval --medoids --transfer-dir "$RBP_LOO_TRANSFER_DIR" \
-  --policy config/evolved.candidate.yaml --max-seqs 64
+ --policy config/evolved.candidate.yaml --max-seqs 64
 nanobot-bio review-toolkit-proposals --list
 nanobot-bio promote-evolved
 ```
@@ -53,7 +53,7 @@ Config ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §5):
 ## Entry points
 
 ```bash
-python -m rbp_eval                          # module help
+python -m rbp_eval # module help
 nanobot-bio run-eval|heavy-loo|evolve|promote-evolved|review-toolkit-proposals|eval-plan|own-head
 ```
 
@@ -72,8 +72,8 @@ bash scripts/cert/smoke_evolve_loop.sh
 from rbp_eval.scoring.fuse_hits import fuse_rbp_hits, aggregate_p_hat
 
 donors = fuse_rbp_hits([
-    [{"alias": "PTBP1", "metric": "esm_cosine", "score": 0.82}],
-    [{"alias": "PTBP1", "metric": "foldseek", "score": 0.71}],
+ [{"alias": "PTBP1", "metric": "esm_cosine", "score": 0.82}],
+ [{"alias": "PTBP1", "metric": "foldseek", "score": 0.71}],
 ], top_k=5)
 print(donors[0]["alias"], donors[0].get("score"))
 ```
@@ -92,4 +92,4 @@ print(donors[0]["alias"], donors[0].get("score"))
 
 ## See also
 
-[`../README.md`](../README.md) · [`../config/README.md`](../config/README.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../scripts/cert/README.md`](../scripts/cert/README.md)
+[`../README.md`](../README.md) · [`../config/README.md`](../config/README.md) · [rbp-agent SKILL.md](../nanobot/skills/rbp-agent/SKILL.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../scripts/cert/README.md`](../scripts/cert/README.md)

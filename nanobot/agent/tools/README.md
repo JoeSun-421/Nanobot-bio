@@ -36,8 +36,8 @@ assert "predict_interaction" in mounted
 
 # Discover schemas for LLM tool calling:
 for name in mounted:
-    tool = registry.get(name)
-    print(name, tool.schema() if hasattr(tool, "schema") else tool.name)
+ tool = registry.get(name)
+ print(name, tool.schema() if hasattr(tool, "schema") else tool.name)
 ```
 
 ```bash
@@ -55,4 +55,4 @@ export RBP_PHMMER=1
 
 ## See also
 
-[`rbp/README.md`](rbp/README.md) · [`../README.md`](../README.md) · [`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`rbp/README.md`](rbp/README.md) · [`../README.md`](../README.md) · [rbp-agent SKILL.md](../../skills/rbp-agent/SKILL.md)

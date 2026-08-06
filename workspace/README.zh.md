@@ -14,7 +14,8 @@ Nanobot 工作区根：同步的 skill 与（符号链接的）session/memory �
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -30,7 +31,7 @@ source scripts/nbio.sh
 | `memory` → `../artifacts/memory` | PA 长期记忆符号链接（科学提示中排除） |
 | `AGENTS.md` | 工作区级短提示（阶段 0 own-head 等） |
 
-规范存储与辅助：`app.core.paths.ensure_artifact_dirs()`。细节见 [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2（若有本地 `docs/guides/MEMORY_AND_SESSIONS.zh.md`）。
+规范存储与辅助：`app.core.paths.ensure_artifact_dirs()`。细节见 [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2（细节见 ARCHITECTURE §2）。
 
 环境变量：
 
@@ -42,7 +43,7 @@ source scripts/nbio.sh
 ## 怎么使用
 
 ```bash
-export NANOBOT_WORKSPACE=$PWD/workspace   # 通常由 setup / 默认设置
+export NANOBOT_WORKSPACE=$PWD/workspace # 通常由 setup / 默认设置
 python -m app.sync_overlay
 nanobot-bio chat
 ```

@@ -1,4 +1,9 @@
-"""Memory system: pure file I/O store and lightweight Consolidator."""
+"""Memory system: pure file I/O store and lightweight Consolidator.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --session-key rbp:cli --example pos
+"""
 
 from __future__ import annotations
 

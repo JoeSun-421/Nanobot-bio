@@ -25,7 +25,7 @@ None for product code. Prefer:
 ```python
 from nanobot.utils.prompt_templates import render_template
 
-render_template("agent/identity.md")  # active path
+render_template("agent/identity.md") # active path
 ```
 
 ## Code examples
@@ -37,10 +37,10 @@ from importlib.resources import files
 legacy = files("nanobot") / "templates" / "legacy" / "HEARTBEAT.md"
 # May be a Traversable; read if present:
 try:
-    text = legacy.read_text(encoding="utf-8")
-    print("legacy HEARTBEAT lines:", len(text.splitlines()))
+ text = legacy.read_text(encoding="utf-8")
+ print("legacy HEARTBEAT lines:", len(text.splitlines()))
 except Exception as exc:
-    print("not packaged or unreadable:", type(exc).__name__)
+ print("not packaged or unreadable:", type(exc).__name__)
 ```
 
 ## Dependencies / env

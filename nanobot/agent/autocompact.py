@@ -1,4 +1,9 @@
-"""Auto compact: proactive compression of idle sessions to reduce token cost and latency."""
+"""Auto compact: proactive compression of idle sessions to reduce token cost and latency.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
 
 from __future__ import annotations
 

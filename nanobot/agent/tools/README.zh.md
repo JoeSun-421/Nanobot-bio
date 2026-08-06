@@ -35,13 +35,13 @@ mounted = register_all(registry)
 assert "predict_interaction" in mounted
 
 for name in mounted:
-    tool = registry.get(name)
-    print(name, tool.name)
+ tool = registry.get(name)
+ print(name, tool.name)
 ```
 
 ```bash
 export NANOBOT_TOOL_ALLOW=rbp
-export RBP_PHMMER=1   # 可选远程同源轴
+export RBP_PHMMER=1 # 可选远程同源轴
 ```
 
 ## 依赖 / 环境
@@ -52,4 +52,4 @@ export RBP_PHMMER=1   # 可选远程同源轴
 
 ## 相关文档
 
-[`rbp/README.zh.md`](rbp/README.zh.md) · [`../README.zh.md`](../README.zh.md) · [`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`rbp/README.zh.md`](rbp/README.zh.md) · [`../README.zh.md`](../README.zh.md) · [rbp-agent SKILL.md](../../skills/rbp-agent/SKILL.md)

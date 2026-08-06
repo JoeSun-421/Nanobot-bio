@@ -8,7 +8,7 @@ Backend adapters for science I/O. Product path uses the **delivery** backend onl
 
 This package is the namespace under which the App talks to external science stacks. Today the sole production backend is [`delivery/`](delivery/README.md): a read-only bridge into sibling `rhobind_agent_delivery`. Historical “mock” backends are not shipped as importable product code here — `RBP_BACKEND=delivery` is the supported setting.
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Layout
 
@@ -58,4 +58,4 @@ python scripts/cert/smoke_delivery_tools.py
 
 ## See also
 
-[`delivery/README.md`](delivery/README.md) · [`../README.md`](../README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) §4
+[`delivery/README.md`](delivery/README.md) · [`../README.md`](../README.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) §4

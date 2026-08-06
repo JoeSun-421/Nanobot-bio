@@ -10,7 +10,7 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
 # 可选：也指向 delivery 工具查找
@@ -34,4 +34,4 @@ nanobot-bio expand-loo-matrix --cohort K562 --skip-existing-helds
 
 大 CSV 已 gitignore；`manifest.json` 记录 cohort / 断点续跑状态。
 
-详见：[docs/guides/LOO_EXPAND.zh.md](../../../docs/guides/LOO_EXPAND.zh.md)、[rbp_eval/README.zh.md](../../README.zh.md)。
+详见：[LOO 扩充](../../loo/README.zh.md)、[rbp_eval/README.zh.md](../../README.zh.md)。

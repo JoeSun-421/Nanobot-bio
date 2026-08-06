@@ -8,7 +8,7 @@ Engineering maturity gates only (C5 boundary). Fast checks that do **not** repla
 
 This package answers: “Is the product tree wired correctly for CI and collaborators?” It runs ruff / pytest / SoT layout / MVP structural acceptance. Scientific scores (own-head AUPRC, transfer calibration, promote evidence) belong in [`rbp_eval/`](../../rbp_eval/README.md) and the `accept-*` / `promote-evolved` CLI commands — do not add science scoring paths here.
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Layout
 
@@ -52,8 +52,8 @@ assert rc == 0
 
 # Optional: only assert LOO report shape when delivery is ready
 if delivery_loo_ready():
-    from app.dev.gate import assert_loo_report
-    assert_loo_report()
+ from app.dev.gate import assert_loo_report
+ assert_loo_report()
 ```
 
 **Layout assertion (SoT)**

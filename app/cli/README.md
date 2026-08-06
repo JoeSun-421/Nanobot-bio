@@ -16,7 +16,8 @@ This package is the thin, stable command surface shared by console scripts and `
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -52,23 +53,24 @@ build_parser().print_help()
 **Daily user path**
 
 ```bash
-source scripts/nbio.sh                 # optional daily activate helper
-nanobot-bio doctor                  # capability table; --verbose for path dumps
-nanobot-bio onboard                 # interactive LLM setup
-nanobot-bio chat                    # multi-turn
-nanobot-bio agent --example --query "Does PTBP1 bind this RNA?"
+source scripts/nbio.sh # optional daily activate helper
+nanobot-bio doctor # capability table; --verbose for path dumps
+nanobot-bio onboard # interactive LLM setup
+nanobot-bio chat # multi-turn
+nanobot-bio agent --example pos
+# or: nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
 ```
 
 **Acceptance / eval / maint**
 
 ```bash
-nanobot-bio own-head                # delivery own-head (no LLM)
+nanobot-bio own-head # delivery own-head (no LLM)
 nanobot-bio accept-llm
 nanobot-bio run-eval
 nanobot-bio heavy-loo
-nanobot-bio evolve --dry-run
-nanobot-bio gate                    # engineering: ruff + pytest + layout
-bash scripts/ci/ci_gate.sh          # → python -m app gate
+nanobot-bio evolve
+nanobot-bio gate # engineering: ruff + pytest + layout
+bash scripts/ci/ci_gate.sh # → python -m app gate
 ```
 
 **Notable flags** (`parser.py` / `user.py`):
@@ -92,4 +94,4 @@ Certification orchestration: [`scripts/cert/certify.sh`](../../scripts/cert/READ
 
 ## See also
 
-[`../README.md`](../README.md) · [`../dev/README.md`](../dev/README.md) · [`INSTALL.md`](../../INSTALL.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../scripts/ci/README.md`](../../scripts/ci/README.md)
+[`../README.md`](../README.md) · [`../dev/README.md`](../dev/README.md) · [`INSTALL.md`](../../INSTALL.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../scripts/ci/README.md`](../../scripts/ci/README.md)

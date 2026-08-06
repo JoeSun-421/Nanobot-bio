@@ -31,18 +31,18 @@ No product CLI entry under `nanobot-bio`.
 from nanobot.legacy.apps import APP_PROTOCOL_SCHEMA, app_manifest
 
 manifest = app_manifest(
-    app_id="example.echo",
-    display_name="Echo",
-    description="Legacy protocol demo only",
-    category="utility",
-    source="local",
-    capabilities=[{"name": "echo", "description": "Echo text"}],
-    install={"kind": "noop"},
-    remove={"kind": "noop"},
-    trust={"level": "untrusted"},
-    version="0.0.0",
+ app_id="example.echo",
+ display_name="Echo",
+ description="Legacy protocol demo only",
+ category="utility",
+ source="local",
+ capabilities=[{"name": "echo", "description": "Echo text"}],
+ install={"kind": "noop"},
+ remove={"kind": "noop"},
+ trust={"level": "untrusted"},
+ version="0.0.0",
 )
-assert manifest["schema"] == APP_PROTOCOL_SCHEMA  # "agent-app.v1"
+assert manifest["schema"] == APP_PROTOCOL_SCHEMA # "agent-app.v1"
 assert manifest["id"] == "example.echo"
 print(sorted(manifest.keys())[:6])
 ```

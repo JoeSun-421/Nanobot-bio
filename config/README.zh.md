@@ -12,7 +12,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -43,7 +44,7 @@ source scripts/nbio.sh
 
 ```bash
 # 演化产出候选后：
-nanobot-bio promote-evolved          # 有门禁；或 python -m rbp_eval.evolve.promote
+nanobot-bio promote-evolved # 有门禁；或 python -m rbp_eval.evolve.promote
 pytest tests/test_proposal_compliance.py
 ```
 

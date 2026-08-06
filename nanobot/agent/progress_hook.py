@@ -1,4 +1,9 @@
-"""Agent hook that adapts runner events into channel progress UI."""
+"""Agent hook that adapts runner events into channel progress UI.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos -v
+"""
 
 from __future__ import annotations
 

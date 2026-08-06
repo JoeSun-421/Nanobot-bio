@@ -4,7 +4,7 @@ RNA-axis fusion gate helpers (delivery-aligned HOLD).
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -47,7 +47,7 @@ assert float(gate["fusion_weight"]) == 0.0
 
 # Runtime fusion weights: zero rna_peak_homology when peaks DB not ready
 w = apply_fusion_rna_policy({"esmc_cosine": 0.4, "rna_peak_homology": 0.3})
-print(w.get("rna_peak_homology"), "rna_embed" in w)  # typically 0.0, False
+print(w.get("rna_peak_homology"), "rna_embed" in w) # typically 0.0, False
 ```
 
 ## Dependencies / env
@@ -58,4 +58,4 @@ print(w.get("rna_peak_homology"), "rna_embed" in w)  # typically 0.0, False
 
 ## See also
 
-[`../README.md`](../README.md) · [`../scoring/README.md`](../scoring/README.md) · [`../../app/core/README.md`](../../app/core/README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.md`](../README.md) · [`../scoring/README.md`](../scoring/README.md) · [`../../app/core/README.md`](../../app/core/README.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md)

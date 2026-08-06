@@ -11,6 +11,11 @@ Agent-side structure evidence order: AFDB fetch → Foldseek → AF3 ≤1 →
 ``structure_axis=unavailable``. Failures (including AF3) are disk-cached;
 never map a missing/failed structure to similarity 0. Scores (TM / lDDT /
 fident) come from delivery only.
+
+CLI examples:
+  nanobot-bio doctor
+  nanobot-bio agent --message "Foldseek structure neighbours for PTBP1; prefer AFDB before AF3"
+  nanobot-bio agent --force-transfer --query SOME_RBP --rna-file path/to/rna.txt
 """
 
 from __future__ import annotations

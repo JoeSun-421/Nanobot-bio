@@ -9,6 +9,11 @@ and a donor alias for own-head ``predict_interaction``, then STOP.
 Under LOO / ``force_transfer``, near_match is disclosed but own-head Fast Path
 is overridden — continue Stage 1–3 on foreign donors only. Read-only; identity
 scores come from delivery / catalogue FASTA only.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
 """
 
 from __future__ import annotations

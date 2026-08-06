@@ -4,7 +4,7 @@ Slash-command routing and built-in handlers for the Nanobot CLI/chat surface.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 

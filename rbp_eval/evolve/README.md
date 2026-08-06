@@ -4,14 +4,14 @@ Offline self-evolution: scored \(D_{\mathrm{val}}\), five-step loop, candidate c
 
 [English] · [中文](README.zh.md)
 
-Policy: [`../../docs/product/SELF_EVOLUTION.md`](../../docs/product/SELF_EVOLUTION.md)  
-Matrix expand: [`../../docs/guides/LOO_EXPAND.md`](../../docs/guides/LOO_EXPAND.md)
+Policy: this package (five-step loop below) · [`ARCHITECTURE.md`](../../ARCHITECTURE.md) § eval/promote  
+Matrix expand: [LOO expand](../loo/README.md)
 
 ## Environment
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh
 export RHOBIND_RELEASE="${RHOBIND_RELEASE:-$DELIVERY_ROOT/release/rhobind_release_v1}"
 export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
 ```
@@ -33,9 +33,9 @@ nanobot-bio expand-loo-matrix --cohort K562 --max-seqs 256 --skip-existing-helds
 export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
 
 nanobot-bio evolve --transfer-dir "$RBP_LOO_TRANSFER_DIR" --medoids --max-seqs 64 \
-  --collect-agent-traces --require-traces
+ --collect-agent-traces --require-traces
 nanobot-bio run-eval --medoids --transfer-dir "$RBP_LOO_TRANSFER_DIR" \
-  --policy config/evolved.candidate.yaml --max-seqs 64
+ --policy config/evolved.candidate.yaml --max-seqs 64
 nanobot-bio review-toolkit-proposals --list
 nanobot-bio promote-evolved
 ```

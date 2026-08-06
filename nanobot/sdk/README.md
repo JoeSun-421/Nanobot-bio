@@ -4,7 +4,7 @@ Internal helpers for the high-level Nanobot Python API surface.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -21,9 +21,9 @@ Supports `nanobot.nanobot.Nanobot` with streaming events, thin clients (session 
 | `__init__.py` | Package note (internal helpers) |
 
 ```
-nanobot/nanobot.py  (public API)
-    └── nanobot/sdk/*  (internal details)
-app/agent.py        (product assembly → Nanobot)
+nanobot/nanobot.py (public API)
+ └── nanobot/sdk/* (internal details)
+app/agent.py (product assembly → Nanobot)
 ```
 
 ## Entry points
@@ -44,11 +44,11 @@ bot = Nanobot.from_config(scientific_mode=True)
 print(bot.sessions, bot.memory, bot.runtime)
 
 async for event in bot.run_streamed("Ping"):
-    print(event.type, getattr(event, "delta", None) or getattr(event, "content", None))
+ print(event.type, getattr(event, "delta", None) or getattr(event, "content", None))
 ```
 
 ```bash
-nanobot-bio chat|agent   # product path — preferred over sdk imports
+nanobot-bio chat|agent # product path — preferred over sdk imports
 ```
 
 ## Dependencies / env

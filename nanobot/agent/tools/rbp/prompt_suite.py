@@ -5,6 +5,11 @@ Reads a prompt-suite ``.md`` under docs/ (via path_guard), parses fenced
 ``text`` cases, and runs one agent turn per case (same runner as
 ``nanobot-bio batch-prompts``). Does **not** ask the LLM to fuse 20 cases
 in a single turn.
+
+CLI examples:
+  nanobot-bio batch-prompts --dry-run
+  nanobot-bio batch-prompts --limit 2
+  nanobot-bio batch-prompts --case PTBP1
 """
 
 from __future__ import annotations

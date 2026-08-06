@@ -12,7 +12,8 @@ Pytest suite for layout, contracts, CLI/UX, delivery bridge, and offline eval lo
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -42,8 +43,8 @@ source scripts/nbio.sh
 source .venv/bin/activate
 pytest -q
 pytest tests/test_proposal_compliance.py tests/test_package_layout.py
-bash scripts/ci/ci_gate.sh          # ruff + pytest + layout (app gate)
-bash scripts/cert/certify.sh        # longer certify path including pytest
+bash scripts/ci/ci_gate.sh # ruff + pytest + layout (app gate)
+bash scripts/cert/certify.sh # longer certify path including pytest
 ```
 
 Useful env: `NANOBOT_BIO_ROOT`, optional `DELIVERY_ROOT`, `RHOBIND_DEVICE`.

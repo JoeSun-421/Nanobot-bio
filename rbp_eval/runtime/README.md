@@ -4,7 +4,7 @@ Eval / self-evolution trace hooks and structured JSONL event schema.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -38,12 +38,12 @@ No dedicated CLI — hooks are attached by eval runners / agent integration.
 from rbp_eval.runtime.trace_schema import make_event, validate_event
 
 row = make_event(
-    "tool_result",
-    session_key="rbp:eval",
-    tool="resolve_rbp",
-    status="ok",
-    latency_ms=12.5,
-    alias="PTBP1",
+ "tool_result",
+ session_key="rbp:eval",
+ tool="resolve_rbp",
+ status="ok",
+ latency_ms=12.5,
+ alias="PTBP1",
 )
 assert row["schema"] == "rbp_trace/v1"
 assert validate_event(row) == []
@@ -58,9 +58,9 @@ from rbp_eval.runtime.hooks import JsonlTraceHook
 
 hook = JsonlTraceHook(Path("artifacts/traces/demo.jsonl"), session_key="rbp:demo")
 hook.on_query_end(
-    "Does PTBP1 bind this RNA?",
-    {"verdict": {"p_hat": 0.9, "label": "Strong"}},
-    tool_calls=[{"tool": "resolve_rbp"}],
+ "Does PTBP1 bind this RNA?",
+ {"verdict": {"p_hat": 0.9, "label": "Strong"}},
+ tool_calls=[{"tool": "resolve_rbp"}],
 )
 print(hook.out_path.read_text(encoding="utf-8").splitlines()[-1][:120])
 ```

@@ -32,10 +32,10 @@ CMD ["nanobot-bio", "chat"]
 ```bash
 docker build -t nanobot-bio:agent .
 docker run --rm \
-  -v $BIO_ROOT/rhobind_agent_delivery:/delivery \
-  -e DELIVERY_ROOT=/delivery \
-  -v $HOME/.nanobot:/root/.nanobot \
-  nanobot-bio:agent doctor
+ -v $BIO_ROOT/rhobind_agent_delivery:/delivery \
+ -e DELIVERY_ROOT=/delivery \
+ -v $HOME/.nanobot:/root/.nanobot \
+ nanobot-bio:agent doctor
 ```
 
 | 变量 | 默认 / 说明 |

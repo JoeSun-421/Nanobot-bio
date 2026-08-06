@@ -6,7 +6,7 @@
 
 ## 用途
 
-这些工具实现 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md) 中的科学阶段：catalogue 解析 / own-head 预测、多视图检索、融合、结构、注释与 evolve 辅助。数值（`prob`、相似度、序列、引用）**只**来自工具返回——绝不来自模型记忆。注册经 `ALL_RBP_TOOL_CLASSES` + 可选 `RBP_PHMMER` 精选挂载。
+这些工具实现 [rbp-agent SKILL.md](../../../skills/rbp-agent/SKILL.md) 中的科学阶段：catalogue 解析 / own-head 预测、多视图检索、融合、结构、注释与 evolve 辅助。数值（`prob`、相似度、序列、引用）**只**来自工具返回——绝不来自模型记忆。注册经 `ALL_RBP_TOOL_CLASSES` + 可选 `RBP_PHMMER` 精选挂载。
 
 ## 布局
 
@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -34,7 +35,7 @@ source scripts/nbio.sh
 | `path_guard.py` | FASTA / markdown 工具的白名单路径解析 |
 | `fasta_score.py` | `ScoreBindingFastaTool` — 白名单 FASTA 路径批量 own-head + AUPRC |
 | `project_doc.py` | `ReadProjectDocTool` — 白名单 `.md` 分包读取 |
-| `prompt_suite.py` | `RunPromptSuiteTool` — docs/eval suite → 外层 batch-prompts |
+| `prompt_suite.py` | `RunPromptSuiteTool` — eval suite → 外层 batch-prompts |
 | `common.py` | 共享辅助 / 返回信封 |
 | `stage_contract.py` | 阶段契约 / 守卫 |
 | `turn_guards.py` | 回合级安全守卫 |
@@ -45,9 +46,9 @@ source scripts/nbio.sh
 
 ```python
 from nanobot.agent.tools.rbp import (
-    register_all,
-    ALL_RBP_TOOL_CLASSES,
-    PredictInteractionTool,
+ register_all,
+ ALL_RBP_TOOL_CLASSES,
+ PredictInteractionTool,
 )
 from nanobot.agent.tools.rbp.register import register_rbp_tools
 ```
@@ -71,7 +72,7 @@ from nanobot.agent.tools import ToolRegistry
 from nanobot.agent.tools.rbp.register import register_rbp_tools
 
 reg = ToolRegistry()
-_, names = register_rbp_tools(reg)  # 默认 include_raw_delivery="all"
+_, names = register_rbp_tools(reg) # 默认 include_raw_delivery="all"
 print(len(names), "tools mounted")
 # 窄 MVP：include_raw_delivery="whitelist" 或 RBP_RAW_TOOLS=whitelist
 ```
@@ -98,4 +99,4 @@ pytest tests/test_proposal_compliance.py
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../../../skills/README.zh.md`](../../../skills/README.zh.md) · [`../../../../app/backends/delivery/README.zh.md`](../../../../app/backends/delivery/README.zh.md) · [`../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../../../skills/README.zh.md`](../../../skills/README.zh.md) · [`../../../../app/backends/delivery/README.zh.md`](../../../../app/backends/delivery/README.zh.md) · [rbp-agent SKILL.md](../../../skills/rbp-agent/SKILL.md)

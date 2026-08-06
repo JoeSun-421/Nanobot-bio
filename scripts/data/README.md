@@ -28,15 +28,15 @@ Prereqs:
 
 ```bash
 bash scripts/data/bootstrap_data.sh \
-  --rb /path/to/rbp_proteins_260417 \
-  --benchmarks /path/to/results/benchmark_cluster \
-  --head-index-dir /path/to/head_index_dir \
-  --out /path/to/agent_db
+ --rb /path/to/rbp_proteins_260417 \
+ --benchmarks /path/to/results/benchmark_cluster \
+ --head-index-dir /path/to/head_index_dir \
+ --out /path/to/agent_db
 
 # optional:
-#   --force
-#   --skip-peaks
-#   --skip-embeddings
+# --force
+# --skip-peaks
+# --skip-embeddings
 ```
 
 Point runtime at the rebuilt DB via `AGENT_DB` / delivery env (see [`INSTALL.md`](../../INSTALL.md)).

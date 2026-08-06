@@ -8,6 +8,11 @@ than MMseqs/BLAST for remote protein relationships. It is NOT mounted by default
 Delivery is untouched: this tool only shells out to the ``phmmer`` binary and
 builds a target FASTA from the catalogue registry (same facade the curated
 seq_similarity uses).
+
+CLI examples:
+  RBP_PHMMER=1 nanobot-bio agent --force-transfer --query SOME_RBP --rna-file path/to/rna.txt
+  nanobot-bio doctor
+  nanobot-bio chat
 """
 
 from __future__ import annotations

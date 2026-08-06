@@ -4,13 +4,13 @@
 
 `nanobot-bio` 工程地图：分层、工作区存储、eval/promote、slim-vendor 与发版清单。  
 安装：[INSTALL.zh.md](INSTALL.zh.md) / [INSTALL.md](INSTALL.md)。Agent 门禁：[AGENTS.md](AGENTS.md)。历史：[CHANGELOG.md](CHANGELOG.md)。  
-各包 README 对：见根 [README.zh.md](README.zh.md) 包地图。本地提案细节在 gitignore 的 `docs/`。
+各包 README 对：见根 [README.zh.md](README.zh.md) 包地图。协作交接：[HANDOFF.zh.md](HANDOFF.zh.md)。本地提案细节在 gitignore 的 `docs/`。
 
 ## 通用布局（Linux）
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 # DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
 ```
@@ -43,7 +43,7 @@ source scripts/nbio.sh
 
 ## 2. 工作区：会话 vs 长期记忆
 
-**可写真相源是 `artifacts/`**（`workspace/sessions` 与 `workspace/memory` 仅为符号链接）。详情：[docs/guides/MEMORY_AND_SESSIONS.zh.md](docs/guides/MEMORY_AND_SESSIONS.zh.md)。
+**可写真相源是 `artifacts/`**（`workspace/sessions` 与 `workspace/memory` 仅为符号链接）。详情见本节下文（本机 `docs/guides/MEMORY_*` 已 gitignore，新克隆可能不存在）。
 
 | 存储 | 路径 | 用途 |
 |------|------|------|
@@ -95,11 +95,11 @@ source scripts/nbio.sh
 | Evolve | `rbp_eval/evolve/` → `config/evolved.candidate.yaml` |
 | Runtime 旋钮 | `defaults.yaml` deep-merge `evolved.yaml`（当 `evolved: true`） |
 
-**Promote 证据（正常路径）：** light LOO 报告通过；evolve `n≥10` 且 `delta_auprc>0`；真实 `transfer_calibration`；RNA 轴未就绪时拒绝非零 RNA 融合权重。详情：[docs/product/SELF_EVOLUTION.zh.md](docs/product/SELF_EVOLUTION.zh.md)。
+**Promote 证据（正常路径）：** light LOO 报告通过；evolve `n≥10` 且 `delta_auprc>0`；真实 `transfer_calibration`；RNA 轴未就绪时拒绝非零 RNA 融合权重。详情：[rbp_eval/evolve](rbp_eval/evolve/README.zh.md)。
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 nanobot-bio evolve
 nanobot-bio gate

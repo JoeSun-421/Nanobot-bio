@@ -12,6 +12,11 @@ tools still need local paths; they must resolve through this module:
 
 Rejects path traversal and absolute paths outside the jail so the LLM cannot
 pull arbitrary host files into context.
+
+CLI examples:
+  nanobot-bio agent --query PTBP1 --fasta path/to/labeled.fasta
+  nanobot-bio agent --doc docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
 """
 
 from __future__ import annotations

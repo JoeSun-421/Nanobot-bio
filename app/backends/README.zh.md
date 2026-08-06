@@ -8,7 +8,7 @@
 
 本包是 App 与外部科学栈对话的命名空间。当前唯一生产后端是 [`delivery/`](delivery/README.zh.md)：只读桥接到同级 `rhobind_agent_delivery`。历史 mock 后端不再作为可导入产品代码提供——支持的设置是 `RBP_BACKEND=delivery`。
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 布局
 
@@ -58,4 +58,4 @@ python scripts/cert/smoke_delivery_tools.py
 
 ## 相关文档
 
-[`delivery/README.zh.md`](delivery/README.zh.md) · [`../README.zh.md`](../README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) §4
+[`delivery/README.zh.md`](delivery/README.zh.md) · [`../README.zh.md`](../README.zh.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) §4

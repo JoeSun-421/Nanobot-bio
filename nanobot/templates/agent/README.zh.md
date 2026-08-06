@@ -43,8 +43,8 @@ contract = render_template("agent/tool_contract.md")
 assert "tool" in contract.lower() or len(contract) > 100
 
 skills = render_template(
-    "agent/skills_section.md",
-    skills_summary="- **rbp-agent**: always-on RNA–RBP skill",
+ "agent/skills_section.md",
+ skills_summary="- **rbp-agent**: always-on RNA–RBP skill",
 )
 assert "rbp-agent" in skills
 

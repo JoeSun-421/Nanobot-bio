@@ -1,4 +1,9 @@
-"""Tool registry for dynamic tool management."""
+"""Tool registry for dynamic tool management.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  nanobot-bio agent --example pos
+"""
 
 import json
 from typing import Any

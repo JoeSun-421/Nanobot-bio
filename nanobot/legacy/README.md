@@ -38,7 +38,7 @@ print(nanobot.legacy.__doc__)
 ```
 
 ```bash
-nanobot-bio layout   # asserts product SoT; PA surfaces constrained
+nanobot-bio layout # asserts product SoT; PA surfaces constrained
 ```
 
 ## Dependencies / env

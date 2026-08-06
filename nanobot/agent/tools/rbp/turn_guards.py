@@ -8,6 +8,11 @@ that consult the contract. A future runner-level scheduler can consume
 ``stage_contract.REQUIRES`` directly; until then these guards are the
 scheduling-layer prevention that keeps the LLM from calling integrate tools
 out of order (B2: dependency declaration, not just post-hoc blocking).
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio chat
 """
 
 from __future__ import annotations

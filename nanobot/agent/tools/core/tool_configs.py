@@ -1,4 +1,9 @@
-"""Slim vendor tool configuration models."""
+"""Slim vendor tool configuration models.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  nanobot-bio doctor
+"""
 
 from pydantic import Field
 

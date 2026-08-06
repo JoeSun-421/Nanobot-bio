@@ -32,7 +32,7 @@ from nanobot.agent.tools.rbp import register_all
 **确认产品 allow-list 排除 legacy**
 
 ```bash
-echo "${NANOBOT_TOOL_ALLOW:-rbp}"   # 期望：rbp
+echo "${NANOBOT_TOOL_ALLOW:-rbp}" # 期望：rbp
 nanobot-bio layout
 ```
 

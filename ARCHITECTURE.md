@@ -5,15 +5,15 @@
 Engineering map of `nanobot-bio`: layers, workspace stores, eval/promote,
 slim-vendor policy, and release checklist. Setup: [`INSTALL.md`](INSTALL.md) /
 [`INSTALL.zh.md`](INSTALL.zh.md). Agent gates: [`AGENTS.md`](AGENTS.md).
-History: [`CHANGELOG.md`](CHANGELOG.md). Package map:
-[`README.md`](README.md) / [`README.zh.md`](README.zh.md).
+Collaborator overview: [`HANDOFF.md`](HANDOFF.md). History: [`CHANGELOG.md`](CHANGELOG.md).
+Package map: [`README.md`](README.md) / [`README.zh.md`](README.zh.md).
 Local proposal detail may stay under git-ignored `docs/`.
 
 ## Portable layout (Linux)
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 # DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
 ```
@@ -52,8 +52,8 @@ physical path = import path (no top-level facade).
 ## 2. Workspace: sessions vs long-term memory
 
 **Canonical store is `artifacts/`** (`workspace/sessions` and `workspace/memory`
-are symlinks only). Detail: [`docs/guides/MEMORY_AND_SESSIONS.md`](docs/guides/MEMORY_AND_SESSIONS.md) /
-[`MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md).
+are symlinks only). Detail: this section below (local `docs/guides/MEMORY_*`
+files are gitignored and may be absent on a fresh clone).
 
 | Store | Path | Purpose |
 |-------|------|---------|

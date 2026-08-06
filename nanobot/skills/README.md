@@ -36,7 +36,7 @@ nanobot-bio doctor
 from app.agent import skill_path, ensure_workspace_skill
 
 print(skill_path())
-print(ensure_workspace_skill())  # ensures workspace/skills/rbp-agent/SKILL.md
+print(ensure_workspace_skill()) # ensures workspace/skills/rbp-agent/SKILL.md
 ```
 
 **Skill front-matter (excerpt)**
@@ -47,7 +47,7 @@ metadata: {"nanobot":{"emoji":"🧬","always":true}}
 always: true
 ```
 
-Binding stages: [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md).
+Binding stages: [rbp-agent SKILL.md](rbp-agent/SKILL.md).
 
 ## Dependencies / env
 
@@ -56,4 +56,4 @@ Binding stages: [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/produc
 
 ## See also
 
-[`../README.md`](../README.md) · [`../agent/tools/rbp/README.md`](../agent/tools/rbp/README.md) · [`../../workspace/skills/README.md`](../../workspace/skills/README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.md`](../README.md) · [`../agent/tools/rbp/README.md`](../agent/tools/rbp/README.md) · [`../../workspace/skills/README.md`](../../workspace/skills/README.md) · [rbp-agent SKILL.md](rbp-agent/SKILL.md)

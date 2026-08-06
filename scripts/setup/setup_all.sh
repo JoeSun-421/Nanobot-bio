@@ -500,7 +500,8 @@ _verify_science_envs() {
     "import transformers; print('  protein_embed (ESM) OK transformers', transformers.__version__)"
 
   # --- rna: mmseqs on PATH inside env ---
-  if conda run -n rna bash -lc 'command -v mmseqs >/dev/null 2>&1'; then
+  # Use bash -c (not -lc): login shells reset PATH and drop conda env/bin.
+  if conda run -n rna bash -c 'command -v mmseqs >/dev/null 2>&1'; then
     echo "  [ok] rna: mmseqs"
   else
     echo "  [heal] rna: mmseqs missing — conda env update from yml ..."
@@ -512,7 +513,7 @@ _verify_science_envs() {
       echo "  [FAIL] rna conda env update" >&2
       return 1
     fi
-    if conda run -n rna bash -lc 'command -v mmseqs >/dev/null 2>&1'; then
+    if conda run -n rna bash -c 'command -v mmseqs >/dev/null 2>&1'; then
       echo "  [healed] rna: mmseqs"
     else
       echo "  [FAIL] rna still has no mmseqs after heal" >&2

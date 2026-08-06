@@ -13,6 +13,11 @@ Invariant: peers and fuse hits are rule-derived from tool text; never invent
 ``s_i`` / ``p_hat``. Soft Function-axis hits are stored in ``turn_guards`` for
 automatic injection into ``fuse_similarity_views``. Call annotation once per
 UniProt; literature is hard-capped to one successful call per turn.
+
+CLI examples:
+  nanobot-bio agent --message "Annotate PTBP1 function and search literature for RBP peers"
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio chat
 """
 
 from __future__ import annotations

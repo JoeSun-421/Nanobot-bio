@@ -1,0 +1,225 @@
+{
+  "protocol": "LOO light: hide head, select donors, lookup loo_transfer_metrics (no RhoBind re-run)",
+  "val_set": [
+    "NSUN2",
+    "FXR2",
+    "HNRNPUL1",
+    "EEF2",
+    "PTBP1",
+    "CPSF6",
+    "DHX30",
+    "DDX51",
+    "DROSHA",
+    "RPS6"
+  ],
+  "n": 10,
+  "summary": {
+    "mean_policy_best": 0.54445625,
+    "mean_policy_mean": 0.47069425,
+    "mean_own_full_auprc": 0.6848,
+    "mean_best_foreign_auprc": 0.653852,
+    "mean_gap_to_own": 0.13360624999999998,
+    "n_ok": 8,
+    "n_fail": 2
+  },
+  "instance_level": {
+    "status": "skipped",
+    "reason": "no --labels JSON provided (light protocol is transfer-CSV only)",
+    "auroc": null,
+    "auprc": null,
+    "ece": null
+  },
+  "rows": [
+    {
+      "held_rbp": "NSUN2",
+      "modality": "none",
+      "donors": [],
+      "policy_best": null,
+      "policy_mean": null,
+      "n_measured": 0,
+      "own_full_auprc": 0.5832,
+      "best_foreign_auprc": 0.56714,
+      "mean_foreign_auprc": 0.44067,
+      "gap_to_own": null,
+      "gap_to_best_foreign": null
+    },
+    {
+      "held_rbp": "FXR2",
+      "modality": "domain",
+      "donors": [
+        "FXR1",
+        "FMR1",
+        "PCBP1",
+        "IGF2BP2",
+        "IGF2BP1"
+      ],
+      "policy_best": 0.7449,
+      "policy_mean": 0.62108,
+      "n_measured": 5,
+      "own_full_auprc": 0.7679,
+      "best_foreign_auprc": 0.7449,
+      "mean_foreign_auprc": 0.49412,
+      "gap_to_own": 0.02300000000000002,
+      "gap_to_best_foreign": 0.0
+    },
+    {
+      "held_rbp": "HNRNPUL1",
+      "modality": "domain",
+      "donors": [
+        "HNRNPU",
+        "SLTM",
+        "SAFB",
+        "SAFB2",
+        "DDX1"
+      ],
+      "policy_best": 0.49163,
+      "policy_mean": 0.46222,
+      "n_measured": 5,
+      "own_full_auprc": 0.6133,
+      "best_foreign_auprc": 0.57173,
+      "mean_foreign_auprc": 0.41393,
+      "gap_to_own": 0.12166999999999994,
+      "gap_to_best_foreign": 0.08009999999999995
+    },
+    {
+      "held_rbp": "EEF2",
+      "modality": "domain",
+      "donors": [
+        "EFTUD2"
+      ],
+      "policy_best": 0.42461,
+      "policy_mean": 0.42461,
+      "n_measured": 1,
+      "own_full_auprc": 0.6977,
+      "best_foreign_auprc": 0.69833,
+      "mean_foreign_auprc": 0.52928,
+      "gap_to_own": 0.27309,
+      "gap_to_best_foreign": 0.27372
+    },
+    {
+      "held_rbp": "PTBP1",
+      "modality": "domain",
+      "donors": [
+        "ELAVL1",
+        "SF3B4",
+        "TRA2A",
+        "SRSF9",
+        "SRSF1"
+      ],
+      "policy_best": 0.51181,
+      "policy_mean": 0.381098,
+      "n_measured": 5,
+      "own_full_auprc": 0.9311,
+      "best_foreign_auprc": 0.82453,
+      "mean_foreign_auprc": 0.34461,
+      "gap_to_own": 0.41929000000000005,
+      "gap_to_best_foreign": 0.31272
+    },
+    {
+      "held_rbp": "CPSF6",
+      "modality": "domain",
+      "donors": [
+        "SF3B4",
+        "TRA2A",
+        "SRSF9",
+        "SRSF1",
+        "NCBP2"
+      ],
+      "policy_best": 0.67254,
+      "policy_mean": 0.63924,
+      "n_measured": 5,
+      "own_full_auprc": 0.7846,
+      "best_foreign_auprc": 0.73258,
+      "mean_foreign_auprc": 0.58045,
+      "gap_to_own": 0.11205999999999994,
+      "gap_to_best_foreign": 0.06003999999999998
+    },
+    {
+      "held_rbp": "DHX30",
+      "modality": "domain",
+      "donors": [
+        "DDX52",
+        "DDX47",
+        "DDX24",
+        "DDX51",
+        "DDX42"
+      ],
+      "policy_best": 0.48448,
+      "policy_mean": 0.45641600000000004,
+      "n_measured": 5,
+      "own_full_auprc": 0.4953,
+      "best_foreign_auprc": 0.50611,
+      "mean_foreign_auprc": 0.39684,
+      "gap_to_own": 0.010819999999999996,
+      "gap_to_best_foreign": 0.021629999999999927
+    },
+    {
+      "held_rbp": "DDX51",
+      "modality": "domain",
+      "donors": [
+        "DDX52",
+        "DDX47",
+        "DDX24",
+        "DDX42",
+        "DDX6"
+      ],
+      "policy_best": 0.51691,
+      "policy_mean": 0.45766,
+      "n_measured": 5,
+      "own_full_auprc": 0.5516,
+      "best_foreign_auprc": 0.51969,
+      "mean_foreign_auprc": 0.38165,
+      "gap_to_own": 0.03469,
+      "gap_to_best_foreign": 0.0027800000000000047
+    },
+    {
+      "held_rbp": "DROSHA",
+      "modality": "domain",
+      "donors": [
+        "DGCR8",
+        "ILF3"
+      ],
+      "policy_best": 0.50877,
+      "policy_mean": 0.32322999999999996,
+      "n_measured": 2,
+      "own_full_auprc": 0.583,
+      "best_foreign_auprc": 0.55649,
+      "mean_foreign_auprc": 0.43023,
+      "gap_to_own": 0.07423000000000002,
+      "gap_to_best_foreign": 0.047720000000000096
+    },
+    {
+      "held_rbp": "RPS6",
+      "modality": "none",
+      "donors": [],
+      "policy_best": null,
+      "policy_mean": null,
+      "n_measured": 0,
+      "own_full_auprc": 0.8403,
+      "best_foreign_auprc": 0.81702,
+      "mean_foreign_auprc": 0.56051,
+      "gap_to_own": null,
+      "gap_to_best_foreign": null
+    }
+  ],
+  "failures": [
+    {
+      "held_rbp": "NSUN2",
+      "reason": "no domain/seq hits"
+    },
+    {
+      "held_rbp": "RPS6",
+      "reason": "no domain/seq hits"
+    }
+  ],
+  "ablation": {},
+  "deficiencies": [
+    "Light protocol: does not re-run RhoBind on test FASTA (needs rhobind env + panels).",
+    "LOO priors calibrate transfer-as-a-method on held-out catalogue RBPs; dark/novel UniProt IDs correctly have no per-target LOO prior.",
+    "Donor selection default=domain-only; pass --with-seq for ESM-C axis."
+  ],
+  "sources": {
+    "loo_summary": "/workspace/sunzhaoyuan/bio_agent/rhobind_agent_delivery/agent/database/transfer/loo_summary.csv",
+    "loo_transfer_metrics": "/workspace/sunzhaoyuan/bio_agent/rhobind_agent_delivery/agent_db/transfer/loo_transfer_metrics.csv"
+  }
+}

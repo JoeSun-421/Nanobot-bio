@@ -34,8 +34,8 @@ from nanobot.agent.tools.rbp import register_all
 
 ```bash
 # Typical product env (set by app):
-echo "${NANOBOT_TOOL_ALLOW:-rbp}"   # expect: rbp
-nanobot-bio layout                  # asserts SoT; PA surfaces forbidden where listed
+echo "${NANOBOT_TOOL_ALLOW:-rbp}" # expect: rbp
+nanobot-bio layout # asserts SoT; PA surfaces forbidden where listed
 ```
 
 **Do not do this for science**

@@ -57,7 +57,7 @@ ws = Path(ensure_workspace_skill())
 print(ws)
 ```
 
-Binding stages: [`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md).
+Binding stages: [rbp-agent SKILL.md](SKILL.md).
 
 ## Dependencies / env
 

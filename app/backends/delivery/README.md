@@ -12,13 +12,14 @@ Read-only bridge from the agent process into sibling `rhobind_agent_delivery`.
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
 All science I/O from the product agent must pass through this package. Light tools may run in-process; heavy tools spawn `conda run` subprocesses with JSON payloads. Mapping is fail-closed against delivery’s `agent/tools/registry.json` — stale bindings hard-fail rather than calling the wrong script. This package never invents binding scores when an env or binary is missing.
 
-End-to-end stage flow (own-head → retrieve → fuse → predict → integrate) is described in [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md). Aggregation authority for transfer `p_hat` remains delivery `similarity_weighted_vote`.
+End-to-end stage flow (own-head → retrieve → fuse → predict → integrate) is described in [rbp-agent SKILL.md](../../../nanobot/skills/rbp-agent/SKILL.md). Aggregation authority for transfer `p_hat` remains delivery `similarity_weighted_vote`.
 
 ## Layout
 
@@ -38,20 +39,20 @@ Call chain:
 
 ```
 nanobot RBP tool
-  → DeliveryToolClient.call
-      → apply_delivery_env / mapping
-      → in-process OR conda run (protein_embed / rna / rhobind / af3…)
+ → DeliveryToolClient.call
+ → apply_delivery_env / mapping
+ → in-process OR conda run (protein_embed / rna / rhobind / af3…)
 ```
 
 ## Entry points
 
 ```python
 from app.backends.delivery import (
-    DeliveryToolClient,
-    apply_delivery_env,
-    delivery_root,
-    resolve_delivery_paths,
-    register_tools,
+ DeliveryToolClient,
+ apply_delivery_env,
+ delivery_root,
+ resolve_delivery_paths,
+ register_tools,
 )
 ```
 
@@ -77,7 +78,7 @@ from app.backends.delivery.registry import register_tools
 from nanobot.agent.tools import ToolRegistry
 
 reg = ToolRegistry()
-names = register_tools(reg)  # default include_raw_delivery="all"
+names = register_tools(reg) # default include_raw_delivery="all"
 print(sorted(names)[:10])
 # Narrow MVP: include_raw_delivery="whitelist" or RBP_RAW_TOOLS=whitelist
 ```
@@ -108,4 +109,4 @@ Child envs scrub the agent `.venv` so torch / jax stacks do not mix. Full table:
 
 ## See also
 
-[`../README.md`](../README.md) · [`../../README.md`](../../README.md) · [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) §4 · [`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../../scripts/cert/README.md`](../../../scripts/cert/README.md)
+[`../README.md`](../README.md) · [`../../README.md`](../../README.md) · [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) §4 · [rbp-agent SKILL.md](../../../nanobot/skills/rbp-agent/SKILL.md) · [`../../../scripts/cert/README.md`](../../../scripts/cert/README.md)

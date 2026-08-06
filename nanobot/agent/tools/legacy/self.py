@@ -1,4 +1,9 @@
-"""MyTool: runtime state inspection and configuration for the agent loop."""
+"""MyTool: runtime state inspection and configuration for the agent loop.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos -v
+"""
 
 from __future__ import annotations
 

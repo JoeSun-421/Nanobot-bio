@@ -4,7 +4,7 @@ Proposal evaluation plan harness (light / heavy) and faithfulness sheets.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -23,14 +23,14 @@ Implements the Proposal Evaluation Plan: hide own head → retrieve donors → s
 nanobot-bio eval-plan [--with-seq]
 python -m rbp_eval.plans.evaluation_plan
 python -m rbp_eval.plans.evaluation_plan --with-seq
-python -m rbp_eval.plans.evaluation_plan --heavy   # needs ≥8 GiB + rhobind
+python -m rbp_eval.plans.evaluation_plan --heavy # needs ≥8 GiB + rhobind
 ```
 
 ```python
 from rbp_eval.plans.evaluation_plan import (
-    assign_strata,
-    run_light_evaluation_plan,
-    write_faithfulness_sheet,
+ assign_strata,
+ run_light_evaluation_plan,
+ write_faithfulness_sheet,
 )
 ```
 
@@ -40,9 +40,9 @@ from rbp_eval.plans.evaluation_plan import (
 
 ```bash
 python -m rbp_eval.plans.evaluation_plan \
-  --out artifacts/reports/json/evaluation_plan_report.json \
-  --md artifacts/reports/md/evaluation_plan_report.md \
-  --qual artifacts/reports/csv/faithfulness_rating_sheet.csv
+ --out artifacts/reports/json/evaluation_plan_report.json \
+ --md artifacts/reports/md/evaluation_plan_report.md \
+ --qual artifacts/reports/csv/faithfulness_rating_sheet.csv
 ```
 
 **Strata helpers + light plan import**
@@ -51,7 +51,7 @@ python -m rbp_eval.plans.evaluation_plan \
 from rbp_eval.plans.evaluation_plan import assign_strata, strata_bucket_schema
 
 tags = assign_strata(in_panel=True, mode="transfer", dark=False)
-print(tags)  # e.g. includes in_panel_transfer / own_head heuristics
+print(tags) # e.g. includes in_panel_transfer / own_head heuristics
 print(list(strata_bucket_schema().keys())[:4])
 ```
 

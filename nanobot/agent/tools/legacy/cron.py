@@ -1,4 +1,9 @@
-"""Cron tool for scheduling reminders and tasks."""
+"""Cron tool for scheduling reminders and tasks.
+
+CLI examples:
+  nanobot-bio chat
+  source scripts/nbio.sh
+"""
 
 from __future__ import annotations
 

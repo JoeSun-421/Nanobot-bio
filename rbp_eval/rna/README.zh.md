@@ -4,7 +4,7 @@ RNA 轴融合门禁辅助（与 delivery 对齐的 HOLD）。
 
 [English](README.md) · [中文]
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 用途
 
@@ -47,7 +47,7 @@ assert float(gate["fusion_weight"]) == 0.0
 
 # 运行时融合权重：peaks DB 未就绪时将 rna_peak_homology 置 0
 w = apply_fusion_rna_policy({"esmc_cosine": 0.4, "rna_peak_homology": 0.3})
-print(w.get("rna_peak_homology"), "rna_embed" in w)  # 通常为 0.0, False
+print(w.get("rna_peak_homology"), "rna_embed" in w) # 通常为 0.0, False
 ```
 
 ## 依赖 / 环境
@@ -58,4 +58,4 @@ print(w.get("rna_peak_homology"), "rna_embed" in w)  # 通常为 0.0, False
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../scoring/README.zh.md`](../scoring/README.zh.md) · [`../../app/core/README.zh.md`](../../app/core/README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../scoring/README.zh.md`](../scoring/README.zh.md) · [`../../app/core/README.zh.md`](../../app/core/README.zh.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md)

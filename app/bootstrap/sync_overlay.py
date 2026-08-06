@@ -135,7 +135,9 @@ def sync_overlay(*, quiet: bool = False) -> int:
         import nanobot as _nb
 
         nb_file = Path(_nb.__file__).resolve()
-        if "nanobot-bio" not in str(nb_file):
+        # Linux checkouts may be Nanobot-bio (case-sensitive); nbio.sh accepts both.
+        nb_s = str(nb_file).replace("\\", "/")
+        if "nanobot-bio" not in nb_s and "Nanobot-bio" not in nb_s:
             print(
                 "WARN: import nanobot resolved outside nanobot-bio:",
                 nb_file,

@@ -39,12 +39,12 @@ from nanobot.agent.tools import Tool, ToolRegistry, ToolLoader
 from nanobot.agent.tools.core.base import Tool, tool_parameters
 
 class PingTool(Tool):
-    name = "ping"
-    description = "Return pong"
+ name = "ping"
+ description = "Return pong"
 
-    @tool_parameters({})
-    async def execute(self, **kwargs):
-        return {"status": "ok", "value": {"msg": "pong"}}
+ @tool_parameters({})
+ async def execute(self, **kwargs):
+ return {"status": "ok", "value": {"msg": "pong"}}
 
 from nanobot.agent.tools import ToolRegistry
 reg = ToolRegistry()

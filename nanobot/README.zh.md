@@ -8,7 +8,7 @@
 
 本树是产品所用的 agent 框架：高层 `Nanobot` API、agent loop、会话存储、LLM providers，以及 RBP skill/工具包。打包（`pyproject.toml`）包含 `nanobot*`，editable install 暴露的是**本目录**——切勿同时安装 PyPI `nanobot-ai`。
 
-产品协作者通常经 [`app/`](../app/README.zh.md)（`nanobot-bio chat|agent`）进入。直接 `python -m nanobot` 偏框架，不是 RBP 产品 UX。阶段纪律与工具契约见 `skills/rbp-agent/SKILL.md` 与 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
+产品协作者通常经 [`app/`](../app/README.zh.md)（`nanobot-bio chat|agent`）进入。直接 `python -m nanobot` 偏框架，不是 RBP 产品 UX。阶段纪律与工具契约见 `skills/rbp-agent/SKILL.md` 与 [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md)。
 
 
 
@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -43,8 +44,8 @@ from nanobot import Nanobot, RunResult
 ```
 
 ```bash
-nanobot-bio chat|agent          # 产品路径
-python -m app.sync_overlay      # 改完 skill / RBP tools 后
+nanobot-bio chat|agent # 产品路径
+python -m app.sync_overlay # 改完 skill / RBP tools 后
 nanobot-bio doctor
 ```
 
@@ -84,4 +85,4 @@ print(result.verdict)
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.zh.md`](../app/README.zh.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../workspace/README.zh.md`](../workspace/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.zh.md`](../app/README.zh.md) · [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md) · [`../workspace/README.zh.md`](../workspace/README.zh.md)

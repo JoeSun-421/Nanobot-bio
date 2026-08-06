@@ -1,12 +1,12 @@
 # docker-compose.yml — nanobot-bio collaborator stack
 #
-# Profiles:
-#   default (agent-only): docker compose up chat
-#   full    (science):    docker compose --profile full up chat
-#   af3     (with AF3):   docker compose --profile full --profile af3 up chat
+# Services: app (default), app-full (profile: full), doctor
+#   agent-only:  docker compose up app
+#   science:     docker compose --profile full up app-full
+#   one-shot:    docker compose run --rm doctor
 #
 # Mounts (edit paths to your host layout):
-#   ./rhobind_agent_delivery  -> /delivery      (data + delivery scripts)
+#   ../rhobind_agent_delivery -> /delivery      (data + delivery scripts)
 #   ~/.nanobot                -> /root/.nanobot  (LLM config + key)
 #
 # Build:
@@ -17,6 +17,9 @@
 #   docker compose run --rm app doctor
 #   docker compose run --rm app accept-golden
 #   docker compose run --rm app agent --message "Does RNA X interact with RBP PTBP1?"
+#
+# Note: prefer host ./scripts/nbio.sh + in-repo nanobot/ SoT unless the image
+# has been verified on your machine. Checkout folder may be Nanobot-bio.
 
 services:
   app:
@@ -47,8 +50,9 @@ services:
   app-full:
     image: nanobot-bio:${NANOBOT_BIO_TAG:-full}
     build:
-      context: ..
-      dockerfile: nanobot-bio/Dockerfile
+      # Same repo context as `app` (works for Nanobot-bio or nanobot-bio checkout names).
+      context: .
+      dockerfile: Dockerfile
       args:
         PROFILE: full
         PYTHON_VERSION: "3.13"

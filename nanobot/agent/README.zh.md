@@ -4,7 +4,7 @@ Agent loop、memory/context、skills 加载与工具包。
 
 [English](README.md) · [中文]
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 用途
 
@@ -52,7 +52,7 @@ from nanobot.agent.tools.rbp import register_all
 
 reg = ToolRegistry()
 names = register_all(reg)
-print(names)  # predict_interaction, seq_similarity, …
+print(names) # predict_interaction, seq_similarity, …
 ```
 
 **产品 chat 启动后的默认**
@@ -78,4 +78,4 @@ pytest tests/test_proposal_compliance.py tests/test_package_layout.py
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`tools/rbp/README.zh.md`](tools/rbp/README.zh.md) · [`../sdk/README.zh.md`](../sdk/README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../app/README.zh.md`](../../app/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`tools/rbp/README.zh.md`](tools/rbp/README.zh.md) · [`../sdk/README.zh.md`](../sdk/README.zh.md) · [rbp-agent SKILL.md](../skills/rbp-agent/SKILL.md) · [`../../app/README.zh.md`](../../app/README.zh.md)

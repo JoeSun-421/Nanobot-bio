@@ -1,10 +1,10 @@
 # scripts/setup/
 
-面向 Linux / SSH 主机的**首次安装 / 修复**脚本。日常请用仓库根下的 [`../nbio`](../nbio)。
+面向 Linux / SSH 主机的**首次安装 / 修复**脚本。日常请用仓库根下的 [`../nbio.sh`](../nbio.sh)。
 
 [English](README.md) · [中文]
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 功能
 
@@ -23,7 +23,7 @@
 
 路径（`AF3_ROOT` / `ENV_PREFIX` / delivery）按本机发现，可用环境变量覆盖；见 [`../README.zh.md`](../README.zh.md)「路径发现」。
 
-Delivery 切换与备份路径见 [`../../docs/guides/DELIVERY_SWAP.zh.md`](../../docs/guides/DELIVERY_SWAP.zh.md)。
+Delivery 切换与备份路径见 [delivery bridge](../../app/backends/delivery/README.zh.md)。
 
 `nbio` **activate 不会**自动 `pip install` CUDA/torch；缺包时 doctor 表格标红，再用 `nbio setup` 修复。
 
@@ -31,7 +31,7 @@ Delivery 切换与备份路径见 [`../../docs/guides/DELIVERY_SWAP.zh.md`](../.
 
 | 脚本 | 何时用 |
 |------|--------|
-| [`../nbio`](../nbio) | **用户入口（canonical）**：activate / status / doctor / setup / chat / start |
+| [`../nbio.sh`](../nbio.sh) | **用户入口（canonical）**：activate / status / doctor / setup / chat / start |
 | `setup_all.sh` | `nbio setup` 内部调用；`AF3_STACK=auto`；AF3 路径可移植发现 |
 | `setup_all_ampere_or_older.sh` | 薄包装（兼容）：强制 `AF3_STACK=classic` |
 | `setup_all_blackwell.sh` | 薄包装（兼容）：强制 `AF3_STACK=blackwell` |
@@ -45,7 +45,7 @@ Delivery 切换与备份路径见 [`../../docs/guides/DELIVERY_SWAP.zh.md`](../.
 ./scripts/nbio.sh setup --skip-conda
 bash scripts/setup/setup_all_blackwell.sh
 
-./scripts/nbio.sh start                 # 日常：路径发现 → 纠偏 AF3 → chat
+./scripts/nbio.sh start # 日常：路径发现 → 纠偏 AF3 → chat
 # source scripts/nbio.sh && nanobot-bio doctor
 ./scripts/nbio.sh status
 ```
@@ -54,4 +54,4 @@ bash scripts/setup/setup_all_blackwell.sh
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [`../nbio`](../nbio)
+[`../README.zh.md`](../README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [`../nbio.sh`](../nbio.sh)

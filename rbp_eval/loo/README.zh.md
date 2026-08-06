@@ -16,7 +16,8 @@ Leave-one-out：轻量 LOO、heavy hide-own-head、矩阵扩充与 A/B。
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -28,4 +29,4 @@ source scripts/nbio.sh
 | `expand_matrix.py` | 扩充 agent 侧 LOO 矩阵 |
 | `matrix_ab_eval.py` | delivery vs 扩展矩阵 A/B |
 
-用法见 [`../../docs/guides/LOO_EXPAND.zh.md`](../../docs/guides/LOO_EXPAND.zh.md)。
+用法见 [`../../README.zh.md`](README.zh.md)。

@@ -16,7 +16,8 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -52,23 +53,24 @@ build_parser().print_help()
 **日常用户路径**
 
 ```bash
-source scripts/nbio.sh                 # 可选日常激活
-nanobot-bio doctor                  # 能力表；--verbose 打印路径
-nanobot-bio onboard                 # 交互式 LLM 配置
-nanobot-bio chat                    # 多轮
-nanobot-bio agent --example --query "Does PTBP1 bind this RNA?"
+source scripts/nbio.sh # 可选日常激活
+nanobot-bio doctor # 能力表；--verbose 打印路径
+nanobot-bio onboard # 交互式 LLM 配置
+nanobot-bio chat # 多轮
+nanobot-bio agent --example pos
+# 或：nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
 ```
 
 **验收 / 评估 / 维护**
 
 ```bash
-nanobot-bio own-head                # delivery own-head（无 LLM）
+nanobot-bio own-head # delivery own-head（无 LLM）
 nanobot-bio accept-llm
 nanobot-bio run-eval
 nanobot-bio heavy-loo
-nanobot-bio evolve --dry-run
-nanobot-bio gate                    # 工程：ruff + pytest + layout
-bash scripts/ci/ci_gate.sh          # → python -m app gate
+nanobot-bio evolve
+nanobot-bio gate # 工程：ruff + pytest + layout
+bash scripts/ci/ci_gate.sh # → python -m app gate
 ```
 
 **常用 flags**（`parser.py` / `user.py`）：
@@ -92,4 +94,4 @@ bash scripts/ci/ci_gate.sh          # → python -m app gate
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../dev/README.zh.md`](../dev/README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../scripts/ci/README.zh.md`](../../scripts/ci/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../dev/README.zh.md`](../dev/README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../scripts/ci/README.zh.md`](../../scripts/ci/README.zh.md)

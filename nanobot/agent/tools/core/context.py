@@ -1,4 +1,9 @@
-"""Runtime context for tool construction."""
+"""Runtime context for tool construction.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+"""
 from __future__ import annotations
 
 from contextvars import ContextVar, Token

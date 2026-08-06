@@ -1,4 +1,9 @@
-"""Message tool for sending messages to users."""
+"""Message tool for sending messages to users.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --message "Hello"
+"""
 
 from contextvars import ContextVar
 from pathlib import Path

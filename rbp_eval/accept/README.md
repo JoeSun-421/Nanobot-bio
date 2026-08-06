@@ -16,7 +16,8 @@ Holds **scientific** accept paths for nanobot-bio. Engineering gates (`gate` / `
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -33,7 +34,7 @@ source scripts/nbio.sh
 
 ```bash
 nanobot-bio own-head
-nanobot-bio accept-golden          # alias of own-head
+nanobot-bio accept-golden # alias of own-head
 nanobot-bio accept-llm
 nanobot-bio gap-closure
 python -m rbp_eval.accept.own_head
@@ -63,21 +64,21 @@ nanobot-bio own-head
 
 ```bash
 python -m rbp_eval.accept.transfer_calibration \
-  --regime both --cohort K562 --top-k 5 --out artifacts/reports/json/transfer_calibration.json
+ --regime both --cohort K562 --top-k 5 --out artifacts/reports/json/transfer_calibration.json
 ```
 
 ```python
 from rbp_eval.accept.gap_closure import check_unseen_trace_shape, build_gap_closure_report
 
 shape = check_unseen_trace_shape(
-    [
-        "resolve_rbp",
-        "fuse_similarity_views",
-        "confidence_abstain",
-        "predict_interaction",
-        "similarity_weighted_vote",
-    ],
-    predict_targets=["DONOR1"],
+ [
+ "resolve_rbp",
+ "fuse_similarity_views",
+ "confidence_abstain",
+ "predict_interaction",
+ "similarity_weighted_vote",
+ ],
+ predict_targets=["DONOR1"],
 )
 print(shape.get("ok"), shape.get("errors"))
 
@@ -104,4 +105,4 @@ print(out.get("ok"), out.get("mode"), list((out.get("touchpoints") or {}).keys()
 
 ## See also
 
-[`../README.md`](../README.md) · [`../evolve/README.md`](../evolve/README.md) · [`../../app/dev/README.md`](../../app/dev/README.md) · [`../../app/backends/delivery/README.md`](../../app/backends/delivery/README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.md`](../README.md) · [`../evolve/README.md`](../evolve/README.md) · [`../../app/dev/README.md`](../../app/dev/README.md) · [`../../app/backends/delivery/README.md`](../../app/backends/delivery/README.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md)

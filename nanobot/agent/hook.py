@@ -1,4 +1,9 @@
-"""Shared lifecycle hook primitives for agent runs."""
+"""Shared lifecycle hook primitives for agent runs.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat -v
+"""
 
 from __future__ import annotations
 

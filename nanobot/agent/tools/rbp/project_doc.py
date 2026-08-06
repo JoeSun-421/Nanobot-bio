@@ -7,6 +7,10 @@ returns a text chunk (offset / max_chars pagination). Paths resolve through
 
 Does not read FASTA or code; use ``score_binding_fasta`` for labeled FASTA
 eval. No scientific scores are produced here.
+
+CLI examples:
+  nanobot-bio agent --doc docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md
+  nanobot-bio agent --message "Summarize workspace/skills/rbp-agent/SKILL.md via read_project_doc"
 """
 
 from __future__ import annotations

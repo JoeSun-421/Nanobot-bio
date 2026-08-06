@@ -32,7 +32,7 @@ sync_workspace_templates(Path("workspace"), silent=True)
 ```python
 from pathlib import Path
 
-seed = Path(__file__).resolve().parents[0] / "MEMORY.md"  # when reading from source tree
+seed = Path(__file__).resolve().parents[0] / "MEMORY.md" # when reading from source tree
 # Or, when developing in-repo:
 seed = Path("nanobot/templates/legacy/memory/MEMORY.md")
 print(seed.read_text(encoding="utf-8").splitlines()[0])

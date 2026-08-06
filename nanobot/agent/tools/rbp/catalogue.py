@@ -7,6 +7,11 @@ with AA sequence) instead of a truncated full dump.
 
 Not a neighbour search — use ``seq_similarity`` for similar RBPs. Numbers and
 sequences come from delivery / catalogue FASTA only.
+
+CLI examples:
+  nanobot-bio agent --message "Is PTBP1 in the RhoBind catalogue? Show UniProt id and AA sequence"
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio doctor
 """
 
 from __future__ import annotations

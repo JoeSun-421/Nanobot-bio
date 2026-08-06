@@ -4,7 +4,7 @@ Non-LLM certification path, environment manifests, and delivery / evolve smokes.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Features
 
@@ -26,12 +26,12 @@ Non-LLM certification path, environment manifests, and delivery / evolve smokes.
 
 ```
 certify.sh
-  ├─ environment_manifest.py
-  ├─ python -m app doctor
-  ├─ python -m rbp_eval.accept.own_head
-  ├─ smoke_delivery_tools.py
-  ├─ (optional) release_metrics / transfer_calibration
-  └─ pytest
+ ├─ environment_manifest.py
+ ├─ python -m app doctor
+ ├─ python -m rbp_eval.accept.own_head
+ ├─ smoke_delivery_tools.py
+ ├─ (optional) release_metrics / transfer_calibration
+ └─ pytest
 ```
 
 Root: `$SCRIPT_DIR/../..`. Prefer agent Python `$ROOT/.venv/bin/python`.
@@ -41,7 +41,7 @@ Root: `$SCRIPT_DIR/../..`. Prefer agent Python `$ROOT/.venv/bin/python`.
 ```bash
 bash scripts/cert/certify.sh
 bash scripts/cert/certify.sh --full
-bash scripts/cert/certify.sh --transfer          # CERTIFY_TARGET / CERTIFY_MAX_SEQS optional
+bash scripts/cert/certify.sh --transfer # CERTIFY_TARGET / CERTIFY_MAX_SEQS optional
 
 python scripts/cert/environment_manifest.py
 python scripts/cert/smoke_delivery_tools.py

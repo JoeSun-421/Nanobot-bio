@@ -1,4 +1,10 @@
-"""Agent core module."""
+"""Agent core module.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  source scripts/nbio.sh
+"""
 
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.hook import AgentHook, AgentHookContext, AgentRunHookContext, CompositeHook

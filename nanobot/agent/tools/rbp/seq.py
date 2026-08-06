@@ -11,6 +11,11 @@ Calls delivery ``esm_similarity`` (embedding / ESM-C) and, when enabled,
 
 Prefer ``alias`` / ``uniprot`` over raw AA. Protein only — never pass RNA.
 Feed both axes into ``fuse_similarity_views`` / ``confidence_abstain``.
+
+CLI examples:
+  nanobot-bio agent --message "Find sequence-similar catalogue RBPs for PTBP1"
+  nanobot-bio agent --force-transfer --query SOME_RBP --rna-file path/to/rna.txt
+  nanobot-bio chat
 """
 
 from __future__ import annotations

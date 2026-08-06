@@ -4,11 +4,11 @@
 
 [English](README.md) · [中文]
 
-> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`。
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
 ## 用途
 
-拥有 `Session` / `SessionManager` 以存储对话状态。在 nanobot-bio 中，规范会话文件位于 `artifacts/sessions/`（workspace 有符号链接）——见 [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](../../docs/guides/MEMORY_AND_SESSIONS.zh.md) 与 [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §2。
+拥有 `Session` / `SessionManager` 以存储对话状态。在 nanobot-bio 中，规范会话文件位于 `artifacts/sessions/`（workspace 有符号链接）——见 [ARCHITECTURE §2](../../ARCHITECTURE.zh.md) 与 [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §2。
 
 ## 布局
 
@@ -51,4 +51,4 @@ nanobot-bio chat
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../../artifacts/README.zh.md`](../../artifacts/README.zh.md) · [`../../docs/guides/MEMORY_AND_SESSIONS.zh.md`](../../docs/guides/MEMORY_AND_SESSIONS.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../../artifacts/README.zh.md`](../../artifacts/README.zh.md) · [ARCHITECTURE §2](../../ARCHITECTURE.zh.md)

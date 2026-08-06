@@ -1,4 +1,10 @@
-"""Agent loop: the core processing engine."""
+"""Agent loop: the core processing engine.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  nanobot-bio agent --message "Does PTBP1 bind this RNA?"
+"""
 
 from __future__ import annotations
 

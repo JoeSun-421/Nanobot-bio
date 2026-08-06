@@ -28,15 +28,15 @@ delivery 操作库的幂等重建辅助脚本。
 
 ```bash
 bash scripts/data/bootstrap_data.sh \
-  --rb /path/to/rbp_proteins_260417 \
-  --benchmarks /path/to/results/benchmark_cluster \
-  --head-index-dir /path/to/head_index_dir \
-  --out /path/to/agent_db
+ --rb /path/to/rbp_proteins_260417 \
+ --benchmarks /path/to/results/benchmark_cluster \
+ --head-index-dir /path/to/head_index_dir \
+ --out /path/to/agent_db
 
 # 可选：
-#   --force
-#   --skip-peaks
-#   --skip-embeddings
+# --force
+# --skip-peaks
+# --skip-embeddings
 ```
 
 运行时通过 `AGENT_DB` / delivery env 指向重建库（见 [`INSTALL.md`](../../INSTALL.md)）。

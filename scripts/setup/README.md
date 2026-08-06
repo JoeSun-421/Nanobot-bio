@@ -1,10 +1,10 @@
 # scripts/setup/
 
-**First-time install / repair** scripts for Linux / SSH hosts. Day-to-day use [`../nbio`](../nbio) at the repo root.
+**First-time install / repair** scripts for Linux / SSH hosts. Day-to-day use [`../nbio.sh`](../nbio.sh) at the repo root.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Features
 
@@ -29,7 +29,7 @@ Paths (`AF3_ROOT` / `ENV_PREFIX` / delivery) are discovered on the host; see [`.
 
 | Script | When |
 |--------|------|
-| [`../nbio`](../nbio) | **User entry (canonical)**: activate / status / doctor / setup / chat / start |
+| [`../nbio.sh`](../nbio.sh) | **User entry (canonical)**: activate / status / doctor / setup / chat / start |
 | `setup_all.sh` | Called by `nbio setup`; `AF3_STACK=auto`; portable AF3 path discovery |
 | `setup_all_ampere_or_older.sh` | Thin compat wrap: force `AF3_STACK=classic` |
 | `setup_all_blackwell.sh` | Thin compat wrap: force `AF3_STACK=blackwell` |
@@ -43,7 +43,7 @@ Paths (`AF3_ROOT` / `ENV_PREFIX` / delivery) are discovered on the host; see [`.
 ./scripts/nbio.sh setup --skip-conda
 bash scripts/setup/setup_all_blackwell.sh
 
-./scripts/nbio.sh start                 # daily: discover → heal AF3 → chat
+./scripts/nbio.sh start # daily: discover → heal AF3 → chat
 # source scripts/nbio.sh && nanobot-bio doctor
 ./scripts/nbio.sh status
 ```
@@ -52,4 +52,4 @@ Full narrative: [`INSTALL.md`](../../INSTALL.md).
 
 ## See also
 
-[`../README.md`](../README.md) · [`INSTALL.md`](../../INSTALL.md) · [`../nbio`](../nbio)
+[`../README.md`](../README.md) · [`INSTALL.md`](../../INSTALL.md) · [`../nbio.sh`](../nbio.sh)

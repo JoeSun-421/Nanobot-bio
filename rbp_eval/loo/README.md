@@ -31,4 +31,4 @@ nanobot-bio heavy-loo --medoids --max-seqs 64
 nanobot-bio loo-matrix-ab
 ```
 
-See [`../../docs/guides/LOO_EXPAND.md`](../../docs/guides/LOO_EXPAND.md) · [中文](../../docs/guides/LOO_EXPAND.zh.md).
+See [`../../README.md`](README.md) · [中文](README.md).

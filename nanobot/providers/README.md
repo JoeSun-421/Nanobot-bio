@@ -4,7 +4,7 @@ LLM provider adapters and factory.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -45,7 +45,7 @@ print(type(provider).__name__)
 
 ```bash
 nanobot-bio onboard --provider openai --model deepseek-chat
-nanobot-bio doctor   # shows LLM readiness
+nanobot-bio doctor # shows LLM readiness
 ```
 
 ## Dependencies / env

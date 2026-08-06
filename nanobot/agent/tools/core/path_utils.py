@@ -1,4 +1,9 @@
-"""Shared path helpers for workspace-scoped tools."""
+"""Shared path helpers for workspace-scoped tools.
+
+CLI examples:
+  nanobot-bio agent --doc docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md
+  nanobot-bio agent --query PTBP1 --fasta path/to/labeled.fasta
+"""
 
 from pathlib import Path
 

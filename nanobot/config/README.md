@@ -4,7 +4,7 @@ Nanobot configuration loading, paths, and schema (`Config`).
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -30,13 +30,13 @@ from nanobot.config import load_config, get_config_path, Config, get_workspace_p
 ```python
 from nanobot.config import load_config, get_config_path, get_workspace_path
 
-print(get_config_path())          # usually ~/.nanobot/config.json
+print(get_config_path()) # usually ~/.nanobot/config.json
 cfg = load_config()
-print(get_workspace_path(cfg))    # workspace directory
+print(get_workspace_path(cfg)) # workspace directory
 ```
 
 ```bash
-nanobot-bio onboard   # writes provider/model refs; secrets in .env
+nanobot-bio onboard # writes provider/model refs; secrets in .env
 ```
 
 ## Dependencies / env

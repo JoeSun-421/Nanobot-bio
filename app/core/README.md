@@ -16,7 +16,8 @@ Eval-only fusion math lives under [`rbp_eval/`](../../rbp_eval/README.md). The i
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -54,8 +55,8 @@ from app.core import normalize_verdict, validate_verdict
 ```python
 from app.core.paths import ensure_artifact_dirs, report_path, find_report
 
-dirs = ensure_artifact_dirs()  # creates artifacts/sessions, reports/json, …
-out = report_path("eval_loo_report.json")  # → artifacts/reports/json/…
+dirs = ensure_artifact_dirs() # creates artifacts/sessions, reports/json, …
+out = report_path("eval_loo_report.json") # → artifacts/reports/json/…
 existing = find_report("eval_loo_report.json")
 ```
 
@@ -65,8 +66,8 @@ existing = find_report("eval_loo_report.json")
 from app.core.runtime_config import load_runtime_config, fusion_weights, config_source
 
 cfg = load_runtime_config(prefer_evolved=True)
-print(config_source())          # which YAML layers are active
-print(fusion_weights())         # rna_peak_homology may be forced to 0
+print(config_source()) # which YAML layers are active
+print(fusion_weights()) # rna_peak_homology may be forced to 0
 ```
 
 **Verdict normalize / validate**
@@ -87,4 +88,4 @@ assert ok, errors
 
 ## See also
 
-[`../README.md`](../README.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../config/README.md`](../../config/README.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
+[`../README.md`](../README.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../config/README.md`](../../config/README.md) · [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)

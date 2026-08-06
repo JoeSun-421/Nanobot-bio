@@ -12,7 +12,8 @@ Pytest 套件：布局、契约、CLI/UX、delivery 桥与离线评估逻辑。
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -42,8 +43,8 @@ source scripts/nbio.sh
 source .venv/bin/activate
 pytest -q
 pytest tests/test_proposal_compliance.py tests/test_package_layout.py
-bash scripts/ci/ci_gate.sh          # ruff + pytest + layout（app gate）
-bash scripts/cert/certify.sh        # 含 pytest 的更长认证链
+bash scripts/ci/ci_gate.sh # ruff + pytest + layout（app gate）
+bash scripts/cert/certify.sh # 含 pytest 的更长认证链
 ```
 
 常用环境变量：`NANOBOT_BIO_ROOT`、可选 `DELIVERY_ROOT`、`RHOBIND_DEVICE`。

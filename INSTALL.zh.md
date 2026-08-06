@@ -8,7 +8,7 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 # 惯例（可由 nbio 发现，也可显式 export）：
 #   DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
@@ -40,9 +40,9 @@ source scripts/nbio.sh
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
 # delivery bundle 需单独获取（见 §3），与 nanobot-bio 同级：
-#   $BIO_ROOT/nanobot-bio/
+#   $BIO_ROOT/Nanobot-bio/   # or nanobot-bio/
 #   $BIO_ROOT/rhobind_agent_delivery/
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 
 ./scripts/nbio.sh setup                  # full 科学栈 + agent venv（= setup_all.sh）
 # 已知机型也可显式选（薄包装，内部仍调 setup_all.sh）：
@@ -57,7 +57,7 @@ nanobot-bio onboard                   # 显式选择 LLM 厂商 + key（写入 .
 # source scripts/nbio.sh && nanobot-bio doctor   # 分步：激活 + 能力表
 ```
 
-`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio.sh`](scripts/nbio.sh)。
+`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md)（AF3 说明）· [scripts/nbio.sh](scripts/nbio.sh)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio.sh`](scripts/nbio.sh)。
 
 **环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常用 `./scripts/nbio.sh start`（或 `source scripts/nbio.sh` + `nanobot-bio chat`），**不必每次** setup。`start` 在本机**自动搜寻** AF3 / conda 路径（`$AF3_BLACKWELL_ROOT`、BIO 旁 `af3_blackwell`、`~/af3_blackwell`、`conda info --base` 等；AutoDL 布局只是候选之一），CC12 上纠偏 classic→blackwell，默认备份后改写 `.env`。用 `start --dry-run` 可只看候选列表。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
 
@@ -93,7 +93,7 @@ cd "$BIO_ROOT/rhobind_agent_delivery"
 bash agent/setup_envs.sh             # protein_embed / rna / rhobind / af3
 
 # 2. agent venv（仓内已含精简 nanobot/）
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
@@ -174,7 +174,7 @@ bash scripts/setup/setup_all_blackwell.sh    # = setup_all.sh --af3-stack=blackw
 成功后 AF3 状态文件（默认 `~/.cache/nanobot-bio/af3_status`，可用 `AF3_STATUS_FILE` 覆盖；不再写入仓内）应为 `state=ok`（否则 agent 会把结构轴标成 deferred）。
 `setup_all.sh`（`AF3_STACK=auto`）会检测 CC 12 并自动选择这个隔离环境；非 5090 机用 `setup_all_ampere_or_older.sh` 强制经典 `af3`。均不覆盖 delivery 的官方 `af3` 环境。
 
-版本矩阵、ColabFold MSA 限制与发行改进清单见 [docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md](docs/guides/AF3_RUNTIME_AND_RELEASE.zh.md) · [EN](docs/guides/AF3_RUNTIME_AND_RELEASE.md)。
+版本矩阵、ColabFold MSA 限制与发行改进清单见 [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md)（AF3 说明）· [scripts/nbio.sh](scripts/nbio.sh) · [EN](ARCHITECTURE.md)。
 
 ---
 
@@ -214,7 +214,7 @@ nanobot-bio gate             # 5. 工程门（ruff + pytest + layout + 可选 LO
 
 delivery 原生 `agent/examples/run_example.sh` 仅用于**无 app 层时的回归**（直接调 delivery 脚本），协作方验收请走 `nanobot-bio accept-golden`。
 
-报告输出到 `artifacts/reports/{json,md,csv}/`（或 `~/.nanobot-bio/artifacts/reports/` 当 env 覆盖时）。会话 / PA 记忆 / 领域记忆（proxy_map）规范路径见 [`docs/guides/MEMORY_AND_SESSIONS.zh.md`](docs/guides/MEMORY_AND_SESSIONS.zh.md) · [EN](docs/guides/MEMORY_AND_SESSIONS.md)（`workspace/sessions|memory` 仅为 symlink）。
+报告输出到 `artifacts/reports/{json,md,csv}/`（或 `~/.nanobot-bio/artifacts/reports/` 当 env 覆盖时）。会话 / PA 记忆 / 领域记忆（proxy_map）规范路径见 [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md) §2 · [EN](ARCHITECTURE.md)（`workspace/sessions|memory` 仅为 symlink）。
 
 ### 4.1 CI 与 self-hosted runner
 

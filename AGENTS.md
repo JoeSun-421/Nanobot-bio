@@ -2,7 +2,8 @@
 
 Committed short gate for agents and CI. Layout / memory / eval / slim-vendor /
 release: [`ARCHITECTURE.md`](ARCHITECTURE.md). Setup: [`INSTALL.md`](INSTALL.md).
-Local detail (git-ignored): `docs/工程指南.zh.md` §9. Chat agreements do **not**
+Collaborator overview: [`HANDOFF.md`](HANDOFF.md) · [`HANDOFF.zh.md`](HANDOFF.zh.md).
+Local detail (git-ignored): `docs/` if present on the machine. Chat agreements do **not**
 override these rules.
 
 ## MUST NOT

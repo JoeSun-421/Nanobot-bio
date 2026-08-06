@@ -1,4 +1,9 @@
-"""Base class for agent tools."""
+"""Base class for agent tools.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  nanobot-bio agent --example pos
+"""
 from __future__ import annotations
 
 import typing

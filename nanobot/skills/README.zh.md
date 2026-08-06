@@ -46,7 +46,7 @@ metadata: {"nanobot":{"emoji":"🧬","always":true}}
 always: true
 ```
 
-绑定阶段：[`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
+绑定阶段：[rbp-agent SKILL.md](rbp-agent/SKILL.md)。
 
 ## 依赖 / 环境
 
@@ -55,4 +55,4 @@ always: true
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../agent/tools/rbp/README.zh.md`](../agent/tools/rbp/README.zh.md) · [`../../workspace/skills/README.zh.md`](../../workspace/skills/README.zh.md) · [`../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../docs/product/BINDING_PREDICTION_FLOW.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../agent/tools/rbp/README.zh.md`](../agent/tools/rbp/README.zh.md) · [`../../workspace/skills/README.zh.md`](../../workspace/skills/README.zh.md) · [rbp-agent SKILL.md](rbp-agent/SKILL.md)

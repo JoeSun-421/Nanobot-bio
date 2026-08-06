@@ -8,7 +8,7 @@ Slim in-repo Nanobot runtime **plus** RBP skill & tools. SoT == runtime: `import
 
 This tree is the agent framework used by the product: high-level `Nanobot` API, agent loop, session store, LLM providers, and the RBP skill/toolkit. Packaging (`pyproject.toml`) includes `nanobot*` so an editable install exposes **this** directory — never install PyPI `nanobot-ai` alongside it.
 
-Product collaborators normally enter through [`app/`](../app/README.md) (`nanobot-bio chat|agent`). Direct `python -m nanobot` is framework-oriented and not the RBP product UX. Stage discipline and tool contracts live in `skills/rbp-agent/SKILL.md` and [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md).
+Product collaborators normally enter through [`app/`](../app/README.md) (`nanobot-bio chat|agent`). Direct `python -m nanobot` is framework-oriented and not the RBP product UX. Stage discipline and tool contracts live in `skills/rbp-agent/SKILL.md` and [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md).
 
 
 
@@ -16,7 +16,8 @@ Product collaborators normally enter through [`app/`](../app/README.md) (`nanobo
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -43,8 +44,8 @@ from nanobot import Nanobot, RunResult
 ```
 
 ```bash
-nanobot-bio chat|agent          # product path
-python -m app.sync_overlay      # after editing skill / RBP tools
+nanobot-bio chat|agent # product path
+python -m app.sync_overlay # after editing skill / RBP tools
 nanobot-bio doctor
 ```
 
@@ -85,4 +86,4 @@ print(result.verdict)
 
 ## See also
 
-[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.md`](../app/README.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../workspace/README.md`](../workspace/README.md)
+[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.md`](../app/README.md) · [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md) · [`../workspace/README.md`](../workspace/README.md)

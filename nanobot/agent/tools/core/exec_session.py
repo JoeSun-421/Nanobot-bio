@@ -1,4 +1,9 @@
-"""Session support for long-running exec workflows."""
+"""Session support for long-running exec workflows.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
 
 from __future__ import annotations
 

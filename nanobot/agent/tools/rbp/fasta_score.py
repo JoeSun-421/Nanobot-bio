@@ -9,6 +9,11 @@ Headers starting with ``NEG`` are negatives; others positive. Returns a metrics
 summary (AUPRC/AUROC when both classes present) plus a CSV artifact path — does
 not dump all sequences into chat. Not a general ``read_file``. Scores come only
 from the predictor; never invent ``p_hat``.
+
+CLI examples:
+  nanobot-bio agent --query PTBP1 --fasta path/to/labeled.fasta
+  nanobot-bio accept-golden
+  nanobot-bio own-head
 """
 
 from __future__ import annotations

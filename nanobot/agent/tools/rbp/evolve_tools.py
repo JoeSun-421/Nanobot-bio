@@ -12,6 +12,12 @@ Delivery / offline code owns the numeric scores. This module only orchestrates
 cache lookup and fusion; the LLM must not invent ``s_i`` or ``p_hat``. On the
 unseen/transfer path: retrieve → fuse → ``commit_proxy_candidates`` →
 ``confidence_abstain`` → ``predict_interaction``.
+
+CLI examples:
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio evolve --medoids
+  nanobot-bio run-eval --medoids
+  nanobot-bio promote-evolved
 """
 
 from __future__ import annotations

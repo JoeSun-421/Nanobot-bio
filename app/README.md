@@ -8,7 +8,8 @@ Product shell: CLI, `RBPAgent` assembly, delivery bridge, and runtime config. Ne
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
@@ -16,7 +17,7 @@ source scripts/nbio.sh
 
 `app/` is the operator-facing product layer of **nanobot-bio**. It wires the in-repo Nanobot runtime, filters tools for RBP science mode, normalizes typed JSON verdicts, and bridges every science call through the read-only delivery client. Collaborators and CI should enter here (`nanobot-bio` / `rbp-agent` / `python -m app`) rather than calling Nanobot or delivery scripts ad hoc.
 
-Offline evaluation and self-evolution live in [`rbp_eval/`](../rbp_eval/README.md) and are intentionally off the chat hot path. Binding-stage semantics: [`BINDING_PREDICTION_FLOW.md`](../docs/product/BINDING_PREDICTION_FLOW.md) · [中文](../docs/product/BINDING_PREDICTION_FLOW.zh.md).
+Offline evaluation and self-evolution live in [`rbp_eval/`](../rbp_eval/README.md) and are intentionally off the chat hot path. Binding-stage semantics: [rbp-agent/SKILL.md](../nanobot/skills/rbp-agent/SKILL.md).
 
 ## Layout
 
@@ -36,10 +37,10 @@ Layering ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1):
 
 ```
 CLI (app/cli)
-  → app.agent.RBPAgent
-      → nanobot/ (loop · tools · skill)
-          → app.backends.delivery
-              → ../rhobind_agent_delivery (read-only)
+ → app.agent.RBPAgent
+ → nanobot/ (loop · tools · skill)
+ → app.backends.delivery
+ → ../rhobind_agent_delivery (read-only)
 Offline eval → rbp_eval/ (not on the chat hot path)
 ```
 
@@ -60,9 +61,9 @@ rbp-agent chat
 ```bash
 # Activate env first (see INSTALL.md / scripts/nbio.sh)
 nanobot-bio doctor
-nanobot-bio agent --query "Does this RNA bind PTBP1?" --example
-# or with explicit RNA file:
-nanobot-bio agent --rna-file /path/to/rna.fa --query "Predict binding to PTBP1"
+nanobot-bio agent --example pos
+# or with explicit RBP id + RNA file:
+nanobot-bio agent --query PTBP1 --rna-file /path/to/rna.fa --device auto
 ```
 
 **Programmatic `RBPAgent`**
@@ -70,7 +71,7 @@ nanobot-bio agent --rna-file /path/to/rna.fa --query "Predict binding to PTBP1"
 ```python
 from app.agent import RBPAgent
 
-agent = RBPAgent()  # applies delivery env, registers RBP tools
+agent = RBPAgent() # applies delivery env, registers RBP tools
 result = agent.run_sync("Predict whether the sample RNA binds PTBP1.")
 print(result.verdict_valid, result.verdict)
 print(result.tools_used)
@@ -102,4 +103,4 @@ Setup: [`scripts/setup/`](../scripts/setup/README.md) · [`INSTALL.md`](../INSTA
 
 ## See also
 
-[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../nanobot/README.md`](../nanobot/README.md) · [`../artifacts/README.md`](../artifacts/README.md)
+[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [rbp-agent SKILL.md](../nanobot/skills/rbp-agent/SKILL.md) · [`../nanobot/README.md`](../nanobot/README.md) · [`../artifacts/README.md`](../artifacts/README.md)

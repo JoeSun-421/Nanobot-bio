@@ -16,6 +16,12 @@ Entry point: ``register_rbp_tools(registry, include_raw_delivery=…)``, used by
 
 Does not register PA legacy tools (shell/web/…); the product path unregisters
 those separately.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  nanobot-bio doctor
+  python -m app.sync_overlay
+  nanobot-bio agent --example pos
 """
 
 from __future__ import annotations

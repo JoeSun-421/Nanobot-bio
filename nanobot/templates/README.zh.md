@@ -38,8 +38,8 @@ from nanobot.utils.prompt_templates import render_template
 
 # 名称相对于 nanobot/templates/
 text = render_template(
-    "agent/skills_section.md",
-    skills_summary="- **rbp-agent**: RNA–RBP binding workflow",
+ "agent/skills_section.md",
+ skills_summary="- **rbp-agent**: RNA–RBP binding workflow",
 )
 print(text[:200])
 

@@ -15,6 +15,11 @@ per-turn *state*; this module holds *policy*:
 
 Kept data-driven so a future scheduler can consume the same edges instead of
 post-hoc blocking only.
+
+CLI examples:
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --example pos
+  nanobot-bio mvp
 """
 
 from __future__ import annotations

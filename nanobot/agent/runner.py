@@ -1,4 +1,10 @@
-"""Shared execution loop for tool-using agents."""
+"""Shared execution loop for tool-using agents.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  nanobot-bio batch-prompts --limit 1
+"""
 
 from __future__ import annotations
 

@@ -57,7 +57,7 @@ ws = Path(ensure_workspace_skill())
 print(ws)
 ```
 
-绑定阶段：[`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)。
+绑定阶段：[rbp-agent SKILL.md](SKILL.md)。
 
 ## 依赖 / 环境
 

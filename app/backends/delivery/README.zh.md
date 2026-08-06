@@ -12,13 +12,14 @@
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 ```
 
 产品 agent 的全部科学 I/O 必须经本包。轻量工具可进程内执行；重工具以 JSON payload 走 `conda run` 子进程。mapping 相对 delivery 的 `agent/tools/registry.json` **失败即关闭**——陈旧绑定硬失败，而不是调用错误脚本。环境或二进制缺失时，本包绝不编造绑定分数。
 
-端到端阶段流（own-head → retrieve → fuse → predict → integrate）见 [`docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md)。transfer `p_hat` 的聚合权威仍是 delivery 的 `similarity_weighted_vote`。
+端到端阶段流（own-head → retrieve → fuse → predict → integrate）见 [rbp-agent SKILL.md](../../../nanobot/skills/rbp-agent/SKILL.md)。transfer `p_hat` 的聚合权威仍是 delivery 的 `similarity_weighted_vote`。
 
 ## 布局
 
@@ -38,20 +39,20 @@ source scripts/nbio.sh
 
 ```
 nanobot RBP tool
-  → DeliveryToolClient.call
-      → apply_delivery_env / mapping
-      → 进程内 或 conda run（protein_embed / rna / rhobind / af3…）
+ → DeliveryToolClient.call
+ → apply_delivery_env / mapping
+ → 进程内 或 conda run（protein_embed / rna / rhobind / af3…）
 ```
 
 ## 入口
 
 ```python
 from app.backends.delivery import (
-    DeliveryToolClient,
-    apply_delivery_env,
-    delivery_root,
-    resolve_delivery_paths,
-    register_tools,
+ DeliveryToolClient,
+ apply_delivery_env,
+ delivery_root,
+ resolve_delivery_paths,
+ register_tools,
 )
 ```
 
@@ -77,7 +78,7 @@ from app.backends.delivery.registry import register_tools
 from nanobot.agent.tools import ToolRegistry
 
 reg = ToolRegistry()
-names = register_tools(reg)  # include_raw_delivery="all"（产品默认）
+names = register_tools(reg) # include_raw_delivery="all"（产品默认）
 print(sorted(names)[:10])
 # 收窄 MVP：include_raw_delivery="whitelist" 或环境变量 RBP_RAW_TOOLS=whitelist
 ```
@@ -108,4 +109,4 @@ python scripts/cert/smoke_delivery_tools.py --network --af3
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`../../README.zh.md`](../../README.zh.md) · [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) §4 · [`../../../docs/product/BINDING_PREDICTION_FLOW.zh.md`](../../../docs/product/BINDING_PREDICTION_FLOW.zh.md) · [`../../../scripts/cert/README.zh.md`](../../../scripts/cert/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../../README.zh.md`](../../README.zh.md) · [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) §4 · [rbp-agent SKILL.md](../../../nanobot/skills/rbp-agent/SKILL.md) · [`../../../scripts/cert/README.zh.md`](../../../scripts/cert/README.zh.md)

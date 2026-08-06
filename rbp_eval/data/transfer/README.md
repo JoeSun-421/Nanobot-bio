@@ -11,7 +11,7 @@ self-evolution / A–B experiments.
 
 ```bash
 export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
-cd "$BIO_ROOT/nanobot-bio"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 source scripts/nbio.sh
 export RBP_LOO_TRANSFER_DIR="$(pwd)/rbp_eval/data/transfer"
 export TRANSFER_DIR="$RBP_LOO_TRANSFER_DIR"

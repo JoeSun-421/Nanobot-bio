@@ -4,6 +4,11 @@
 The LLM may select/explain donors, but cannot create or modify numeric ``s_i``.
 All committed scores are copied from the immediately preceding deterministic
 ``fuse_similarity_views`` result.
+
+CLI examples:
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --message "Transfer path: fuse similarity views then commit proxy donors"
+  nanobot-bio run-eval --medoids
 """
 
 from __future__ import annotations

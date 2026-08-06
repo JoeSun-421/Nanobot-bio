@@ -1,4 +1,10 @@
-"""Helpers for runtime model preset selection."""
+"""Helpers for runtime model preset selection.
+
+CLI examples:
+  nanobot-bio onboard --show
+  nanobot-bio onboard --list-models
+  nanobot-bio doctor
+"""
 
 from __future__ import annotations
 

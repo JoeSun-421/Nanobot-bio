@@ -4,7 +4,7 @@ Scheduled agent tasks (cron service) for the Nanobot framework.
 
 [English] · [中文](README.zh.md)
 
-> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "$BIO_ROOT/nanobot-bio" && source scripts/nbio.sh`.
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
 ## Purpose
 
@@ -34,17 +34,17 @@ from nanobot.cron.types import CronPayload
 
 schedule = CronSchedule(kind="cron", expr="0 * * * *")
 job = CronJob(
-    id="hourly-ping",
-    name="hourly-ping",
-    schedule=schedule,
-    payload=CronPayload(message="ping"),
+ id="hourly-ping",
+ name="hourly-ping",
+ schedule=schedule,
+ payload=CronPayload(message="ping"),
 )
 print(job.id, job.schedule.expr)
 ```
 
 ```bash
 # Product offline loops (preferred for science):
-nanobot-bio evolve --dry-run
+nanobot-bio evolve
 bash scripts/cert/smoke_evolve_loop.sh
 ```
 
