@@ -1,21 +1,46 @@
 # scripts/
 
-Operator scripts for nanobot-bio. **Day-to-day entry:** [`nbio`](nbio).
+Operator scripts for nanobot-bio. **Day-to-day entry:** [`nbio.sh`](nbio.sh).
 
 [English] · [中文](README.zh.md)
 
 ## Features
 
-- **`nbio`**: portable activate / status / doctor / setup / chat (Linux)
+- **`nbio.sh`**: single portable entry for activate / status / doctor / setup / chat / **start**
+- Discovers `BIO_ROOT`, `DELIVERY_ROOT`, AF3, and conda without host-vendor absolute paths
+- Subdirs: `setup/` (heavy install), `ci/` (gates), `cert/` (non-LLM certify), `docker/`, `data/`
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
+- **`nbio.sh`**: portable activate / status / doctor / setup / chat / **start** (one-shot)
 - Setup: agent `.venv` + delivery science conda + AF3 stack selection
 - CI / Cert / Docker / Data helpers (unchanged filenames)
+
+## Path discovery (portable Linux)
+
+`nbio.sh` / `setup_*` **discover paths relative to the checkout and standard env vars** — no host-vendor absolute paths:
+
+| Target | Candidate order (summary) |
+|--------|---------------------------|
+| `BIO_ROOT` / delivery | Relative to `scripts/nbio.sh` checkout → `$BIO_ROOT` / `$DELIVERY_ROOT` (only if still present) |
+| `AF3_BLACKWELL_ROOT` | `$AF3_BLACKWELL_ROOT` → `$BIO_ROOT/af3_blackwell` → sibling of BIO parent → `~/af3_blackwell` → `/opt/af3_blackwell` |
+| `AF3_PYTHON` | `$ENV_PREFIX` → `conda info --base` → `$CONDA_PREFIX` / common miniconda·anaconda → `$BIO_ROOT/../conda` or `$BIO_ROOT/conda` |
+
+`./scripts/nbio.sh start` (or `--dry-run`) prints the candidate list and selection, then heals `.env` for this machine (backup `.env.bak.nbio.*`). On a new host: place delivery (+ optional af3_blackwell), then `./scripts/nbio.sh setup` → `./scripts/nbio.sh start`.
 
 ## Implementation
 
 | Path | Role |
 |------|------|
-| [`nbio`](nbio) | **Single user entry** (detect + activate; setup is explicit) |
-| [`setup/`](setup/README.md) | Heavy install (`setup_all*`); `activate_env.sh` → `nbio` |
+| [`nbio.sh`](nbio.sh) | **Single user entry** (detect + activate; setup is explicit) |
+| [`setup/`](setup/README.md) | Heavy install (`setup_all*`); `activate_env.sh` → `nbio.sh` (compat wrappers) |
 | [`ci/`](ci/README.md) | Secret scan + engineering gate |
 | [`cert/`](cert/README.md) | Non-LLM certify, manifests, smokes |
 | [`docker/`](docker/README.md) | Container entrypoint |
@@ -23,9 +48,9 @@ Operator scripts for nanobot-bio. **Day-to-day entry:** [`nbio`](nbio).
 
 ```
 scripts/
-  nbio                 ← daily entry
-  setup/               setup_all*, activate_env.sh (compat)
-  ci/ cert/ docker/ data/
+ nbio.sh ← daily entry (canonical)
+ setup/ setup_all*; activate_env / ampere / blackwell = thin compat
+ ci/ cert/ docker/ data/
 ```
 
 ## How to use
@@ -33,14 +58,18 @@ scripts/
 ```bash
 git clone https://github.com/JoeSun-421/Nanobot-bio.git
 cd Nanobot-bio
-./scripts/nbio setup
-source scripts/nbio
-nanobot-bio doctor
-nanobot-bio chat
+./scripts/nbio.sh setup # first time
+./scripts/nbio.sh start # one-shot: discover paths → heal AF3 → chat
+# ./scripts/nbio.sh start --dry-run # show candidate list + adaptation only
+# source scripts/nbio.sh && nanobot-bio chat
 ```
 
-Install narrative: [`INSTALL.md`](../INSTALL.md).
+`start` / `up` picks classic vs blackwell from GPU `compute_cap`, then aligns `AF3_DIR` / `AF3_PYTHON` / `AF3_CACHE` (default: heal `.env` with backup; `--no-heal` = session-only). Install narrative: [`INSTALL.md`](../INSTALL.md).
+
+## Delivery bridge
+
+Science I/O goes through the App delivery package (not scripts). Brief pointer: [`../app/backends/delivery/README.md`](../app/backends/delivery/README.md) · [中文](../app/backends/delivery/README.zh.md).
 
 ## See also
 
-[`../README.md`](../README.md) · [`INSTALL.md`](../INSTALL.md) · [`nbio`](nbio)
+[`../README.md`](../README.md) · [`INSTALL.md`](../INSTALL.md) · [`nbio.sh`](nbio.sh)

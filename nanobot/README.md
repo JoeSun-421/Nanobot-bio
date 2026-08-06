@@ -4,57 +4,86 @@ Slim in-repo Nanobot runtime **plus** RBP skill & tools. SoT == runtime: `import
 
 [English] · [中文](README.zh.md)
 
-## Features
+## Purpose
 
-- High-level `Nanobot` API (`from_config` / `run` / `run_streamed`) for the product CLI
-- Agent loop, session store, LLM providers, and internal SDK helpers
-- Product skill SoT: `skills/rbp-agent/SKILL.md`
-- Product toolkit under `agent/tools/rbp/` (retrieve / predict / structure / …)
-- Slim-vendor policy: PA surfaces (channels / webui / …) stripped; asserted by `rbp-agent layout`
+This tree is the agent framework used by the product: high-level `Nanobot` API, agent loop, session store, LLM providers, and the RBP skill/toolkit. Packaging (`pyproject.toml`) includes `nanobot*` so an editable install exposes **this** directory — never install PyPI `nanobot-ai` alongside it.
 
-## Implementation
+Product collaborators normally enter through [`app/`](../app/README.md) (`nanobot-bio chat|agent`). Direct `python -m nanobot` is framework-oriented and not the RBP product UX. Stage discipline and tool contracts live in `skills/rbp-agent/SKILL.md` and [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md).
+
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
+## Layout
 
 | Path | Role |
 |------|------|
-| `nanobot.py` | Public high-level API |
+| `nanobot.py` | Public high-level API (`Nanobot.from_config` / `run` / `run_streamed`) |
 | [`agent/`](agent/README.md) | Loop, memory, context, skills, **tools** |
+| [`agent/tools/rbp/`](agent/tools/rbp/README.md) | Product toolkit (retrieve / predict / structure / …) |
 | [`sdk/`](sdk/README.md) | Internal SDK helpers (clients / streaming / types) |
-| `session/` | Session storage/management (canonical data under `artifacts/sessions`) |
-| `skills/rbp-agent/` | Skill source of truth; synced to `workspace/skills/` |
-| `providers/` | LLM provider adapters |
-| `config/` · `bus/` · `command/` · `cron/` · `security/` · `utils/` | Framework support |
-| `legacy/` · `templates/` | Legacy / templates; not the primary product path |
+| [`session/`](session/README.md) | Session storage (canonical data under `artifacts/sessions`) |
+| [`skills/`](skills/README.md) | Skill SoT (`rbp-agent/SKILL.md`); synced to `workspace/skills/` |
+| [`providers/`](providers/README.md) | LLM provider adapters |
+| [`config/`](config/README.md) · [`bus/`](bus/README.md) · [`command/`](command/README.md) · [`cron/`](cron/README.md) · [`security/`](security/README.md) · [`utils/`](utils/README.md) | Framework support |
+| [`legacy/`](legacy/README.md) · [`templates/`](templates/README.md) | Legacy / templates; not the primary product path |
 
-Tool loading defaults: `NANOBOT_TOOL_ALLOW=rbp`; `NANOBOT_TOOL_PLUGINS` off unless set. Chat also unregisters noisy PA tools in `app/agent.py`.
+Defaults: `NANOBOT_TOOL_ALLOW=rbp`; `NANOBOT_TOOL_PLUGINS` off unless set. Chat also unregisters noisy PA tools in `app/agent.py`.
 
-Packaging: `pyproject.toml` includes `nanobot*` via setuptools so editable install exposes this tree.
+## Entry points
 
-## How to use
-
-Product users normally go through the App CLI, not `python -m nanobot`:
-
-```bash
-nanobot-bio chat|agent
-# Inside App: Nanobot.from_config → run / run_streamed
-# Prefer ephemeral=True for MVP / eval turns
+```python
+from nanobot import Nanobot, RunResult
 ```
 
-After editing skill or RBP tools:
-
 ```bash
-python -m app.sync_overlay
+nanobot-bio chat|agent # product path
+python -m app.sync_overlay # after editing skill / RBP tools
 nanobot-bio doctor
 ```
 
-Do **not** `pip install nanobot-ai` alongside this package — it steals the import name.
+## Code examples
+
+**High-level Nanobot (framework)**
+
+```python
+from nanobot import Nanobot
+
+bot = Nanobot.from_config(workspace="workspace", scientific_mode=True)
+# Prefer ephemeral turns for MVP / eval:
+result = await bot.run("Summarize workspace AGENTS.md", ephemeral=True)
+print(result.content)
+```
+
+**Product assembly (preferred)**
+
+```python
+from app.agent import RBPAgent
+
+agent = RBPAgent()
+result = agent.run_sync("Predict binding for PTBP1 on the sample RNA.")
+print(result.verdict)
+```
+
+## Dependencies / env
+
+- LLM credentials via `~/.nanobot/config.json` / `.env` (`nanobot-bio onboard`).
+- Science tools need delivery (`DELIVERY_ROOT`) — Nanobot itself stays free of torch/jax model stacks.
+- Do **not** `pip install nanobot-ai` — it steals the import name.
 
 ## Design rationale
 
-- **SoT == runtime** avoids a third tools tree and sync drift (Proposal / ARCHITECTURE §6).
-- Keep heavy science (torch / jax models) out of the Nanobot process; call delivery via App bridge.
-- Scientific mode disables automatic Dream / idle compaction / token consolidator and excludes PA `MEMORY.md` from the science prompt ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §2).
+- **SoT == runtime** avoids a third tools tree and sync drift ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §6).
+- Scientific mode disables automatic Dream / idle compaction / token consolidator and excludes PA `MEMORY.md` from the science prompt.
 - Session/memory stacks stay wired even when product defaults tighten PA behaviour — do not blind-delete them.
 
 ## See also
 
-[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.md`](../app/README.md) · [`../workspace/README.md`](../workspace/README.md)
+[`../README.md`](../README.md) · [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`../app/README.md`](../app/README.md) · [rbp-agent SKILL.md](skills/rbp-agent/SKILL.md) · [`../workspace/README.md`](../workspace/README.md)

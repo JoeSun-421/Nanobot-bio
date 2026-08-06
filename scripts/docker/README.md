@@ -32,10 +32,10 @@ Local compose: root `docker-compose.yml`. Build/mount notes: [`INSTALL.md`](../.
 ```bash
 docker build -t nanobot-bio:agent .
 docker run --rm \
-  -v $BIO_ROOT/rhobind_agent_delivery:/delivery \
-  -e DELIVERY_ROOT=/delivery \
-  -v $HOME/.nanobot:/root/.nanobot \
-  nanobot-bio:agent doctor
+ -v $BIO_ROOT/rhobind_agent_delivery:/delivery \
+ -e DELIVERY_ROOT=/delivery \
+ -v $HOME/.nanobot:/root/.nanobot \
+ nanobot-bio:agent doctor
 ```
 
 | Variable | Default / notes |

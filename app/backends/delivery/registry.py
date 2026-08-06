@@ -195,7 +195,7 @@ class DeliveryBackedTool(Tool):
         tool_name: str,
         description: str,
         parameters: dict[str, Any],
-        client: DeliveryToolClient,
+        client: Optional[DeliveryToolClient],
         delivery_name: Optional[str] = None,
         read_only: bool = True,
     ):
@@ -255,8 +255,12 @@ class DeliveryBackedTool(Tool):
             blocked = retrieve_blocked_reason(self._name)
             if blocked:
                 return _dumps(_envelope_err(blocked))
-        except Exception:
-            pass
+        except Exception as e:  # fail-closed: never skip Stage-0 STOP
+            return _dumps(
+                _envelope_err(
+                    f"turn_guard_unavailable: {type(e).__name__}: {e}"
+                )
+            )
         # A1: local structure file input modality — skip delivery resolve, hand
         # pdb_path straight to struct_similarity (no AFDB fetch needed).
         if self._delivery_name == "resolve_rbp" and kwargs.get("structure_file"):
@@ -300,13 +304,21 @@ class DeliveryBackedTool(Tool):
                 blocked_abs = abstain_blocked_reason()
                 if blocked_abs:
                     return _dumps(_envelope_err(blocked_abs))
-            except Exception:
-                pass
+            except Exception as e:  # fail-closed: abstain gate must not vanish
+                return _dumps(
+                    _envelope_err(
+                        f"turn_guard_unavailable: {type(e).__name__}: {e}"
+                    )
+                )
         payload = {k: v for k, v in kwargs.items() if v is not None}
         payload = _normalize_delivery_payload(self._delivery_name, payload)
 
+        client = self._client
+        if client is None:
+            return _dumps(_envelope_err("delivery client is not configured"))
+
         def _run() -> dict[str, Any]:
-            return self._client.call(self._delivery_name, payload)
+            return client.call(self._delivery_name, payload)
 
         try:
             out = await asyncio.to_thread(_run)
@@ -459,7 +471,7 @@ def build_proposal_tools(client: Optional[DeliveryToolClient] = None) -> list[To
     except ImportError:
         # Ensure tools are installed into the real nanobot tree, then retry
         try:
-            from app.integrate import install_rbp_tools_into_nanobot
+            from app.bootstrap import install_rbp_tools_into_nanobot
 
             install_rbp_tools_into_nanobot()
         except Exception:

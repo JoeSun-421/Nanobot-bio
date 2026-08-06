@@ -1,4 +1,9 @@
-"""Context builder for assembling agent prompts."""
+"""Context builder for assembling agent prompts.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+"""
 
 import base64
 import mimetypes

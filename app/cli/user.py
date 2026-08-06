@@ -97,6 +97,172 @@ def _start_nanobot_with_onboard(agent) -> int:
             return 1
 
 
+def _cmd_agent_fasta(args: argparse.Namespace) -> int:
+    """Batch own-head FASTA score (score_binding_fasta; no LLM)."""
+    query = (getattr(args, "query", None) or "").strip()
+    fasta = getattr(args, "fasta", None)
+    if not query:
+        print("ERROR: --fasta requires --query RBP alias", file=sys.stderr)
+        return 2
+    if not fasta:
+        print("ERROR: --fasta path required", file=sys.stderr)
+        return 2
+    from nanobot.agent.tools.rbp.fasta_score import run_fasta_score
+
+    try:
+        from app.core.chat_ux import print_banner
+
+        print_banner(subtitle="batch FASTA score · no LLM")
+    except Exception:
+        pass
+    out = run_fasta_score(
+        path=str(fasta),
+        rbp=query,
+        cohort="K562",
+        batch_size=64,
+        max_seqs=getattr(args, "max_seqs", None),
+        device=getattr(args, "device", None) or "auto",
+    )
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    out_path = getattr(args, "out", None)
+    if out_path:
+        Path(out_path).write_text(
+            json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"wrote {out_path}", file=sys.stderr)
+    return 0 if out.get("ok") else 1
+
+
+def _cmd_agent_doc(args: argparse.Namespace) -> int:
+    """Print allowlisted markdown chunk (read_project_doc; no LLM)."""
+    from nanobot.agent.tools.rbp.project_doc import read_project_doc
+
+    out = read_project_doc(path=str(args.doc), offset=0, max_chars=24000)
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    return 0 if out.get("ok") else 1
+
+
+def _looks_like_suite_path_message(msg: str) -> bool:
+    """True when chat should short-circuit to outer-loop prompt-suite batch."""
+    try:
+        from nanobot.agent.tools.rbp.prompt_suite import is_prompt_suite_request
+
+        return bool(is_prompt_suite_request(msg))
+    except Exception:
+        return False
+
+
+def _run_chat_prompt_suite(msg: str, *, device: str = "auto") -> None:
+    """Read full user message, apply suite filters, run outer-loop batch.
+
+    Never ignores non-path instructions (e.g. ``最后三条``). If the message
+    has leftover intent we cannot parse confidently, ask for clarification
+    instead of silently running the full suite.
+    """
+    from nanobot.agent.tools.rbp.prompt_suite import (
+        extract_suite_path_candidate,
+        parse_suite_message_options,
+        run_prompt_suite,
+    )
+
+    opts = parse_suite_message_options(msg)
+    path = extract_suite_path_candidate(msg)
+    if not path:
+        print(
+            "  usage: /suite docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md "
+            "[--dry-run] [--limit N] [--offset N] [--last N] [--case GENE]",
+            file=sys.stderr,
+        )
+        print(
+            "  or paste a suite path + filter, e.g.\n"
+            "    docs/eval/transfer_test_prompts.md 读取最后三条\n"
+            "    /suite docs/eval/transfer_test_prompts.md --last 3",
+            file=sys.stderr,
+        )
+        return
+
+    if opts.needs_clarification:
+        print(f"  ▸ prompt suite · {path}", file=sys.stderr)
+        print(
+            "  ⚠ message has instructions beyond the suite path, but no clear "
+            "case filter was parsed (last N / first N / --limit / --offset / "
+            "--case / Prompt NN).\n"
+            "  Not running the full suite. Re-send with an explicit filter, e.g.:\n"
+            "    …/transfer_test_prompts.md 读取最后三条\n"
+            "    /suite …/transfer_test_prompts.md --last 3\n"
+            "    /suite …/transfer_test_prompts.md --limit 3\n"
+            "    /suite …/transfer_test_prompts.md --case 18 --case 19 --case 20",
+            file=sys.stderr,
+        )
+        return
+
+    print(f"  ▸ prompt suite · {path}", file=sys.stderr)
+    if opts.dry_run:
+        print("  · dry-run (parse only)", file=sys.stderr)
+    if opts.has_explicit_filter:
+        bits = []
+        if opts.last is not None:
+            bits.append(f"last={opts.last}")
+        if opts.limit is not None:
+            bits.append(f"limit={opts.limit}")
+        if opts.offset is not None:
+            bits.append(f"offset={opts.offset}")
+        if opts.cases:
+            bits.append("case=" + ",".join(opts.cases))
+        if bits:
+            print(f"  · filter {' '.join(bits)}", file=sys.stderr)
+    t0 = time.perf_counter()
+    try:
+        report = run_prompt_suite(
+            path=path,
+            cases=opts.cases,
+            limit=opts.limit,
+            offset=opts.offset,
+            last=opts.last,
+            device=device,
+            dry_run=bool(opts.dry_run),
+            stream=True,
+        )
+    except KeyboardInterrupt:
+        print("\n  ⚠ suite interrupted", file=sys.stderr)
+        return
+    except Exception as e:
+        print(f"  ✗ suite error: {type(e).__name__}: {e}", file=sys.stderr)
+        return
+
+    elapsed = time.perf_counter() - t0
+    if report.get("error") and not report.get("n_cases"):
+        print(f"  ✗ {report.get('error')}", file=sys.stderr)
+        return
+
+    sel = report.get("selection")
+    print(
+        f"  suite ok={report.get('ok')} "
+        f"n_ok={report.get('n_ok')}/{report.get('n_cases')} "
+        + (f"({sel}) " if sel else "")
+        + f"elapsed={elapsed:.1f}s",
+        file=sys.stderr,
+    )
+    if report.get("summary_json"):
+        print(f"  summary  {report.get('summary_json')}", file=sys.stderr)
+    if report.get("jsonl"):
+        print(f"  jsonl    {report.get('jsonl')}", file=sys.stderr)
+    for r in report.get("results") or []:
+        if isinstance(r, str):
+            print(f"  - {r}", file=sys.stderr)
+            continue
+        if report.get("dry_run"):
+            print(f"  - {r.get('case')}", file=sys.stderr)
+            continue
+        status = "ok" if r.get("ok") else "FAIL"
+        print(
+            f"  [{status}] {r.get('case')} label={r.get('label')} "
+            f"p_hat={r.get('p_hat')} mode={r.get('path_mode')}"
+            + (f" err={r.get('error')}" if r.get("error") else ""),
+            file=sys.stderr,
+        )
+
+
 def cmd_agent(args: argparse.Namespace) -> int:
     """One-shot Nanobot.run (primary agent path). No pipeline fallback."""
     from app.core.chat_ux import (
@@ -111,6 +277,13 @@ def cmd_agent(args: argparse.Namespace) -> int:
     from app.agent import skill_path as _skill_path
 
     configure_chat_logging(verbose=bool(getattr(args, "verbose", False)))
+
+    # Short-circuit: batch FASTA score / doc read (no LLM).
+    if getattr(args, "fasta", None):
+        return _cmd_agent_fasta(args)
+    if getattr(args, "doc", None):
+        return _cmd_agent_doc(args)
+
     print_banner(subtitle="one-shot agent · thinking + tools visible")
     warn = memory_blocker_message()
     if warn:
@@ -159,8 +332,10 @@ def cmd_agent(args: argparse.Namespace) -> int:
             )
         if not parts:
             print(
-                "Need --message, --example pos|neg, or --query/--rna-file.\n"
-                "Ideal-env own-head smoke:  rbp-agent agent --example pos",
+                "Need --message, --example pos|neg, --query/--rna-file, "
+                "--query/--fasta, or --doc.\n"
+                "Ideal-env own-head smoke:  rbp-agent agent --example pos\n"
+                "Batch FASTA: nanobot-bio agent --query FXR2 --fasta path/to/test.fasta",
                 file=sys.stderr,
             )
             return 2
@@ -354,6 +529,24 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 os.environ["RBP_SHOW_THINKING"] = "1"
                 print("  thinking expanded", file=sys.stderr)
             continue
+        if low == "/caveats":
+            cur = os.environ.get("RBP_SHOW_CAVEATS", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "full",
+                "expand",
+            )
+            if cur:
+                os.environ.pop("RBP_SHOW_CAVEATS", None)
+                print("  caveats folded (default)", file=sys.stderr)
+            else:
+                os.environ["RBP_SHOW_CAVEATS"] = "1"
+                print("  caveats expanded", file=sys.stderr)
+            continue
+        if low == "/suite" or _looks_like_suite_path_message(msg):
+            _run_chat_prompt_suite(msg, device=device)
+            continue
         if low in ("/onboard", "/login"):
             from app.core.onboard import current_summary, interactive_onboard, prepare_llm_config
 
@@ -432,7 +625,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     sync_ok = False
     sync_err = None
     try:
-        from app.sync_overlay import sync_overlay
+        from app.bootstrap import sync_overlay
 
         sync_ok = sync_overlay(quiet=True) == 0
     except Exception as e:
@@ -512,23 +705,39 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     mmseqs_ok = False
     mmseqs_detail = ""
     if rna_py is not None:
-        try:
-            import subprocess as _sp_mm
+        # Direct env python does not put env bin on PATH (same caveat as
+        # DeliveryToolClient). Prefer the sibling binary next to rna python —
+        # that is how tools set MMSEQS / prepend PATH for rna_blastn etc.
+        sibling_mm = rna_py.parent / "mmseqs"
+        if sibling_mm.is_file():
+            mmseqs_ok = True
+            mmseqs_detail = str(sibling_mm)
+        else:
+            try:
+                import os as _os_mm
+                import subprocess as _sp_mm
 
-            mm = _sp_mm.run(
-                [str(rna_py), "-c", "import shutil; print(shutil.which('mmseqs') or '')"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            path_mm = (mm.stdout or "").strip()
-            if mm.returncode == 0 and path_mm:
-                mmseqs_ok = True
-                mmseqs_detail = path_mm
-            else:
-                mmseqs_detail = "mmseqs not on PATH in rna env"
-        except Exception as e:
-            mmseqs_detail = f"{type(e).__name__}: {e}"[:160]
+                env_mm = _os_mm.environ.copy()
+                env_mm["PATH"] = f"{rna_py.parent}:{env_mm.get('PATH', '')}"
+                mm = _sp_mm.run(
+                    [
+                        str(rna_py),
+                        "-c",
+                        "import shutil; print(shutil.which('mmseqs') or '')",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env=env_mm,
+                )
+                path_mm = (mm.stdout or "").strip()
+                if mm.returncode == 0 and path_mm:
+                    mmseqs_ok = True
+                    mmseqs_detail = path_mm
+                else:
+                    mmseqs_detail = "mmseqs not installed in rna env bin"
+            except Exception as e:
+                mmseqs_detail = f"{type(e).__name__}: {e}"[:160]
     else:
         mmseqs_detail = "no rna conda env"
 

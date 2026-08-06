@@ -1,4 +1,9 @@
-"""Memory system: pure file I/O store and lightweight Consolidator."""
+"""Memory system: pure file I/O store and lightweight Consolidator.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --session-key rbp:cli --example pos
+"""
 
 from __future__ import annotations
 
@@ -597,8 +602,9 @@ class MemoryStore:
     def build_dream_commit_message(prefix: str, resp: object | None) -> str:
         """Build a Dream auto-commit message, appending the LLM summary if present."""
         msg = prefix
-        if resp is not None and getattr(resp, "content", None):
-            msg = f"{msg}\n\n{resp.content.strip()}"
+        content = getattr(resp, "content", None) if resp is not None else None
+        if isinstance(content, str) and content.strip():
+            msg = f"{msg}\n\n{content.strip()}"
         return msg
 
     @staticmethod

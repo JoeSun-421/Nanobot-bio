@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
-"""P0 tool — seq_similarity → delivery esm_similarity (+ protein_seq_similarity).
+"""P0 tool: ``seq_similarity`` — dual sequence axes vs the catalogue.
 
-Final delivery: always expose dual axes ``hits_emb`` + ``hits_seq`` when
-``parallel_retrieve`` is on (default). ``hits`` remains the merged list for
-backward-compatible fuse callers.
+Calls delivery ``esm_similarity`` (embedding / ESM-C) and, when enabled,
+``protein_seq_similarity`` (MMseqs identity). With ``parallel_retrieve``
+(default True) returns:
+
+* ``hits_emb`` — embedding neighbours
+* ``hits_seq`` — sequence-identity neighbours
+* ``hits`` — merged list for older fuse callers
+
+Prefer ``alias`` / ``uniprot`` over raw AA. Protein only — never pass RNA.
+Feed both axes into ``fuse_similarity_views`` / ``confidence_abstain``.
+
+CLI examples:
+  nanobot-bio agent --message "Find sequence-similar catalogue RBPs for PTBP1"
+  nanobot-bio agent --force-transfer --query SOME_RBP --rna-file path/to/rna.txt
+  nanobot-bio chat
 """
 
 from __future__ import annotations
@@ -83,6 +95,8 @@ def _parallel_retrieve_default() -> bool:
     }
 )
 class SeqSimilarityTool(Tool):
+    """P0 Stage-1 sequence retrieve — ESM-C embeddings + optional MMseqs identity."""
+
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
 

@@ -33,19 +33,27 @@ class _FsTool(Tool):
 
 
 class ReadFileTool(_FsTool):
-    name = "read_file"
+    @property
+    def name(self) -> str:
+        return "read_file"
 
 
 class WriteFileTool(_FsTool):
-    name = "write_file"
+    @property
+    def name(self) -> str:
+        return "write_file"
 
 
 class EditFileTool(_FsTool):
-    name = "edit_file"
+    @property
+    def name(self) -> str:
+        return "edit_file"
 
 
 class ListDirTool(_FsTool):
-    name = "list_dir"
+    @property
+    def name(self) -> str:
+        return "list_dir"
 
 
 __all__ = ["EditFileTool", "FileToolsConfig", "ListDirTool", "ReadFileTool", "WriteFileTool", "_FsTool"]

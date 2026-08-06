@@ -1,7 +1,8 @@
 """Quarantined vendored WebUI metadata compatibility.
 
-Terminal scientific execution does not import the cron/WebUI surface. The file
-is retained only to avoid destructive slimming before explicit user approval.
+Terminal scientific execution does not import a WebUI surface. Constants live
+here (not under ``nanobot.webui``) so the slim layout gate can forbid that
+package while cron still tags proactive websocket deliveries.
 """
 
 from __future__ import annotations
@@ -9,7 +10,9 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from nanobot.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
+# Formerly nanobot.webui.metadata — kept local so nothing imports nanobot.webui.
+WEBUI_MESSAGE_SOURCE_METADATA_KEY = "webui_message_source"
+WEBUI_TURN_METADATA_KEY = "webui_turn"
 
 
 def cron_proactive_delivery_metadata(

@@ -1,4 +1,9 @@
-"""Session support for long-running exec workflows."""
+"""Session support for long-running exec workflows.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
 
 from __future__ import annotations
 
@@ -446,19 +451,16 @@ class WriteStdinTool(Tool):
             "Do not use this to start new commands; start them with exec."
         )
 
-    async def execute(
-        self,
-        session_id: str,
-        chars: str | None = None,
-        close_stdin: bool = False,
-        terminate: bool = False,
-        yield_time_ms: int | None = None,
-        wait_for: str | None = None,
-        wait_timeout_ms: int | None = None,
-        max_output_chars: int | None = None,
-        max_output_tokens: int | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        session_id = str(kwargs.get("session_id") or "")
+        chars = kwargs.get("chars")
+        close_stdin = bool(kwargs.get("close_stdin", False))
+        terminate = bool(kwargs.get("terminate", False))
+        yield_time_ms = kwargs.get("yield_time_ms")
+        wait_for = kwargs.get("wait_for")
+        wait_timeout_ms = kwargs.get("wait_timeout_ms")
+        max_output_chars = kwargs.get("max_output_chars")
+        max_output_tokens = kwargs.get("max_output_tokens")
         try:
             if max_output_chars is None:
                 max_output_chars = max_output_tokens

@@ -87,7 +87,12 @@ def metrics_from_pairs(pairs: list[dict[str, Any]]) -> dict[str, Any]:
     for p in pairs:
         if p.get("p_hat") is None and p.get("score") is None:
             continue
-        s = float(p.get("p_hat") if p.get("p_hat") is not None else p["score"])
+        raw_score = p.get("p_hat")
+        if raw_score is None:
+            raw_score = p.get("score")
+        if raw_score is None:
+            continue
+        s = float(raw_score)
         if p.get("y") is not None:
             y = int(p["y"])
         elif p.get("label"):

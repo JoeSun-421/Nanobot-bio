@@ -2,6 +2,10 @@
 artifacts/**
 !artifacts/README.md
 !artifacts/README.zh.md
+# Expanded LOO matrix copy (large; keep README)
+rbp_eval/data/transfer/*.csv
+rbp_eval/data/transfer/manifest.json
+!rbp_eval/data/transfer/README.md
 workspace/sessions
 workspace/memory/*
 workspace/.nanobot/

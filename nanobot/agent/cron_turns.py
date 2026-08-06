@@ -1,4 +1,9 @@
-"""Coordination for scheduled cron turns."""
+"""Coordination for scheduled cron turns.
+
+CLI examples:
+  nanobot-bio chat
+  source scripts/nbio.sh
+"""
 
 from __future__ import annotations
 

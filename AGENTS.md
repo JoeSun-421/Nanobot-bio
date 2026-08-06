@@ -2,7 +2,8 @@
 
 Committed short gate for agents and CI. Layout / memory / eval / slim-vendor /
 release: [`ARCHITECTURE.md`](ARCHITECTURE.md). Setup: [`INSTALL.md`](INSTALL.md).
-Local detail (git-ignored): `docs/工程指南.zh.md` §9. Chat agreements do **not**
+Collaborator overview: [`HANDOFF.md`](HANDOFF.md) · [`HANDOFF.zh.md`](HANDOFF.zh.md).
+Local detail (git-ignored): `docs/` if present on the machine. Chat agreements do **not**
 override these rules.
 
 ## MUST NOT
@@ -15,11 +16,12 @@ override these rules.
 - Treat legacy PA stubs as product features; widen `NANOBOT_TOOL_ALLOW` / enable `NANOBOT_TOOL_PLUGINS` / restore channels·webui without maintainer approval (ARCHITECTURE §6).
 - Blind-delete loop-wired leftovers or the session/memory stores (ARCHITECTURE §2 / §6).
 - Let the LLM or a diagnostic max/mean override delivery `similarity_weighted_vote`; promote on retrieval-only synthetic scores; claim capabilities the matrix marks unavailable.
+- Reuse prior session / chat-transcript tool results or verdicts as authoritative scores to skip Stage 0–3; invent `p_hat` from history (“identical LOO case already run”).
 
 ## MUST
 
 - Layers: Agent Controller (in-repo slim `nanobot/`) / Toolkit / Predictor + offline `rbp_eval/`.
-- Product path: `Nanobot.from_config` → `run` / `run_streamed` (`nanobot-bio agent|chat`). Prefer `ephemeral=True` for MVP/eval. Do not install `nanobot-ai`.
+- Product path: `Nanobot.from_config` → `run` / `run_streamed` (`nanobot-bio agent|chat`). Default `ephemeral=True` for chat/agent so each user query recomputes (tools re-called); scientific tool caches OK only on an executed tool path. Do not install `nanobot-ai`.
 - Default tools = RBP only; physical path = import path (`tools.{core,rbp,legacy}`, `rbp_eval.*` subpackages).
 - Stage 0→1→2→3 + two LLM checkpoints; Stage 0 own-head / near-known Fast Path; \(N_{\mathrm{cand}}\le5\); drop fused similarity \(<0.30\).
 - Tool contract: JSON Schema, error envelope, `latency_ms`, retrieve tools `read_only=True`.

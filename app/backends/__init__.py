@@ -1,1 +1,1 @@
-"""Backends: mock vs delivery."""
+"""Backends namespace — production backend is ``delivery`` only."""

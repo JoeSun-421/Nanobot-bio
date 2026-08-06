@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -119,7 +119,7 @@ class SDKRuntimeController:
         *,
         model: str | None,
         model_preset: str | None,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         ensure_single_model_selector(model=model, model_preset=model_preset)
         exclusive = model is not None or model_preset is not None
         async with self._gate.slot(exclusive=exclusive):

@@ -1,5 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Stage-0 helper — check_near_known (seq identity ≥ near_match threshold)."""
+"""Stage-0 near-known Fast Path: exact catalogue match or high seq identity.
+
+Tool: ``check_near_known``. Compares the query protein to the RhoBind catalogue
+via exact AA equality and/or delivery MMseqs identity. When best identity ≥
+``near_match_seq_identity`` (default 0.95) to a headed RBP → ``near_match=true``
+and a donor alias for own-head ``predict_interaction``, then STOP.
+
+Under LOO / ``force_transfer``, near_match is disclosed but own-head Fast Path
+is overridden — continue Stage 1–3 on foreign donors only. Read-only; identity
+scores come from delivery / catalogue FASTA only.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+"""
 
 from __future__ import annotations
 
@@ -27,6 +42,45 @@ def _near_threshold() -> float:
         return float(get_runtime_config().get("near_match_seq_identity") or 0.95)
     except Exception:
         return 0.95
+
+
+def _near_match_own_head_hint(*, donor_placeholder: str = "<donor_alias>") -> str:
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import force_transfer_active
+
+        if force_transfer_active():
+            return (
+                "near_match under LOO / force_transfer: disclose near_match in "
+                "caveats; do NOT own-head on the query/target. Continue Stage 1–3 "
+                "retrieve → fuse → commit(force_transfer=true) → abstain → "
+                "predict(force_transfer=true, rbps=[foreign donors only]). "
+                "Stage 0 own-head STOP is overridden."
+            )
+    except Exception:
+        pass
+    return (
+        f"near_match own-head Fast Path: call predict_interaction once "
+        f"with rbp_id={donor_placeholder} (no force_transfer), disclose "
+        "near_match, then STOP. force_transfer=true disables own-head Fast Path."
+    )
+
+
+def _not_near_known_hint() -> str:
+    try:
+        from nanobot.agent.tools.rbp.turn_guards import force_transfer_active
+
+        if force_transfer_active():
+            return (
+                "not near-known; LOO / force_transfer active — continue Stage 1 "
+                "retrieve → fuse → commit(force_transfer=true) → abstain → "
+                "predict on foreign donors only (exclude query/target)."
+            )
+    except Exception:
+        pass
+    return (
+        "not near-known; continue characterize → parallel retrieve → "
+        "fuse → abstain → predict"
+    )
 
 
 def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
@@ -57,7 +111,7 @@ def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
         if s > 1.0 + 1e-9:
             return s / 100.0
         # Ambiguous 0–1: treat as identity only if already near threshold helper agrees
-        if is_near_match_score and is_near_match_score(s, 0.90):
+        if is_near_match_score and is_near_match_score(s, threshold=0.90):
             return s if s <= 1.0 else s / 100.0
     return None
 
@@ -80,7 +134,7 @@ def _score_as_identity(hit: dict[str, Any]) -> Optional[float]:
     }
 )
 class CheckNearKnownTool(Tool):
-    """Read-only Stage-0 near-known detector (Proposal ≥95% identity Fast Path)."""
+    """Stage-0 near-match detector — exact catalogue AA or identity ≥ threshold."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
@@ -166,12 +220,8 @@ class CheckNearKnownTool(Tool):
                         "hits": [],
                         "sequence_source": src,
                         "match_basis": "resolve_exact_catalogue_identifier",
-                        "hint": (
-                            "near_match own-head Fast Path: exact resolved "
-                            "catalogue identity; call predict_interaction once "
-                            "on donor_alias (no force_transfer), disclose "
-                            "near_match, then STOP. "
-                            "force_transfer=true disables own-head Fast Path."
+                        "hint": _near_match_own_head_hint(
+                            donor_placeholder=str(exact_alias or exact_id)
                         ),
                     }
                     try:
@@ -203,13 +253,8 @@ class CheckNearKnownTool(Tool):
                             "hits": [],
                             "sequence_source": src,
                             "match_basis": "exact_catalogue_sequence",
-                            "hint": (
-                                "near_match own-head Fast Path: query AA exactly "
-                                "matches catalogue FASTA for donor_alias (MMseqs "
-                                "may under-report on low-complexity regions); "
-                                "call predict_interaction once on donor_alias "
-                                "(no force_transfer), disclose near_match, then STOP. "
-                                "force_transfer=true disables own-head Fast Path."
+                            "hint": _near_match_own_head_hint(
+                                donor_placeholder=donor
                             ),
                         }
                         try:
@@ -280,12 +325,9 @@ class CheckNearKnownTool(Tool):
                 "hits": hits[:5],
                 "sequence_source": src,
                 "hint": (
-                    "near_match own-head Fast Path: call predict_interaction once "
-                    "with rbp_id=<donor_alias> (no force_transfer), disclose "
-                    "near_match in the explanation, then STOP. "
-                    "force_transfer=true disables own-head Fast Path."
+                    _near_match_own_head_hint(donor_placeholder="<donor_alias>")
                     if near
-                    else "not near-known; continue characterize → parallel retrieve → fuse → abstain → predict"
+                    else _not_near_known_hint()
                 ),
             }
             if near:

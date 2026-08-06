@@ -1,4 +1,9 @@
-"""MyTool: runtime state inspection and configuration for the agent loop."""
+"""MyTool: runtime state inspection and configuration for the agent loop.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos -v
+"""
 
 from __future__ import annotations
 
@@ -250,8 +255,9 @@ class MyTool(Tool, ContextAware):
                 detail = MyTool._format_status(st, "    ")
                 lines.append(f"  [{tid}] '{st.label}'\n{detail}")
             return "\n".join(lines)
-        if hasattr(val, "tool_names"):
-            return f"tools: {len(val.tool_names)} registered — {val.tool_names}"
+        tool_names = getattr(val, "tool_names", None)
+        if tool_names is not None:
+            return f"tools: {len(tool_names)} registered — {tool_names}"
         # Scalar types — repr is fine
         if isinstance(val, (str, int, float, bool, type(None))):
             r = repr(val)
@@ -305,13 +311,10 @@ class MyTool(Tool, ContextAware):
     # Action dispatch
     # ------------------------------------------------------------------
 
-    async def execute(
-        self,
-        action: str,
-        key: str | None = None,
-        value: Any = None,
-        **_kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        action = str(kwargs.get("action") or "")
+        key = kwargs.get("key")
+        value = kwargs.get("value")
         if action in ("inspect", "check"):
             return self._inspect(key)
         if not self._modify_allowed:
@@ -370,6 +373,7 @@ class MyTool(Tool, ContextAware):
     def _modify(self, key: str | None, value: Any) -> str:
         if err := self._validate_key(key):
             return err
+        assert key is not None
         top = key.split(".")[0]
         if top in self.BLOCKED or top in self._DENIED_ATTRS or top.startswith("__") or top.lower() in self._SENSITIVE_NAMES:
             self._audit("modify", f"BLOCKED {key}")

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -40,15 +41,23 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return out
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def load_runtime_config(*, prefer_evolved: bool = True) -> dict[str, Any]:
     """Return defaults merged with evolved overrides when available.
 
     Uses a recursive deep-merge so every nested config block (``predict``,
     ``structure_policy``, ``integrate``, ``fusion_weights``, ``axes``, ``llm``,
     ``models``, …) is merged key-by-key rather than replaced wholesale.
+
+    Optional env ``RBP_RUNTIME_CONFIG`` points at a YAML override (e.g. candidate
+    policy during transfer calibration evidence packaging).
     """
     base = _load_yaml(DEFAULT_CONFIG)
+    override_path = (os.environ.get("RBP_RUNTIME_CONFIG") or "").strip()
+    if override_path:
+        ovr = _load_yaml(Path(override_path).expanduser())
+        if ovr:
+            return _deep_merge(base, ovr)
     if not prefer_evolved:
         return dict(base)
     evo = _load_yaml(EVOLVED_CONFIG)
@@ -119,6 +128,42 @@ def abstain_thresholds() -> dict[str, float]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def soft_disabled_tools() -> list[str]:
+    """Tool names soft-disabled by self-evolution (runtime skip; delivery untouched)."""
+    cfg = load_runtime_config()
+    # Prefer live evolved; also honor RBP_RUNTIME_CONFIG / candidate override
+    tools = cfg.get("tools") or {}
+    raw = tools.get("soft_disabled") if isinstance(tools, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [str(t).strip() for t in raw if str(t).strip()]
+
+
+def logit_scale() -> float:
+    """Temperature / logit scale for score calibration (default 1.0 = identity)."""
+    cfg = load_runtime_config()
+    predict = cfg.get("predict") if isinstance(cfg.get("predict"), dict) else {}
+    raw = cfg.get("logit_scale")
+    if raw is None and predict:
+        raw = predict.get("logit_scale")
+    try:
+        v = float(raw if raw is not None else 1.0)
+        return v if v > 0 else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def apply_logit_scale(score: float, *, scale: Optional[float] = None) -> float:
+    """Map raw score in [0,1] through sigmoid(scale * (s - 0.5))."""
+    import math
+
+    s = float(scale if scale is not None else logit_scale())
+    if abs(s - 1.0) < 1e-9:
+        return max(0.0, min(1.0, float(score)))
+    z = max(-20.0, min(20.0, s * (float(score) - 0.5)))
+    return 1.0 / (1.0 + math.exp(-z))
 
 
 def config_source() -> str:

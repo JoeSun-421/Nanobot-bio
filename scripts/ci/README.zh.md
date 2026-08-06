@@ -4,6 +4,8 @@
 
 [English](README.md) · [中文]
 
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
+
 ## 功能
 
 - 合并前扫描已跟踪文件中的私钥 / API key 形态

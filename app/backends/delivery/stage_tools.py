@@ -18,14 +18,16 @@ def axis_enabled(tool_name: str, axes: Optional[dict] = None) -> tuple[bool, Opt
     axis = TOOL_AXIS_GATE.get(tool_name)
     if not axis:
         return True, None
-    if axes is None:
+    axes_map = axes
+    if axes_map is None:
         try:
             from app.core.runtime_config import load_runtime_config
 
-            axes = (load_runtime_config().get("axes") or {})
+            loaded = load_runtime_config().get("axes") or {}
+            axes_map = loaded if isinstance(loaded, dict) else {}
         except Exception as exc:
             return False, f"{axis}:runtime_config_unavailable:{type(exc).__name__}"
-    if axes.get(axis) is False:
+    if axes_map.get(axis) is False:
         return False, axis
     return True, None
 

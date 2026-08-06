@@ -621,9 +621,14 @@ def estimate_prompt_tokens_chain(
     provider_counter = getattr(provider, "estimate_prompt_tokens", None)
     if callable(provider_counter):
         with suppress(Exception):
-            tokens, source = provider_counter(messages, tools, model)
-            if isinstance(tokens, (int, float)) and tokens > 0:
-                return int(tokens), str(source or "provider_counter")
+            counted = provider_counter(messages, tools, model)
+            if (
+                isinstance(counted, tuple)
+                and len(counted) >= 2
+                and isinstance(counted[0], (int, float))
+                and counted[0] > 0
+            ):
+                return int(counted[0]), str(counted[1] or "provider_counter")
     estimated = estimate_prompt_tokens(messages, tools)
     if estimated > 0:
         return int(estimated), "tiktoken"

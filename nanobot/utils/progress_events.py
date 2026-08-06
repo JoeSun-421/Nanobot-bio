@@ -71,8 +71,10 @@ def build_tool_event_start_payload(tool_call: Any) -> dict[str, Any]:
 def tool_event_result_extras(result: Any) -> tuple[list[Any], list[Any]]:
     if not isinstance(result, dict):
         return [], []
-    files = result.get("files") if isinstance(result.get("files"), list) else []
-    embeds = result.get("embeds") if isinstance(result.get("embeds"), list) else []
+    raw_files = result.get("files")
+    raw_embeds = result.get("embeds")
+    files: list[Any] = raw_files if isinstance(raw_files, list) else []
+    embeds: list[Any] = raw_embeds if isinstance(raw_embeds, list) else []
     return files, embeds
 
 

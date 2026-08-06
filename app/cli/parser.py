@@ -8,6 +8,7 @@ import argparse
 from app.cli.accept import (
     cmd_accept_golden,
     cmd_accept_llm,
+    cmd_batch_prompts,
     cmd_gap_closure,
     cmd_own_head,
 )
@@ -15,8 +16,11 @@ from app.cli.eval_cmds import (
     cmd_eval_plan,
     cmd_evolve,
     cmd_evolve_eval,
+    cmd_expand_loo_matrix,
     cmd_heavy_loo,
+    cmd_loo_matrix_ab,
     cmd_promote_evolved,
+    cmd_review_toolkit_proposals,
     cmd_run_eval,
 )
 from app.cli.maint import (
@@ -73,6 +77,22 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--uniprot", default=None)
     a.add_argument("--sequence-fasta", default=None)
     a.add_argument("--rna-file", default=None)
+    a.add_argument(
+        "--fasta",
+        default=None,
+        help="Allowlisted FASTA path: batch own-head score (no LLM); needs --query RBP",
+    )
+    a.add_argument(
+        "--max-seqs",
+        type=int,
+        default=None,
+        help="Optional subsample for --fasta",
+    )
+    a.add_argument(
+        "--doc",
+        default=None,
+        help="Print allowlisted markdown slice (read_project_doc; no LLM)",
+    )
     a.add_argument("--force-transfer", action="store_true")
     a.add_argument("--strict", action="store_true", help="Exit 2 unless mode=nanobot_llm")
     a.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
@@ -106,6 +126,66 @@ def build_parser() -> argparse.ArgumentParser:
     al.add_argument("--no-strict", action="store_true")
     al.set_defaults(func=cmd_accept_llm)
 
+    bp = sub.add_parser(
+        "batch-prompts",
+        help=(
+            "Outer-loop multi-verdict: one agent turn per markdown case "
+            "(e.g. docs/eval/UNSEEN_RBP_TEST_PROMPTS_20.md)"
+        ),
+    )
+    bp.add_argument(
+        "--prompts",
+        default=str(
+            __import__("pathlib").Path(__file__).resolve().parents[2]
+            / "docs"
+            / "eval"
+            / "UNSEEN_RBP_TEST_PROMPTS_20.md"
+        ),
+        help="Markdown with ## Prompt NN — Case NN — GENE + ```text``` blocks",
+    )
+    bp.add_argument("--out-dir", default=None, help="Directory for jsonl + summary json")
+    bp.add_argument(
+        "--case",
+        action="append",
+        default=None,
+        help="Filter by case id / prompt id / gene (repeatable)",
+    )
+    bp.add_argument("--limit", type=int, default=None, help="Run at most N cases")
+    bp.add_argument(
+        "--offset",
+        type=int,
+        default=None,
+        help="Skip the first N cases before applying --limit",
+    )
+    bp.add_argument(
+        "--last",
+        type=int,
+        default=None,
+        help="Run only the last N cases (after --case filter)",
+    )
+    bp.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
+    bp.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse/list cases only (no LLM)",
+    )
+    bp.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Abort after the first failed case",
+    )
+    bp.add_argument(
+        "--stream",
+        action="store_true",
+        help="Force chat-like per-case tool streaming (default: on when stderr is a TTY)",
+    )
+    bp.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-case banners / tool streaming",
+    )
+    bp.set_defaults(func=cmd_batch_prompts)
+
     gc = sub.add_parser("gap-closure", help="Gap-closure evidence report")
     gc.add_argument("--no-live", action="store_true")
     gc.add_argument("--out-dir", default=None)
@@ -129,12 +209,51 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Dev only: allow writing candidate from retrieval-only synthetic batch",
     )
+    evo.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="Use retrieval-only stub batch (not promotable; research/weight retune)",
+    )
+    evo.add_argument(
+        "--transfer-dir",
+        default=None,
+        help="Prefer agent-side LOO matrix dir (sets RBP_LOO_TRANSFER_DIR for this run)",
+    )
+    evo.add_argument("--medoids", action="store_true", help="Score LOO medoid helds (default)")
+    evo.add_argument("--held", action="append", default=None, help="Held alias (repeatable)")
+    evo.add_argument("--cohort", default="K562")
+    evo.add_argument("--max-seqs", type=int, default=64)
+    evo.add_argument(
+        "--skip-calibration",
+        action="store_true",
+        help="Skip live transfer_calibration evidence packaging after retune",
+    )
+    evo.add_argument(
+        "--collect-agent-traces",
+        action="store_true",
+        help="Write rbp_trace/v1 JSONL from scored/retrieval results (no LLM)",
+    )
+    evo.add_argument(
+        "--require-traces",
+        action="store_true",
+        help="Warn if no valid rbp_trace/v1 events (does not block scored evolve)",
+    )
     evo.set_defaults(func=cmd_evolve)
 
-    re = sub.add_parser("run-eval", help="LOO ceiling + modality ablation harness")
+    re = sub.add_parser(
+        "run-eval",
+        help="Policy eval: per-RBP recovered AUPRC / gap-to-ceiling / abstain + report",
+    )
     re.add_argument("--hits-json", default=None)
     re.add_argument("--top-k", type=int, default=5)
     re.add_argument("--out-dir", default=None)
+    re.add_argument("--medoids", action="store_true")
+    re.add_argument("--held", action="append", default=None)
+    re.add_argument("--cohort", default="K562")
+    re.add_argument("--max-seqs", type=int, default=64)
+    re.add_argument("--policy", default=None, help="evolved.yaml / candidate path")
+    re.add_argument("--transfer-dir", default=None)
+    re.add_argument("--device", default=None)
     re.set_defaults(func=cmd_run_eval)
 
     ee = sub.add_parser("evolve-eval", help="Light nested-split evolve eval")
@@ -154,6 +273,16 @@ def build_parser() -> argparse.ArgumentParser:
     pe.add_argument("--seed", action="store_true")
     pe.set_defaults(func=cmd_promote_evolved)
 
+    rtp = sub.add_parser(
+        "review-toolkit-proposals",
+        help="Human review of toolkit proposals (audit only; never installs tools)",
+    )
+    rtp.add_argument("--list", action="store_true", help="List proposals JSON")
+    rtp.add_argument("--accept", default=None, help="Proposal id to accept (audit)")
+    rtp.add_argument("--reject", default=None, help="Proposal id to reject (audit)")
+    rtp.add_argument("--note", default="", help="Optional reviewer note")
+    rtp.set_defaults(func=cmd_review_toolkit_proposals)
+
     ep = sub.add_parser("eval-plan", help="Evaluation plan report")
     ep.add_argument("--with-seq", action="store_true")
     ep.add_argument("--labels", default=None)
@@ -171,6 +300,57 @@ def build_parser() -> argparse.ArgumentParser:
     hl.add_argument("--top-k", type=int, default=5, help="Foreign donor heads per held RBP")
     hl.add_argument("--out", default=None, help="Output JSON path (md written alongside)")
     hl.set_defaults(func=cmd_heavy_loo)
+
+    elm = sub.add_parser(
+        "expand-loo-matrix",
+        help="Expand LOO transfer matrix into rbp_eval/data/transfer (never edits delivery)",
+    )
+    elm.add_argument("--out-dir", default=None)
+    elm.add_argument("--cohort", default="K562")
+    elm.add_argument("--max-seqs", type=int, default=256)
+    elm.add_argument("--device", default=None)
+    elm.add_argument("--rbp-chunk", type=int, default=40)
+    elm.add_argument("--batch-size", type=int, default=64)
+    elm.add_argument("--seed", type=int, default=42)
+    elm.add_argument("--no-resume", action="store_true")
+    elm.add_argument("--held", action="append", default=None, help="Limit to alias (repeatable)")
+    elm.add_argument(
+        "--skip-existing-helds",
+        action="store_true",
+        help="Skip helds already in loo_summary.csv (only score new test.fasta)",
+    )
+    elm.add_argument(
+        "--list-helds",
+        action="store_true",
+        help="Dry-run: show catalogue ∩ test.fasta planned helds and exit",
+    )
+    elm.add_argument(
+        "--legacy-per-call",
+        action="store_true",
+        help="Slow per-RNA DeliveryToolClient path (default: batch encode-once)",
+    )
+    elm.add_argument(
+        "--validate-complete",
+        action="store_true",
+        help="Validate held×foreign coverage after expand / with --list-helds",
+    )
+    elm.add_argument(
+        "--test-data-root",
+        default=None,
+        help="Sets RBP_TEST_DATA_ROOT for this run (directory containing k562/…)",
+    )
+    elm.set_defaults(func=cmd_expand_loo_matrix)
+
+    lab = sub.add_parser(
+        "loo-matrix-ab",
+        help="A/B delivery vs expanded LOO matrix (policy AUPRC / prior_missing / retune)",
+    )
+    lab.add_argument("--expanded-dir", default=None)
+    lab.add_argument("--top-k", type=int, default=5)
+    lab.add_argument("--no-retune", action="store_true")
+    lab.add_argument("--out", default=None)
+    lab.add_argument("--held", action="append", default=None)
+    lab.set_defaults(func=cmd_loo_matrix_ab)
 
     # --- maint ---
     g = sub.add_parser("gate", help="Engineering gate: ruff + pytest + layout (+ light eval)")

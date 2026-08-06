@@ -2,6 +2,11 @@
 
 nanobot-bio slim vendor: only the ``rbp`` toolkit package is auto-discovered.
 Legacy stubs live under ``nanobot.agent.tools.legacy``; only ``rbp`` is auto-discovered.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  python -m app.sync_overlay
+  nanobot-bio agent --example pos
 """
 from __future__ import annotations
 

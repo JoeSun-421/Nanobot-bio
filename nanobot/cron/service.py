@@ -24,6 +24,8 @@ from nanobot.cron.types import (
     CronStore,
 )
 
+_UNSET: Any = object()
+
 
 class CronJobSkippedError(Exception):
     """Raised by cron callbacks when a job was intentionally skipped."""
@@ -294,8 +296,11 @@ class CronService:
     def _merge_action(self):
         if not self._action_path.exists():
             return
+        store = self._store
+        if store is None:
+            return
 
-        jobs_map = {j.id: j for j in self._store.jobs}
+        jobs_map = {j.id: j for j in store.jobs}
         def _update(params: dict):
             j = CronJob.from_dict(params)
             _normalize_agent_turn_job(j)
@@ -322,11 +327,18 @@ class CronService:
                     except Exception:
                         logger.exception("load action line error")
                         continue
-            self._store.jobs = list(jobs_map.values())
+            store.jobs = list(jobs_map.values())
             if self._running and changed:
                 self._action_path.write_text("", encoding="utf-8")
                 self._save_store()
         return
+
+    def _require_store(self) -> CronStore:
+        """Load the cron store or raise when the on-disk store is unrecoverable."""
+        store = self._load_store()
+        if store is None:
+            raise RuntimeError(f"Cron store unavailable at {self.store_path}")
+        return store
 
     def _load_store(self) -> CronStore | None:
         """Load jobs from disk. Reloads automatically if file was modified externally.
@@ -603,7 +615,9 @@ class CronService:
         # Handle one-shot jobs
         if job.schedule.kind == "at":
             if job.delete_after_run:
-                self._store.jobs = [j for j in self._store.jobs if j.id != job.id]
+                store = self._store
+                if store is not None:
+                    store.jobs = [j for j in store.jobs if j.id != job.id]
             else:
                 job.enabled = False
                 job.state.next_run_at_ms = None
@@ -622,7 +636,7 @@ class CronService:
 
     def list_jobs(self, include_disabled: bool = False) -> list[CronJob]:
         """List all jobs."""
-        store = self._load_store()
+        store = self._require_store()
         jobs = store.jobs if include_disabled else [j for j in store.jobs if j.enabled]
         return sorted(jobs, key=lambda j: j.state.next_run_at_ms or float('inf'))
 
@@ -684,7 +698,7 @@ class CronService:
         _normalize_agent_turn_job(job)
         self._enforce_agent_binding(job)
         if self._running:
-            store = self._load_store()
+            store = self._require_store()
             store.jobs.append(job)
             self._save_store()
             self._arm_timer()
@@ -696,7 +710,7 @@ class CronService:
 
     def register_system_job(self, job: CronJob) -> CronJob:
         """Register an internal system job (idempotent on restart)."""
-        store = self._load_store()
+        store = self._require_store()
         now = _now_ms()
         job.state = CronJobState(next_run_at_ms=_compute_next_run(job.schedule, now))
         job.created_at_ms = now
@@ -710,7 +724,7 @@ class CronService:
 
     def remove_job(self, job_id: str) -> Literal["removed", "protected", "not_found"]:
         """Remove a job by ID, unless it is a protected system job."""
-        store = self._load_store()
+        store = self._require_store()
         job = next((j for j in store.jobs if j.id == job_id), None)
         if job is None:
             return "not_found"
@@ -735,7 +749,7 @@ class CronService:
 
     def enable_job(self, job_id: str, enabled: bool = True) -> CronJob | None:
         """Enable or disable a job."""
-        store = self._load_store()
+        store = self._require_store()
         for job in store.jobs:
             if job.id == job_id:
                 job.enabled = enabled
@@ -761,16 +775,16 @@ class CronService:
         schedule: CronSchedule | None = None,
         message: str | None = None,
         deliver: bool | None = None,
-        channel: str | None = ...,
-        to: str | None = ...,
+        channel: Any = _UNSET,
+        to: Any = _UNSET,
         delete_after_run: bool | None = None,
     ) -> CronJob | Literal["not_found", "protected"]:
         """Update mutable fields of an existing job. System jobs cannot be updated.
 
         For ``channel`` and ``to``, pass an explicit value (including ``None``)
-        to update; omit (sentinel ``...``) to leave unchanged.
+        to update; omit (default sentinel) to leave unchanged.
         """
-        store = self._load_store()
+        store = self._require_store()
         job = next((j for j in store.jobs if j.id == job_id), None)
         if job is None:
             return "not_found"
@@ -786,9 +800,9 @@ class CronService:
             job.payload.message = message
         if deliver is not None:
             job.payload.deliver = deliver
-        if channel is not ...:
+        if channel is not _UNSET:
             job.payload.channel = channel
-        if to is not ...:
+        if to is not _UNSET:
             job.payload.to = to
         if delete_after_run is not None:
             job.delete_after_run = delete_after_run
@@ -815,7 +829,7 @@ class CronService:
         was_running = self._running
         self._running = True
         try:
-            store = self._load_store()
+            store = self._require_store()
             for job in store.jobs:
                 if job.id == job_id:
                     if self._is_unbound_agent_job(job):
@@ -835,12 +849,12 @@ class CronService:
 
     def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID."""
-        store = self._load_store()
+        store = self._require_store()
         return next((j for j in store.jobs if j.id == job_id), None)
 
     def status(self) -> dict:
         """Get service status."""
-        store = self._load_store()
+        store = self._require_store()
         return {
             "enabled": self._running,
             "jobs": len(store.jobs),

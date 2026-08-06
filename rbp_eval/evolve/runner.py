@@ -78,8 +78,300 @@ def run_batch(
     raise RuntimeError(
         "Fixed pipeline batch runner removed. "
         "Use: rbp-agent own-head | rbp-agent agent --example pos | "
-        "rbp_eval.evolve.runner.run_loo_val_batch (retrieval-only for weight retune)."
+        "rbp_eval.evolve.runner.run_scored_loo_val_batch (default) | "
+        "run_loo_val_batch (--retrieval-only)."
     )
+
+
+def run_scored_loo_val_batch(
+    *,
+    rbps: Optional[list[str]] = None,
+    top_k: int = 5,
+    cohort: str = "K562",
+    max_seqs: int = 64,
+    device: str = "cuda",
+    trace_path: str | Path | None = None,
+    with_retrieval_hits: bool = True,
+) -> tuple[list[dict[str, Any]], dict[str, list[list[dict[str, Any]]]], list[dict[str, Any]]]:
+    """Hide-own-head scored LOO val: real donor probs → ``{p_hat,y}`` + transfer results.
+
+    Returns ``(results, held_to_hit_lists, scored_labels)``.
+    """
+    from app.backends.delivery.env import apply_delivery_env, resolve_delivery_paths
+    from app.core.paths import report_path
+    from app.core.verdict_schema import normalize_verdict
+    from rbp_eval.loo.heavy_loo import (
+        MEDOIDS,
+        pick_donors,
+        test_fasta_for,
+    )
+    from rbp_eval.loo.loo_eval import load_transfer_matrix, resolve_loo_csvs
+    from rbp_eval.loo.batch_score_held import run_batch_score_subprocess
+
+    apply_delivery_env()
+    helds = list(rbps) if rbps else list(MEDOIDS)
+    paths = resolve_delivery_paths()
+    delivery = Path(paths["delivery_root"])
+    release = Path(paths.get("rhobind_release") or (delivery / "release" / "rhobind_release_v1"))
+    _summary_path, metrics_path = resolve_loo_csvs()
+    matrix = load_transfer_matrix(metrics_path) if metrics_path and metrics_path.is_file() else {}
+
+    held_hits: dict[str, list[list[dict[str, Any]]]] = {}
+    if with_retrieval_hits:
+        try:
+            _ret_results, held_hits = run_loo_val_batch(
+                top_k=top_k,
+                trace_path=trace_path,
+                with_esm=False,
+            )
+            # Restrict to requested helds
+            held_hits = {k: v for k, v in held_hits.items() if k in set(helds)}
+        except Exception:
+            held_hits = {}
+
+    results: list[dict[str, Any]] = []
+    scored_labels: list[dict[str, Any]] = []
+    heavy_rows: list[dict[str, Any]] = []
+
+    for alias in helds:
+        donors = pick_donors(alias, matrix, top_k) if matrix else []
+        fasta = test_fasta_for(alias, cohort, delivery)
+        row: dict[str, Any]
+        if fasta is None or not donors:
+            row = {
+                "held_rbp": alias,
+                "ok": False,
+                "reason": "missing_fasta_or_donors",
+                "donors": donors,
+            }
+            heavy_rows.append(row)
+            results.append(
+                {
+                    "query": {"alias": alias},
+                    "mode": "transfer",
+                    "donors": [{"alias": d} for d in donors],
+                    "errors": [row.get("reason")],
+                    "verdict": normalize_verdict(
+                        {
+                            "label": "No",
+                            "p_hat": None,
+                            "confidence": "low",
+                            "explanation": f"scored LOO skipped: {row.get('reason')}",
+                            "supporting_rbps": [],
+                        }
+                    ),
+                }
+            )
+            continue
+
+        # Prefer batch donor scoring (encode-once); fall back to heavy_loo per held
+        scored = run_batch_score_subprocess(
+            held=alias,
+            cohort=cohort,
+            fasta=fasta,
+            release=release,
+            foreigns=donors,
+            max_seqs=max_seqs,
+            device=device,
+            batch_size=64,
+            seed=42,
+            donors_only=True,
+        )
+        pairs: list[dict[str, Any]] = []
+        recovered = None
+        own_ceil = None
+        if scored.get("ok") and scored.get("pairs"):
+            pairs = [
+                {
+                    "p_hat": float(p["p_hat"]),
+                    "y": int(p["y"]),
+                    "score": float(p.get("score", p["p_hat"])),
+                }
+                for p in scored["pairs"]
+            ]
+            recovered = scored.get("recovered_auprc")
+            own_ceil = scored.get("own_full_auprc")
+            donors = list(scored.get("donors") or donors)
+        else:
+            from rbp_eval.loo.heavy_loo import run_one_held
+
+            one = run_one_held(
+                alias, cohort=cohort, top_k=top_k, max_seqs=max_seqs, device=device
+            )
+            heavy_rows.append(one)
+            if one.get("ok"):
+                pairs = [
+                    {"p_hat": float(p["score"]), "y": int(p["y"]), "score": float(p["score"])}
+                    for p in (one.get("pairs") or [])
+                ]
+                recovered = one.get("recovered_auprc")
+                own_ceil = one.get("own_full_auprc")
+                donors = list(one.get("donors") or donors)
+            else:
+                results.append(
+                    {
+                        "query": {"alias": alias},
+                        "mode": "transfer",
+                        "donors": [{"alias": d} for d in donors],
+                        "errors": [one.get("reason")],
+                        "verdict": normalize_verdict(
+                            {
+                                "label": "No",
+                                "p_hat": None,
+                                "confidence": "low",
+                                "explanation": f"scored LOO failed: {one.get('reason')}",
+                                "supporting_rbps": [],
+                            }
+                        ),
+                    }
+                )
+                continue
+
+        if not pairs:
+            results.append(
+                {
+                    "query": {"alias": alias},
+                    "mode": "transfer",
+                    "donors": [{"alias": d} for d in donors],
+                    "errors": ["no_scored_pairs"],
+                    "verdict": normalize_verdict(
+                        {
+                            "label": "No",
+                            "p_hat": None,
+                            "confidence": "low",
+                            "explanation": "scored LOO produced no pairs",
+                            "supporting_rbps": [],
+                        }
+                    ),
+                }
+            )
+            continue
+
+        scored_labels.extend(
+            {"p_hat": p["p_hat"], "y": p["y"], "held_rbp": alias} for p in pairs
+        )
+        mean_p = sum(p["p_hat"] for p in pairs) / len(pairs)
+        n_abstain = sum(1 for p in pairs if p.get("p_hat") is None)
+        gap = None if own_ceil is None or recovered is None else float(own_ceil) - float(recovered)
+
+        # Ensure hit lists exist for weight retune (matrix prior as similarity)
+        if alias not in held_hits or not any(held_hits.get(alias) or []):
+            prior_hits = []
+            for d in donors:
+                auprc = matrix.get((alias, d))
+                score = float(auprc) if auprc is not None else 0.5
+                prior_hits.append(
+                    {
+                        "alias": d,
+                        "score": score,
+                        "metric": "transfer_prior",
+                        "sim_by_modality": {
+                            "domain_overlap": score,
+                            "transfer_prior": score,
+                        },
+                    }
+                )
+            held_hits[alias] = [prior_hits]
+
+        heavy_rows.append(
+            {
+                "held_rbp": alias,
+                "ok": True,
+                "donors": donors,
+                "recovered_auprc": recovered,
+                "own_full_auprc": own_ceil,
+                "gap_to_own": gap,
+                "n_scored": len(pairs),
+                "abstain_rate": n_abstain / len(pairs) if pairs else None,
+            }
+        )
+        results.append(
+            {
+                "query": {"alias": alias},
+                "mode": "transfer",
+                "donors": [
+                    {
+                        "alias": d,
+                        "score": float(matrix[(alias, d)])
+                        if (alias, d) in matrix
+                        else None,
+                    }
+                    for d in donors
+                ],
+                "errors": [],
+                "retrieval": {"transfer_matrix": {"ok": True, "n": len(donors)}},
+                "evidence_table": held_hits.get(alias, [[]])[0] if held_hits.get(alias) else [],
+                "predictions": [{"alias": d, "prob": mean_p} for d in donors[:1]],
+                "loo_metrics": {
+                    "recovered_auprc": recovered,
+                    "own_full_auprc": own_ceil,
+                    "gap_to_ceiling": gap,
+                    "n_scored": len(pairs),
+                    "abstain_rate": n_abstain / len(pairs) if pairs else 0.0,
+                },
+                "verdict": normalize_verdict(
+                    {
+                        "label": "Likely" if mean_p >= 0.5 else "Unlikely",
+                        "p_hat": float(mean_p),
+                        "confidence": "medium",
+                        "explanation": (
+                            f"Scored LOO hide-own-head for {alias}: "
+                            f"recovered_auprc={recovered} gap={gap}"
+                        ),
+                        "supporting_rbps": [
+                            {
+                                "alias": d,
+                                "similarity_score": float(matrix[(alias, d)])
+                                if (alias, d) in matrix
+                                else 0.5,
+                                "prob": float(mean_p),
+                                "sim_by_modality": {
+                                    "transfer_prior": float(matrix[(alias, d)])
+                                    if (alias, d) in matrix
+                                    else 0.5,
+                                    "domain_overlap": float(matrix[(alias, d)])
+                                    if (alias, d) in matrix
+                                    else 0.5,
+                                },
+                            }
+                            for d in donors
+                        ],
+                    }
+                ),
+            }
+        )
+
+    # Persist a heavy-LOO-shaped report so promote/evolve LOO gate can find it
+    try:
+        ok_rows = [r for r in heavy_rows if r.get("ok")]
+        mean_rec = (
+            sum(float(r["recovered_auprc"]) for r in ok_rows if r.get("recovered_auprc") is not None)
+            / len(ok_rows)
+            if ok_rows
+            else None
+        )
+        report = {
+            "schema": "loo_heavy.v2",
+            "protocol": "scored_loo_val_batch",
+            "cohort": cohort,
+            "top_k": top_k,
+            "max_seqs": max_seqs,
+            "rbps": helds,
+            "rows": heavy_rows,
+            "summary": {
+                "n_ok": len(ok_rows),
+                "n_fail": len(heavy_rows) - len(ok_rows),
+                "mean_recovered_auprc": mean_rec,
+            },
+            "ok": len(ok_rows) >= 1,
+        }
+        outp = report_path("heavy_loo_report.json")
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        outp.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    return results, held_hits, scored_labels
 
 
 def _safe_hits(out: Any) -> list[dict[str, Any]]:
@@ -304,6 +596,78 @@ def load_traces(path: str | Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return rows
+
+
+def collect_agent_traces(
+    results: list[dict[str, Any]],
+    *,
+    out_path: str | Path | None = None,
+    session_key: str = "rbp:collect_agent_traces",
+) -> Path:
+    """Write rbp_trace/v1 JSONL from scored/retrieval results (no LLM required).
+
+    Emits ``query_end`` (+ optional ``stage1_bypassed``) so attribution / cache
+    promotion can consume real structured traces alongside synthetic scored paths.
+    """
+    from app.core.paths import TRACES
+    from rbp_eval.runtime.trace_schema import make_event, validate_event
+
+    path = Path(out_path) if out_path else TRACES / "collect_agent_traces.jsonl"
+    if not path.is_absolute():
+        path = ROOT / path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for i, r in enumerate(results):
+            q = r.get("query") or {}
+            if isinstance(q, str):
+                q = {"alias": q}
+            alias = q.get("alias") or r.get("alias")
+            et = r.get("evidence_table") or []
+            donors = r.get("donors") or []
+            enriched = []
+            for d in donors:
+                if not isinstance(d, dict):
+                    continue
+                row = dict(d)
+                if not row.get("sim_by_modality"):
+                    # Prefer evidence_table row match
+                    for e in et:
+                        if isinstance(e, dict) and e.get("alias") == row.get("alias"):
+                            row["sim_by_modality"] = e.get("sim_by_modality") or {
+                                "transfer_prior": e.get("score")
+                            }
+                            break
+                    if not row.get("sim_by_modality") and row.get("score") is not None:
+                        row["sim_by_modality"] = {"transfer_prior": row.get("score")}
+                enriched.append(row)
+            ev = make_event(
+                "query_end",
+                session_key=session_key,
+                index=i,
+                query=q,
+                alias=alias,
+                donors=enriched,
+                evidence_table=et,
+                fused_similarities=[
+                    {
+                        "alias": e.get("alias"),
+                        "score": e.get("score") or e.get("similarity_score"),
+                        "sim_by_modality": e.get("sim_by_modality"),
+                    }
+                    for e in enriched
+                ],
+                verdict=r.get("verdict"),
+                mode=r.get("mode"),
+                stage1_bypassed=bool(
+                    (r.get("retrieval") or {}).get("stage1_bypassed")
+                    or (r.get("verdict") or {}).get("stage1_bypassed")
+                ),
+            )
+            problems = validate_event(ev)
+            if problems:
+                ev["schema_warnings"] = problems
+            f.write(json.dumps(ev, ensure_ascii=False, default=str) + "\n")
+    return path
 
 
 def main(argv: Optional[list[str]] = None) -> int:

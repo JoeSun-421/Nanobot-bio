@@ -11,6 +11,49 @@ def cmd_accept_golden(args: argparse.Namespace) -> int:
     return cmd_own_head(args)
 
 
+def cmd_batch_prompts(args: argparse.Namespace) -> int:
+    """Outer-loop: one agent turn per markdown case → many JSON verdicts."""
+    from rbp_eval.accept.batch_prompts import run_batch_prompts
+
+    if bool(getattr(args, "quiet", False)):
+        stream_flag: bool | None = False
+    elif bool(getattr(args, "stream", False)):
+        stream_flag = True
+    else:
+        stream_flag = None  # auto: stream when stderr is a TTY
+
+    report = run_batch_prompts(
+        prompts_md=args.prompts,
+        out_dir=getattr(args, "out_dir", None),
+        cases=getattr(args, "case", None),
+        limit=getattr(args, "limit", None),
+        offset=getattr(args, "offset", None),
+        last=getattr(args, "last", None),
+        device=str(getattr(args, "device", "auto") or "auto"),
+        dry_run=bool(getattr(args, "dry_run", False)),
+        continue_on_error=not bool(getattr(args, "stop_on_error", False)),
+        stream=stream_flag,
+    )
+    print(
+        f"batch-prompts ok={report.get('ok')} "
+        f"n_ok={report.get('n_ok', report.get('n_cases'))}/"
+        f"{report.get('n_cases')} path={report.get('path')}"
+    )
+    if report.get("jsonl"):
+        print(f"jsonl: {report.get('jsonl')}")
+    for r in report.get("results") or []:
+        status = "ok" if r.get("ok") else "FAIL"
+        print(
+            f"  [{status}] {r.get('case')} label={r.get('label')} "
+            f"p_hat={r.get('p_hat')} mode={r.get('path_mode')}"
+            + (f" err={r.get('error')}" if r.get("error") else "")
+        )
+    if report.get("dry_run"):
+        for c in report.get("cases") or []:
+            print(f"  - {c}")
+    return 0 if report.get("ok") else 1
+
+
 def cmd_accept_llm(args: argparse.Namespace) -> int:
     """LLM touchpoint acceptance (nanobot_llm + abstain-before-predict evidence)."""
     from rbp_eval.accept.accept_llm import run_accept_llm

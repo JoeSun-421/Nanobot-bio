@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 
 from app.core.chat_ux import (
     CHAT_HELP,
@@ -18,7 +19,7 @@ from app.core.chat_ux import (
 
 
 def test_help_lists_core_commands():
-    for cmd in ("/help", "/status", "/tools", "/quit", "/thinking"):
+    for cmd in ("/help", "/status", "/tools", "/quit", "/thinking", "/caveats"):
         assert cmd in CHAT_HELP
 
 
@@ -192,22 +193,149 @@ def test_verdict_prints_evidence_before_verdict():
     assert "FMR1" in shown
     assert "confidence=medium" in shown
     assert "prior_missing" in shown
+    assert "caveats: 1 (folded)" in shown
     assert '"p_hat": 0.61' in shown
+    # path/mode is chrome-only (title + path=…), not public JSON.
+    assert "path=multi_head" in shown
+    assert '"mode"' not in shown
+    # Folded: caveats key omitted from pretty JSON body.
+    assert '"caveats"' not in shown
     # Engineering / provenance keys must not appear in user-facing chat output.
     for banned in (
         "score_source",
         "score_kind",
         "score_disclaimer",
-        '"mode"',
         "weighted_consensus",
         "delivery_similarity_weighted_vote",
         "calibrated binding probability",
-        "multi_head",
     ):
         assert banned not in shown, f"public verdict leaked {banned!r}"
     # Footer must not reintroduce score chrome.
     assert "score=" not in shown
     assert "disclaimer=" not in shown
+
+
+def test_print_verdict_block_shows_rna_placeholder_banner():
+    import io
+    import json
+
+    from app.core.chat_ux import print_verdict_block
+
+    body = json.dumps(
+        {
+            "label": "Likely",
+            "p_hat": 0.6,
+            "confidence": "medium",
+            "explanation": "demo path",
+            "caveats": ["rna_placeholder"],
+            "mode": "multi_head",
+        }
+    )
+    stream = io.StringIO()
+    print_verdict_block(body, stream=stream)
+    shown = stream.getvalue()
+    assert "PLACEHOLDER" in shown or "not experimental gold" in shown
+    assert "rna_placeholder" in shown
+
+
+def test_print_verdict_block_folds_caveats_by_default(monkeypatch):
+    import io
+    import json
+
+    from app.core.chat_ux import format_caveats_fold_line, print_verdict_block
+
+    monkeypatch.delenv("RBP_SHOW_CAVEATS", raising=False)
+    caveats = [
+        "prior_missing",
+        "structure_axis_unavailable",
+        "literature_unavailable",
+        "domain_empty",
+        "near_match_loo_disclosed",
+        "single_donor_transfer",
+        "rna_placeholder",
+    ]
+    fold = format_caveats_fold_line(caveats)
+    assert "caveats: 7 (folded)" in fold
+    assert "prior_missing" in fold
+    assert "structure_axis_unavailable" in fold
+    assert "expand: RBP_SHOW_CAVEATS=1" in fold
+    assert "single_donor_transfer" not in fold  # only first 2 previewed
+
+    body = json.dumps(
+        {
+            "label": "Likely",
+            "p_hat": 0.6,
+            "confidence": "low",
+            "explanation": "demo",
+            "caveats": caveats,
+            "mode": "multi_head",
+        }
+    )
+    stream = io.StringIO()
+    print_verdict_block(body, stream=stream)
+    shown = stream.getvalue()
+    assert "caveats: 7 (folded)" in shown
+    assert "expand: RBP_SHOW_CAVEATS=1" in shown
+    # Full array not dumped into the pretty JSON body when folded.
+    assert '"caveats"' not in shown
+    assert "PLACEHOLDER" in shown or "not experimental gold" in shown
+
+
+def test_print_verdict_block_expands_caveats_with_env(monkeypatch):
+    import io
+    import json
+
+    from app.core.chat_ux import print_verdict_block
+
+    monkeypatch.setenv("RBP_SHOW_CAVEATS", "1")
+    caveats = [
+        "prior_missing",
+        "structure_axis_unavailable",
+        "literature_unavailable",
+        "domain_empty",
+        "near_match_loo_disclosed",
+    ]
+    body = json.dumps(
+        {
+            "label": "Likely",
+            "p_hat": 0.6,
+            "confidence": "low",
+            "explanation": "demo",
+            "caveats": caveats,
+        }
+    )
+    stream = io.StringIO()
+    print_verdict_block(body, stream=stream)
+    shown = stream.getvalue()
+    assert '"caveats"' in shown
+    for c in caveats:
+        assert c in shown
+    assert "(folded)" not in shown
+
+
+def test_format_verdict_display_keeps_full_caveats_array():
+    """Structured formatter still carries the full caveats list (fold is print-only)."""
+    import json
+    from types import SimpleNamespace
+
+    from app.core.chat_ux import format_verdict_display
+
+    caveats = [f"c{i}" for i in range(6)]
+    shown = format_verdict_display(
+        SimpleNamespace(
+            content="",
+            verdict={
+                "label": "Likely",
+                "p_hat": 0.5,
+                "confidence": "low",
+                "explanation": "demo",
+                "supporting_rbps": [],
+                "caveats": caveats,
+            },
+        )
+    )
+    parsed = json.loads(shown)
+    assert parsed.get("caveats") == caveats
 
 
 def test_format_verdict_display_omits_engineering_fields():
@@ -235,10 +363,10 @@ def test_format_verdict_display_omits_engineering_fields():
         "score_source",
         "score_kind",
         "score_disclaimer",
-        '"mode"',
         "weighted_consensus",
-        "multi_head",
     ):
         assert banned not in shown
+    # mode is passed through for print_verdict_block chrome; JSON body strip is there.
+    assert '"mode": "multi_head"' in shown
     assert '"confidence": "medium"' in shown
     assert "literature_unavailable" in shown

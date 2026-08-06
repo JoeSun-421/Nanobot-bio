@@ -1,4 +1,10 @@
-"""Shared execution loop for tool-using agents."""
+"""Shared execution loop for tool-using agents.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  nanobot-bio batch-prompts --limit 1
+"""
 
 from __future__ import annotations
 
@@ -752,12 +758,15 @@ class AgentRunner:
         progress_state: dict[str, bool] | None = None
         live_file_edits: StreamingFileEditTracker | None = None
 
+        on_progress = spec.progress_callback
         if (
-            spec.progress_callback is not None
-            and on_progress_accepts_file_edit_events(spec.progress_callback)
+            on_progress is not None
+            and on_progress_accepts_file_edit_events(on_progress)
         ):
+            progress_cb = on_progress
+
             async def _emit_live_file_edits(events: list[dict[str, Any]]) -> None:
-                await invoke_file_edit_progress(spec.progress_callback, events)
+                await invoke_file_edit_progress(progress_cb, events)
 
             live_file_edits = StreamingFileEditTracker(
                 workspace=spec.workspace,
@@ -814,7 +823,8 @@ class AgentRunner:
                         await hook.emit_reasoning_end()
                         progress_state["reasoning_open"] = False
                     context.streamed_content = True
-                    await spec.progress_callback(incremental)
+                    if on_progress is not None:
+                        await on_progress(incremental)
 
             coro = self.provider.chat_stream_with_retry(
                 **kwargs,
@@ -1132,9 +1142,13 @@ class AgentRunner:
             # satisfy the declarative "__any_retrieve__" edge.  Import is optional
             # so the generic runner remains usable without the RBP plugin.
             with suppress(Exception):
-                from nanobot.agent.tools.rbp.turn_guards import mark_retrieve_done
+                from nanobot.agent.tools.rbp.turn_guards import (
+                    mark_retrieve_done,
+                    register_retrieve_donors_from_tool_result,
+                )
 
                 mark_retrieve_done(tool_call.name)
+                register_retrieve_donors_from_tool_result(tool_call.name, result)
         except asyncio.CancelledError:
             raise
         except BaseException as exc:
@@ -1567,13 +1581,12 @@ class AgentRunner:
 
             prerequisite_tools = set(REQUIRES)
         for tool_call in tool_calls:
-            get_tool = getattr(spec.tools, "get", None)
-            tool = get_tool(tool_call.name) if callable(get_tool) else None
+            tool = spec.tools.get(tool_call.name)
             # A tool with declared prerequisites starts a new serial batch. This
             # prevents retrieve+fuse or fuse+commit calls emitted together from
             # racing inside one asyncio.gather.
             can_batch = bool(
-                tool
+                tool is not None
                 and tool.concurrency_safe
                 and tool_call.name not in prerequisite_tools
             )

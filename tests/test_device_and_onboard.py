@@ -24,8 +24,8 @@ def test_resolve_device_respects_force_cpu(monkeypatch):
 
         p = ROOT / "nanobot" / "agent" / "tools" / "rbp" / "common.py"
         spec = importlib.util.spec_from_file_location("rbp_common_sot", p)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
         spec.loader.exec_module(mod)
         resolve_device = mod.resolve_device
 
@@ -43,8 +43,8 @@ def test_resolve_device_explicit_cpu(monkeypatch):
 
         p = ROOT / "nanobot" / "agent" / "tools" / "rbp" / "common.py"
         spec = importlib.util.spec_from_file_location("rbp_common_sot2", p)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
         spec.loader.exec_module(mod)
         resolve_device = mod.resolve_device
 
@@ -60,10 +60,10 @@ def test_resolve_device_auto_does_not_import_torch(monkeypatch):
     # Load SoT module fresh so we can clear its CUDA cache
     p = ROOT / "nanobot" / "agent" / "tools" / "rbp" / "common.py"
     spec = importlib.util.spec_from_file_location("rbp_common_notorch", p)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     spec.loader.exec_module(mod)
-    mod._CUDA_CACHE = None
+    setattr(mod, "_CUDA_CACHE", None)
 
     before = "torch" in sys.modules
     _ = mod.resolve_device("auto")

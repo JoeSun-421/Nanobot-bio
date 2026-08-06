@@ -113,20 +113,8 @@ def print_chat_header(
         stream.write(f"  {s.dim('Session')}  {short}\n")
     stream.write(
         s.dim(
-            "  Commands  /help  /status  /tools  /new  /clear  /thinking  "
-            "/onboard  /quit\n"
-        )
-    )
-    stream.write(
-        s.dim(
-            "  Tips      Paste RNA+protein in one message · Esc+Enter for "
-            "multiline · thoughts folded (RBP_SHOW_THINKING=1)\n"
-        )
-    )
-    stream.write(
-        s.dim(
-            "  Try       “Does this RNA interact with PTBP1?” + paste RNA, "
-            "or resolve an unseen UniProt\n"
+            "  Commands  /help  /status  /tools  /new  /suite  /clear  "
+            "/thinking  /caveats  /onboard  /quit\n"
         )
     )
     if mem_warn:
@@ -139,12 +127,15 @@ CHAT_HELP = """\
   /help       Show this help
   /status     LLM, tools, session, paths
   /tools      List registered tool names
-  /new        Start a fresh session (clears conversation memory)
-  /clear      Clear the terminal screen (keeps session)
+  /new        Start a fresh session key (optional; each query already recomputes)
+  /suite      Run docs/eval suite path (honours 最后N条 / --last / --limit / Prompt NN)
+  /clear      Clear the terminal screen (keeps session key)
   /thinking   Toggle expanded thinking (RBP_SHOW_THINKING)
+  /caveats    Toggle expanded verdict caveats (RBP_SHOW_CAVEATS)
   /onboard    Reconfigure LLM provider / API key
   /quit       Exit chat
 
+  Each binding question re-runs Stage 0–3 tools (ephemeral; no transcript reuse).
   Input       Esc+Enter = multiline · ↑ history · Ctrl+C cancel line · Ctrl+D exit
 """
 
@@ -174,6 +165,13 @@ def print_status_panel(
             f"(RBP_SHOW_THINKING)\n"
         )
     )
+    stream.write(
+        s.dim(
+            f"  caveats   "
+            f"{'expanded' if _show_full_caveats() else 'folded'} "
+            f"(RBP_SHOW_CAVEATS)\n"
+        )
+    )
     stream.flush()
 
 
@@ -193,6 +191,35 @@ _PUBLIC_VERDICT_STRIP = frozenset(
 )
 
 
+def _show_full_caveats() -> bool:
+    """Expand folded verdict caveats (default = collapsed chrome)."""
+    return os.environ.get("RBP_SHOW_CAVEATS", "").strip().lower() in (
+        "1", "true", "yes", "full", "expand",
+    )
+
+
+def _caveat_preview(text: str, *, max_len: int = 48) -> str:
+    s = " ".join(str(text).split())
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
+def format_caveats_fold_line(
+    caveats: list[str], *, preview_n: int = 2
+) -> str:
+    """One-line folded caveats summary for chat chrome (not the JSON body)."""
+    n = len(caveats)
+    if n == 0:
+        return ""
+    previews = [_caveat_preview(c) for c in caveats[:preview_n] if str(c).strip()]
+    parts = [f"caveats: {n} (folded)"]
+    if previews:
+        parts.append(", ".join(previews))
+    parts.append("expand: RBP_SHOW_CAVEATS=1")
+    return " · ".join(parts)
+
+
 def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     s = Style(stream)
     w = _term_width()
@@ -205,12 +232,21 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     evidence = []
     caveats: list[str] = []
     confidence = None
+    path_mode: str | None = None
     if parsed is not None:
         evidence = list(parsed.pop("evidence_table", []) or [])
+        # Surface path/mode in the chrome line, not the public JSON body.
+        raw_mode = parsed.get("mode") or parsed.get("path")
+        if raw_mode is not None and str(raw_mode).strip():
+            path_mode = str(raw_mode).strip()
         for key in _PUBLIC_VERDICT_STRIP:
             parsed.pop(key, None)
+        parsed.pop("path", None)
         caveats = [str(x) for x in (parsed.get("caveats") or [])]
         confidence = parsed.get("confidence")
+        # Keep full caveats on the structured verdict; fold only the terminal dump.
+        if caveats and not _show_full_caveats():
+            parsed.pop("caveats", None)
         body = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
     if evidence:
         stream.write("\n" + s.bold("▸ evidence") + "\n")
@@ -233,15 +269,31 @@ def print_verdict_block(body: str, *, stream: TextIO = sys.stdout) -> None:
     if label:
         colored = _color_label(label, s)
         title = f"▸ verdict  {colored}"
+    if path_mode:
+        title = f"{title}  ·  {s.yellow(path_mode)}"
     stream.write("\n")
     stream.write(s.bold(title) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
+    if "rna_placeholder" in caveats:
+        stream.write(
+            s.yellow(
+                "⚠ RNA marked PLACEHOLDER / not experimental gold — "
+                "scores are demo-path only; do not treat as biological gold.\n"
+            )
+        )
     stream.write(body if body.endswith("\n") else body + "\n")
-    if confidence or caveats:
-        detail = f"confidence={confidence or 'unknown'}"
+    if confidence or caveats or path_mode:
+        detail_parts: list[str] = []
+        if confidence:
+            detail_parts.append(f"confidence={confidence}")
         if caveats:
-            detail += " · caveats=" + ", ".join(caveats)
-        stream.write(s.dim(detail) + "\n")
+            if _show_full_caveats():
+                detail_parts.append("caveats=" + ", ".join(caveats))
+            else:
+                detail_parts.append(format_caveats_fold_line(caveats))
+        if path_mode:
+            detail_parts.append(f"path={path_mode}")
+        stream.write(s.dim(" · ".join(detail_parts)) + "\n")
     stream.write(s.dim("─" * min(w, 48)) + "\n")
     stream.flush()
 
@@ -950,10 +1002,22 @@ def format_verdict_display(result: Any) -> str:
     from app.core.verdict_schema import (
         _parse_json_object,
         extract_verdict_from_content,
+        looks_like_tool_markup,
         normalize_verdict,
     )
 
     content = getattr(result, "content", None) or ""
+    # Never echo truncated DSML/tool XML as the "verdict" body.
+    if looks_like_tool_markup(content):
+        return (
+            json.dumps(
+                normalize_verdict(content),
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
     parsed = _parse_json_object(content) if content else None
     if isinstance(parsed, dict) and (
         ("A" in parsed and isinstance(parsed.get("A"), dict))
@@ -972,11 +1036,12 @@ def format_verdict_display(result: Any) -> str:
     # returned a non-flat object (e.g. only nested keys).
     expl = str(verdict.get("explanation") or "")
     if (
-        not verdict.get("p_hat")
+        verdict.get("p_hat") is None
         and verdict.get("label") == "No"
         and "Mode=unknown" in expl
         and content
         and len(content) > 200
+        and not looks_like_tool_markup(content)
     ):
         return content.strip() + "\n"
 
@@ -993,6 +1058,10 @@ def format_verdict_display(result: Any) -> str:
         "supporting_rbps": verdict.get("supporting_rbps") or [],
         "caveats": verdict.get("caveats") or [],
     }
+    # path/mode for print_verdict_block chrome (stripped from public JSON there).
+    path_mode = verdict.get("mode") or verdict.get("path")
+    if path_mode is not None and str(path_mode).strip():
+        display["mode"] = str(path_mode).strip()
     display = {k: v for k, v in display.items() if v is not None}
     # Internal provenance stays on the turn verdict; only donor terms surface
     # as evidence_table above the public JSON (then stripped from the body).
@@ -1051,11 +1120,15 @@ def run_agent_turn_streamed_sync(
     session_key: str,
     extra_hooks: Optional[list[Any]] = None,
     bot_name: str = "rbp-agent",
+    ephemeral: bool = True,
 ) -> Any:
     """Sync helper: streamed run + phase spinner + folded thought + tool steps.
 
     Final JSON is not printed here — caller uses ``print_verdict_block``.
     Answer tokens are not Live-rendered (JSON contract → verdict box only).
+
+    Defaults to ``ephemeral=True`` so chat/agent turns do not replay prior
+    scientific tool transcripts into the next LLM context.
     """
     import asyncio
 
@@ -1069,6 +1142,7 @@ def run_agent_turn_streamed_sync(
                 session_key=session_key,
                 extra_hooks=hooks,
                 renderer=None,
+                ephemeral=ephemeral,
             )
         )
     try:

@@ -1,5 +1,11 @@
-"""RuntimeState protocol: agent loop state exposed to MyTool."""
+"""RuntimeState protocol: agent loop state exposed to MyTool.
 
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
+
+from pathlib import Path
 from typing import Any, Protocol
 
 
@@ -25,7 +31,7 @@ class RuntimeState(Protocol):
     def tool_names(self) -> list[str]: ...
 
     @property
-    def workspace(self) -> str: ...
+    def workspace(self) -> Path | str: ...
 
     @property
     def provider_retry_mode(self) -> str: ...

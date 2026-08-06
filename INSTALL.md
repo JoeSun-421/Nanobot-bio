@@ -1,223 +1,205 @@
-# 安装指南（协作方入门）
+# Installation guide
 
-> **安装 / 环境 / 验收的单一入口。** 产品概览见 [README.zh.md](README.zh.md) / [README.md](README.md)；架构 / 发版 / slim vendor 见 [ARCHITECTURE.md](ARCHITECTURE.md)；Agent 门禁见 [AGENTS.md](AGENTS.md)。
+<p><b>English</b> · <a href="INSTALL.zh.md">中文</a></p>
 
-（本文为中文。英文读者可按代码块与表格操作；完整英文版未单独维护。）
+> **Single entry for install / env / acceptance.** Overview: [README.md](README.md) / [README.zh.md](README.zh.md). Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) / [ARCHITECTURE.zh.md](ARCHITECTURE.zh.md). Agent gates: [AGENTS.md](AGENTS.md). Hand-off: [HANDOFF.md](HANDOFF.md).
 
----
-
-## 0. 前置条件
-
-| 项 | 要求 | 说明 |
-|----|------|------|
-| OS | Linux x86_64（Ubuntu 20.04+ 验证通过） | macOS/WSL 可跑 agent 层，科学栈未验证 |
-| 磁盘 | ≥ 30 GB 空闲 | delivery bundle ~15 GB；conda 科学栈 ~10 GB |
-| Python | ≥ 3.10（推荐 3.13） | 仓内精简 nanobot 与本机 venv 同解释器 |
-| conda / mamba | full 路径必需；agent 路径可选 | 推荐 mamba 加速 |
-| GPU | 可选 | rhobind_predict / ESM / AF3 受益；CPU 可跑 doctor + chat |
-| LLM API key | `agent` / `chat` / `accept-llm` 必需 | `nanobot-bio onboard` 显式选厂商；密钥写入 `.env` |
-
----
-
-## 1. 三条安装路径
-
-### 路径 A：一键脚本（最快，推荐首次使用）
+## Portable layout (Linux)
 
 ```bash
-git clone https://github.com/JoeSun-421/Nanobot-bio.git
-cd Nanobot-bio
-# delivery bundle 需单独获取（见 §3），放到同级目录：
-#   parent/
-#     ├── Nanobot-bio/
-#     └── rhobind_agent_delivery/
-
-./scripts/nbio setup                  # full 科学栈 + agent venv（= setup_all.sh）
-# 已知机型也可显式选（薄包装，内部仍调 setup_all.sh）：
-# bash scripts/setup/setup_all_ampere_or_older.sh   # A100/H100/4090… → 经典 af3
-# bash scripts/setup/setup_all_blackwell.sh         # RTX 5090 / CC12 → af3_blackwell
-# 或仅 agent 层（无 conda）：
-# ./scripts/nbio setup --skip-conda
-
-source scripts/nbio                   # 日常：探测 + 激活 .venv（不重装）
-nanobot-bio onboard                   # 显式选择 LLM 厂商 + key（写入 .env）
-nanobot-bio doctor                    # 功能能力表（异常优先）；明细加 --verbose
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+# Conventions (discovered by nbio, or export explicitly):
+#   DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
+#   RHOBIND_RELEASE=$DELIVERY_ROOT/release/rhobind_release_v1
+#   RBP_TEST_DATA_ROOT=$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data
 ```
 
-`setup_all.sh`（经 `nbio setup`）使用仓内精简 `nanobot/`。`pip install -e .` 会安装 in-repo 包；勿再安装 `nanobot-ai`（会抢 `import nanobot`）。按 GPU 选型说明见 [docs/AF3_RUNTIME_AND_RELEASE.zh.md §3.4](docs/AF3_RUNTIME_AND_RELEASE.zh.md)。脚本分类见 [`scripts/README.md`](scripts/README.md)；单一入口见 [`scripts/nbio`](scripts/nbio)。
+Do **not** treat a trial-machine absolute path as the only source of truth; `nbio` discovers paths on the host.
 
-**环境名存在 ≠ 依赖已齐。** delivery `setup_envs.sh` 只在 conda **名字缺失**时创建；裸 `conda create -n rhobind` 会留下空壳。`nbio setup` / `setup_all.sh` 会做 **import 级校验**并 heal。日常只需 `source scripts/nbio` + `nanobot-bio chat`，**不必每次** setup。兼容旧命令：`source scripts/setup/activate_env.sh`（转发到 `nbio`）。
+---
 
-### 路径 B：Docker（隔离环境，推荐给只跑不开发的协作方）
+## 0. Prerequisites
+
+| Item | Requirement | Notes |
+|------|-------------|-------|
+| OS | Linux x86_64 (Ubuntu 20.04+ verified) | macOS/WSL may run the agent layer; science stack unverified |
+| Disk | ≥ 30 GB free | delivery bundle ~15 GB; conda science stack ~10 GB |
+| Python | ≥ 3.10 (3.13 recommended) | In-repo slim nanobot shares the agent venv interpreter |
+| conda / mamba | Required for full path; optional for agent-only | mamba recommended |
+| GPU | Optional | Helps rhobind_predict / ESM / AF3; CPU can run doctor + chat |
+| LLM API key | Required for `agent` / `chat` / `accept-llm` | `nanobot-bio onboard` picks provider; key in `.env` |
+
+---
+
+## 1. Three install paths
+
+### Path A: One-shot script (fastest; recommended first install)
 
 ```bash
-cd nanobot-bio
-# agent-only 镜像（轻）
-docker compose build
-# 或 full 科学栈镜像（重，需 GPU）
-docker compose --profile full build
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+mkdir -p "$BIO_ROOT"
+# Place this repo and delivery as siblings:
+#   $BIO_ROOT/Nanobot-bio/   # or nanobot-bio/
+#   $BIO_ROOT/rhobind_agent_delivery/
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 
-# 把 LLM 配置挂进去（首次需先在宿主机 onboard，或直接挂 config）
+./scripts/nbio.sh setup                  # full science stack + agent venv (= setup_all.sh)
+# Optional GPU-specific thin wrappers (still call setup_all.sh):
+# bash scripts/setup/setup_all_ampere_or_older.sh   # A100/H100/4090… → classic af3
+# bash scripts/setup/setup_all_blackwell.sh         # CC12 → af3_blackwell
+# Agent layer only (no conda):
+# ./scripts/nbio.sh setup --skip-conda
+
+nanobot-bio onboard                   # pick LLM provider + key → .env
+./scripts/nbio.sh start                  # daily one-shot: heal AF3 → chat
+# ./scripts/nbio.sh start --dry-run
+# source scripts/nbio.sh && nanobot-bio doctor
+```
+
+`setup_all.sh` (via `nbio setup`) uses in-repo slim `nanobot/`. `pip install -e .` installs the in-repo package; do **not** also install `nanobot-ai` (it steals `import nanobot`). GPU selection: [ARCHITECTURE.md](ARCHITECTURE.md) (AF3 notes) · [scripts/nbio.sh](scripts/nbio.sh). Scripts map: [`scripts/README.md`](scripts/README.md).
+
+**Env name present ≠ deps installed.** Delivery `setup_envs.sh` only creates missing conda **names**; a bare `conda create -n rhobind` leaves a hollow env. `nbio setup` / `setup_all.sh` run **import-level checks** and heal. Daily use `./scripts/nbio.sh start` (or `source scripts/nbio.sh` + `nanobot-bio chat`) — you need not re-run setup every time. `start` auto-discovers AF3 / conda on the host (`$AF3_BLACKWELL_ROOT`, sibling `af3_blackwell`, `~/af3_blackwell`, `conda info --base`, …). Use `start --dry-run` to list candidates only.
+
+### Path B: Docker (isolated; good for operators who do not develop)
+
+```bash
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+docker compose build                              # agent-only (light)
+# docker compose --profile full build             # full science (heavy; GPU)
 docker compose run --rm app onboard
-
-# 自检 + 交互式 chat
 docker compose run --rm app doctor
-docker compose up app                # = nanobot-bio chat
+docker compose up app                             # = nanobot-bio chat
 ```
 
-数据 bundle 通过 volume 挂载（见 `docker-compose.yml`），不烤进镜像。详见 [Dockerfile](Dockerfile) 头部注释。
+Data bundles mount via volumes (see `docker-compose.yml`), not baked into the image. See comments at the top of [Dockerfile](Dockerfile).
 
-### 路径 C：手动 venv + conda（精细控制）
+### Path C: Manual venv + conda (fine control)
 
-> 注意：仅跑 `setup_envs.sh` **不会**修复已存在的空壳 env。装完后请用  
-> `conda run -n rhobind python -c "import torch, transformers"` 自检，或改走路径 A 的 `setup_all.sh`。
+> Running only `setup_envs.sh` will **not** heal an existing hollow env. After install, check with  
+> `conda run -n rhobind python -c "import torch, transformers"` or use Path A.
 
 ```bash
-# 1. delivery 科学栈 conda envs
-cd rhobind_agent_delivery
+cd "$BIO_ROOT/rhobind_agent_delivery"
 bash agent/setup_envs.sh             # protein_embed / rna / rhobind / af3
 
-# 2. agent venv（仓内已含精简 nanobot/）
-cd ../nanobot-bio
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
 pip uninstall -y nanobot-ai nanobot 2>/dev/null || true
 pip install -e ".[dev]"
 
-# 3. 校验 import 指向本仓 + workspace skill 链接
-python -c "import nanobot; print(nanobot.__file__)"   # 必须含 nanobot-bio/nanobot
+python -c "import nanobot; print(nanobot.__file__)"   # must contain nanobot-bio/nanobot
 python -m app.sync_overlay
-cp .env.example .env                # 按需编辑；NANOBOT_SRC 默认本仓 nanobot/
+cp .env.example .env
 nanobot-bio doctor
 ```
 
 ---
 
-## 2. 环境变量总表
+## 2. Environment variables
 
-合并自 [README §6](README.md)、[`.env.example`](.env.example)、[`app/backends/delivery/env.py`](app/backends/delivery/env.py)、delivery `setup.sh`。`apply_delivery_env()` 会为缺失项填默认值，所以**只有覆盖默认时才需手动设**。
+Merged from README, [`.env.example`](.env.example), [`app/backends/delivery/env.py`](app/backends/delivery/env.py), and delivery setup. `apply_delivery_env()` fills defaults for missing keys — set vars only to override.
 
-| 变量 | 默认 | 必填 | 用途 |
-|------|------|------|------|
-| `BIO_ROOT` | `nanobot-bio/..` | 否 | 仓库父目录 |
-| `DELIVERY_ROOT` | `$BIO_ROOT/rhobind_agent_delivery` | 是* | delivery 包根 |
-| `NANOBOT_SRC` | `$NANOBOT_BIO_ROOT/nanobot` | 是* | 仓内精简 nanobot 运行时（SoT == runtime） |
-| `NANOBOT_BIO_ROOT` | `nanobot-bio/` | 否 | app 包根 |
-| `NANOBOT_WORKSPACE` | `$NANOBOT_BIO_ROOT/workspace` | 否 | nanobot 工作区（会话/记忆路径见 [ARCHITECTURE.md](ARCHITECTURE.md) §2） |
-| `NANOBOT_CONFIG` | `~/.nanobot/config.json` | 是** | LLM provider/model + `${…_API_KEY}` 引用（密钥在 `.env`） |
-| `AGENT_DB` | `$DELIVERY_ROOT/agent_db` | 否 | registry / embeddings / DBs |
-| `RBP_REGISTRY` | `$AGENT_DB/registry/rbp_registry.json` | 否 | 238 条 RBP 注册表 |
-| `RHOBIND_RELEASE` | `$DELIVERY_ROOT/release/rhobind_release_v1` | 否 | 预测器 checkpoint |
-| `RBP_PROTEINS` | `$DELIVERY_ROOT/reference` | 否 | 参考蛋白/结构 |
-| `AFDB_DIR` | `$RBP_PROTEINS/structures/afdb` | 否 | AFDB PDB 目录 |
-| `TRANSFER_DIR` | `$AGENT_DB/transfer` | 否 | LOO transfer CSV |
-| `EMB_BANK` | `$AGENT_DB/embedding_bank` | 否 | ESM embedding 库 |
-| `FOLDSEEK_DB` | `$AGENT_DB/foldseek_db/refs` | 否 | foldseek 索引 |
-| `SEQ_DB` | `$AGENT_DB/seq_db/refs` | 否 | mmseqs 序列索引 |
-| `PEAKS_DB` | `$AGENT_DB/peaks_db/peaks` | 否 | peaks 索引 |
-| `USALIGN` | `$AGENT_DB/bin/USalign` | 否 | 结构对齐二进制 |
-| `AF3_DIR` | `$DELIVERY_ROOT/agent/third_party/alphafold3` | 否 | AF3 源码 |
-| `AF3_PARAMS` | `$DELIVERY_ROOT/af3_assets/alphafold_param` | 否 | AF3 权重 |
-| `AF3_PYTHON` | conda `af3` env python | 否 | AF3 解释器 |
-| `RHOBIND_DEVICE` | `auto` | 否 | `auto`/`cuda`/`cpu` |
-| `RBP_BACKEND` | `delivery` | 否 | 工具后端 |
-| `RBP_LLM_PROVIDER` | （无默认） | 否\*\* | 显式选择的厂商名；`onboard` 写入 `.env` |
-| `RBP_LLM_MODEL` | （无默认） | 否\*\* | 对应模型 id |
-| `OPENAI_API_KEY` 等 | — | 否\*\* | 各厂商密钥只放 `nanobot-bio/.env`；config 写 `${VAR}` |
-| `HF_ENDPOINT` | `https://hf-mirror.com` | 否 | HF 镜像（ESM 权重） |
-| `OMP_NUM_THREADS` | `4` | 否 | 科学工具线程数 |
+| Variable | Default | Required | Purpose |
+|----------|---------|----------|---------|
+| `BIO_ROOT` | parent of `nanobot-bio` | no | Workspace parent |
+| `DELIVERY_ROOT` | `$BIO_ROOT/rhobind_agent_delivery` | yes* | Delivery bundle root |
+| `NANOBOT_SRC` | `$NANOBOT_BIO_ROOT/nanobot` | yes* | In-repo slim nanobot (SoT == runtime) |
+| `NANOBOT_BIO_ROOT` | `nanobot-bio/` | no | App package root |
+| `NANOBOT_WORKSPACE` | `$NANOBOT_BIO_ROOT/workspace` | no | Workspace; sessions/memory → [ARCHITECTURE.md](ARCHITECTURE.md) §2 |
+| `NANOBOT_CONFIG` | `~/.nanobot/config.json` | yes** | LLM provider/model + `${…_API_KEY}` refs |
+| `AGENT_DB` | `$DELIVERY_ROOT/agent_db` | no | Registry / embeddings / DBs |
+| `RBP_REGISTRY` | `$AGENT_DB/registry/rbp_registry.json` | no | RBP registry |
+| `RHOBIND_RELEASE` | `$DELIVERY_ROOT/release/rhobind_release_v1` | no | Predictor checkpoints |
+| `RBP_PROTEINS` | `$DELIVERY_ROOT/reference` | no | Reference proteins/structures |
+| `AFDB_DIR` | `$RBP_PROTEINS/structures/afdb` | no | AFDB PDB dir |
+| `TRANSFER_DIR` | `$AGENT_DB/transfer` | no | Delivery LOO transfer CSVs |
+| `RBP_LOO_TRANSFER_DIR` | — | no | Agent-side expanded LOO copy (`rbp_eval/data/transfer`) |
+| `RBP_TEST_DATA_ROOT` | — | no | Labeled FASTA root for expand-loo |
+| `EMB_BANK` | `$AGENT_DB/embedding_bank` | no | ESM embedding bank |
+| `FOLDSEEK_DB` / `SEQ_DB` / `PEAKS_DB` | under `$AGENT_DB` | no | Retrieve indexes |
+| `USALIGN` | `$AGENT_DB/bin/USalign` | no | Structure align binary |
+| `AF3_DIR` / `AF3_PARAMS` / `AF3_PYTHON` | delivery / conda | no | AF3 source, weights, interpreter |
+| `RHOBIND_DEVICE` | `auto` | no | `auto`/`cuda`/`cpu` |
+| `RBP_BACKEND` | `delivery` | no | Tool backend |
+| `RBP_LLM_PROVIDER` / `RBP_LLM_MODEL` | (none) | no** | Set by `onboard` |
+| Provider API keys | — | no** | Only in `nanobot-bio/.env`; config uses `${VAR}` |
+| `HF_ENDPOINT` | `https://hf-mirror.com` | no | HF mirror for ESM weights |
+| `OMP_NUM_THREADS` | `4` | no | Science tool threads |
 
-\* `setup_all.sh` / Docker 会自动设；手动路径需自己 export。
-\** `onboard` 写入 `.env`（密钥）与 `~/.nanobot/config.json`（provider/model + `${…_API_KEY}` 引用）；无默认厂商，需显式选择。
+\* Set automatically by `setup_all.sh` / Docker; export yourself on the manual path.  
+\*\* `onboard` writes `.env` (secrets) and `~/.nanobot/config.json` (provider/model + `${…_API_KEY}`); no default provider.
 
-`RNA_FM_CHECKPOINT` 对当前 delivery **不适用（N/A）**。RNA 证据来自
-`rna_blastn` 与 `PEAKS_DB`；不要为了“启用 RNA 轴”伪造 RNA-FM 路径或权重。
+`RNA_FM_CHECKPOINT` is **N/A** for current delivery. RNA evidence comes from `rna_blastn` and `PEAKS_DB` — do not invent RNA-FM paths to “enable” the RNA axis.
 
-工作区落盘、slim vendor 残留与工具 allowlist 说明统一见 [ARCHITECTURE.md](ARCHITECTURE.md) §2 / §6。
+Workspace stores, slim-vendor residuals, and tool allowlists: [ARCHITECTURE.md](ARCHITECTURE.md) §2 / §6.
 
-**RTX 5090 / Blackwell（CC 12）：** 交付钉死的 `af3`（jax 0.4.34）无法推理。不改 delivery，另装并行栈。推荐整机入口：
+**RTX 5090 / Blackwell (CC 12):** delivery-pinned `af3` (jax 0.4.34) cannot infer. Install a parallel stack without editing delivery:
 
 ```bash
-bash scripts/setup/setup_all_blackwell.sh    # = setup_all.sh --af3-stack=blackwell
-# 若只需补装 AF3 隔离栈（不动 agent venv）：
-# bash scripts/setup/setup_af3_blackwell.sh
+bash scripts/setup/setup_all_blackwell.sh
+./scripts/nbio.sh start --dry-run    # list AF3_BLACKWELL_ROOT / AF3_PYTHON candidates
+./scripts/nbio.sh start --heal       # write discovered paths into .env (backup first)
 ```
 
-然后在 `.env` 指向仓外树（权重仍用 delivery 的 `AF3_PARAMS`）：
-
-```bash
-AF3_DIR=/root/autodl-tmp/af3_blackwell/alphafold3
-AF3_PYTHON=/root/autodl-tmp/conda/envs/af3_blackwell/bin/python
-AF3_PARAMS=$DELIVERY_ROOT/af3_assets/alphafold_param
-AF3_CACHE=/root/autodl-tmp/af3_blackwell/alphafold_cache
-```
-
-成功后 AF3 状态文件（默认 `~/.cache/nanobot-bio/af3_status`，可用 `AF3_STATUS_FILE` 覆盖；不再写入仓内）应为 `state=ok`（否则 agent 会把结构轴标成 deferred）。
-`setup_all.sh`（`AF3_STACK=auto`）会检测 CC 12 并自动选择这个隔离环境；非 5090 机用 `setup_all_ampere_or_older.sh` 强制经典 `af3`。均不覆盖 delivery 的官方 `af3` 环境。
-
-版本矩阵、ColabFold MSA 限制与发行改进清单见 [docs/AF3_RUNTIME_AND_RELEASE.zh.md](docs/AF3_RUNTIME_AND_RELEASE.zh.md)。
+Do **not** hand-copy another machine’s absolute paths. Details: [ARCHITECTURE.md](ARCHITECTURE.md) (AF3 notes) · [scripts/nbio.sh](scripts/nbio.sh).
 
 ---
 
-## 3. 数据获取
+## 3. Data acquisition
 
-delivery bundle（`rhobind_agent_delivery/`）含全部数据：238 条 registry、embedding 库、foldseek/mmseqs 索引、AFDB 结构、LOO transfer 矩阵、rhobind checkpoint、AF3 权重。
+The delivery bundle (`rhobind_agent_delivery/`) holds registry, embeddings, foldseek/mmseqs indexes, AFDB structures, LOO transfer matrix, rhobind checkpoints, and AF3 weights.
 
-**两条获取路径：**
+- **Existing bundle (recommended):** place `rhobind_agent_delivery/` next to `nanobot-bio/` under `$BIO_ROOT/`.
+- **Rebuild from scratch:** see delivery `agent/database/SOURCES.md` and [`scripts/data/bootstrap_data.sh`](scripts/data/bootstrap_data.sh).
 
-- **已有 bundle**（推荐）：从协作方处获取 `rhobind_agent_delivery/` 目录，放到 `$BIO_ROOT/` 下与 `nanobot-bio/` 同级。
-- **从零重建**：见 [`rhobind_agent_delivery/agent/database/SOURCES.md`](../rhobind_agent_delivery/agent/database/SOURCES.md)（记录了 pc157 构建过程：`build_registry.py` / `build_embedding_bank.py` / foldseek / mmseqs）。重建脚本见 [`scripts/data/bootstrap_data.sh`](scripts/data/bootstrap_data.sh)（幂等）。
+All data paths are env-driven; the bundle may live anywhere as long as `DELIVERY_ROOT` / `AGENT_DB` point correctly.
 
-数据路径全部由上表环境变量驱动，bundle 放哪都行，只要 `DELIVERY_ROOT` / `AGENT_DB` 指对。
+Optional labeled testdata for LOO expand:
+
+```bash
+export RBP_TEST_DATA_ROOT="${RBP_TEST_DATA_ROOT:-$BIO_ROOT/rhobind_testdata_v2/rhobind_testdata_v2/test_data}"
+```
 
 ---
 
-## 4. 验收流程
+## 4. Acceptance
 
-**权威验收路径：`nanobot-bio accept-golden`**（覆盖 delivery 原生 smoke 的断言）。
-
-完整的无 LLM/无密钥认证入口：
+Authoritative path: `nanobot-bio accept-golden`. Full no-LLM cert:
 
 ```bash
 bash scripts/cert/certify.sh --full
 ```
 
-该命令写出环境/不可变输入 checksum、registry 工具场景、own-head 与
-transfer 报告；不会读取或输出 provider API key。
-
 ```bash
-nanobot-bio doctor           # 1. 环境自检（路径/registry/skill/axes/AF3）
-nanobot-bio accept-golden    # 2. own-head golden（PTBP1 × pos RNA ≈ 0.966）
-nanobot-bio accept-llm       # 3. LLM touchpoint（需 API key）
-nanobot-bio gap-closure      # 4. Stage-0 / unseen fixture 证据包
-nanobot-bio gate             # 5. 工程门（ruff + pytest + layout + 可选 LOO）
+nanobot-bio doctor           # 1. env / paths / registry / skill / axes / AF3
+nanobot-bio accept-golden    # 2. own-head golden
+nanobot-bio accept-llm       # 3. LLM touchpoint (needs API key)
+nanobot-bio gap-closure      # 4. Stage-0 / unseen fixture pack
+nanobot-bio gate             # 5. ruff + pytest + layout (+ optional LOO)
 ```
 
-delivery 原生 `agent/examples/run_example.sh` 仅用于**无 app 层时的回归**（直接调 delivery 脚本），协作方验收请走 `nanobot-bio accept-golden`。
+Reports land under `artifacts/reports/{json,md,csv}/`. Sessions / PA memory / domain memory (`proxy_map`): [ARCHITECTURE.md](ARCHITECTURE.md) §2.
 
-报告输出到 `artifacts/reports/{json,md,csv}/`（或 `~/.nanobot-bio/artifacts/reports/` 当 env 覆盖时）。会话 / PA 记忆 / 领域记忆（proxy_map）规范路径见 [`docs/MEMORY_AND_SESSIONS.zh.md`](docs/MEMORY_AND_SESSIONS.zh.md)（`workspace/sessions|memory` 仅为 symlink）。
+### 4.1 CI and self-hosted runners
 
-### 4.1 CI 与 self-hosted runner
-
-`.github/workflows/ci.yml` 有三个 job：
-
-| job | runner | 触发 | 作用 |
+| job | runner | trigger | role |
 | --- | --- | --- | --- |
-| `test` | `ubuntu-latest` | 每次 push/PR | ruff + pytest + layout + secret scan（公开 CI，无需 GPU） |
-| `science` | `self-hosted, linux, science` | 仅 tag / 手动 | `accept-golden`（需 delivery bundle + 内存/GPU） |
-| `eval` | `self-hosted, linux, science` | 仅 tag / 手动 | Stage-3 消融 + ECE（B5） |
+| `test` | `ubuntu-latest` | every push/PR | ruff + pytest + layout + secret scan |
+| `science` | `self-hosted, linux, science` | tag / manual | `accept-golden` |
+| `eval` | `self-hosted, linux, science` | tag / manual | Stage-3 ablation + ECE |
 
-`science` / `eval` 只在 tag（`v*`）或 `workflow_dispatch` 时跑，**常规 push/PR 只跑 `test`**——这样没有 self-hosted runner 时 `test` 仍能保持绿色，重 job 不会无限排队。
-
-要启用 `science` / `eval`：在一台有 delivery bundle 的机器上注册 runner 并打标签 `self-hosted, linux, science`，再设仓库 secret `DELIVERY_BUNDLE_PATH`（指向 `rhobind_agent_delivery` 绝对路径）与可选 `NANOBOT_CONFIG_PATH`。发版与 `promote-evolved` 流程见 [ARCHITECTURE.md](ARCHITECTURE.md) §5 / §7。
+Register a science runner with labels `self-hosted, linux, science` and set repo secret `DELIVERY_BUNDLE_PATH`. Release / promote: [ARCHITECTURE.md](ARCHITECTURE.md) §5 / §7.
 
 ---
 
-## 5. 常见问题
+## 5. FAQ
 
-- **`predict_interaction` / doctor 报缺 `torch`（rhobind hollow）**：conda 环境名在，但未装 release requirements（常见于手搓 `conda create -n rhobind`）。`doctor` 会显示 `rhobind torch+transformers: MISSING` 且 `[RED] science_envs`。修复：`bash scripts/setup/setup_all.sh`（会 heal），勿只跑 delivery `setup_envs.sh`。
-- **`doctor` 报 AF3 deferred/broken**：常见。无 AFDB 时仍会尝试 `predict_structure` 一次（`use_af3_fallback=true`）；失败则 caveat，序列/功能轴继续。重跑 `bash scripts/setup/setup_all.sh`（AF3 harden 10 分钟预算）可改善探针。
-- **`onboard` 后 chat 仍报 no key**：确认已显式选择厂商；密钥在 `nanobot-bio/.env`（如 `OPENAI_API_KEY=` / `DEEPSEEK_API_KEY=`），`~/.nanobot/config.json` 里是 `${…_API_KEY}` 引用而非明文；检查 `NANOBOT_CONFIG` 路径。
-- **CI 跳过 own-head/LOO**：public CI 无 GPU/delivery bundle。本地跑 `bash scripts/ci/ci_gate.sh` 或 `rbp-agent gate`。
-- **CI 跳过 delivery 依赖测试**：公开 `test` job 无同级 `rhobind_agent_delivery`。`tests/conftest.py` 在 `delivery_root()` 不可用时 **skip**（非整批 fail）；标记 `@pytest.mark.requires_delivery` 的用例在收集阶段也会 skip。有 bundle 时设 `DELIVERY_ROOT` 或保持同级目录即可照常跑。
-- **docs/ 不在 GitHub 上**：整个 `docs/`（含 `proposal.md` / `proposal.zh.md`）本地保留、不推远程；缺省时权威文档相关测试会 skip。需要提案/清单时从协作方单独拷贝；架构与 slim 政策见根目录 [ARCHITECTURE.md](ARCHITECTURE.md)。
+- **`predict_interaction` / doctor missing `torch` (hollow rhobind):** env name exists but release requirements were never installed. Fix with `bash scripts/setup/setup_all.sh`, not delivery `setup_envs.sh` alone.
+- **AF3 deferred/broken:** Skill prefers AFDB `structure_fetch`; call `predict_structure` only on AFDB miss. Failure → caveat; do not invent structure sim=0.
+- **Chat still “no key” after onboard:** secrets in `nanobot-bio/.env`; `~/.nanobot/config.json` holds `${…_API_KEY}` refs only.
+- **CI skips own-head/LOO / delivery tests:** public CI has no GPU/bundle; locally set `DELIVERY_ROOT` or keep the sibling layout.
+- **`docs/` not on GitHub:** local-only product docs may be gitignored; architecture policy remains in root [ARCHITECTURE.md](ARCHITECTURE.md).

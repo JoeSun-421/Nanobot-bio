@@ -29,6 +29,7 @@ fusion_weights:
   tm_score: 0.3
   lddt: 0.3
   function_similarity: 0.4
+  literature_cooccurrence: 0.1
   saprot_cosine: 0.0
   fident: 0.2
 abstain_thresholds:

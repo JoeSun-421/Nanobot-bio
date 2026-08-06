@@ -15,12 +15,14 @@ EVENT_TYPES = frozenset(
     {
         "before_execute_tools",
         "after_tools",
+        "after_iteration",  # legacy alias → normalized in RBPTraceHook
         "tool_result",
         "query_end",
         "nanobot_run_failed",
         "stage",
         "dedupe_hit",
         "axis_skipped",
+        "stage1_bypassed",
     }
 )
 

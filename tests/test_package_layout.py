@@ -104,3 +104,34 @@ def test_real_path_imports():
     assert MessageTool
     assert callable(aggregate_probability)
     assert callable(run_self_evolution)
+
+
+def test_sot_skill_and_tools_resolve_under_nanobot():
+    from app.bootstrap import skill_md, tools_rbp
+
+    skill = skill_md()
+    tools = tools_rbp()
+    assert skill.is_file()
+    assert "nanobot/skills/rbp-agent/SKILL.md" in str(skill).replace("\\", "/")
+    assert "/plugin/" not in str(skill).replace("\\", "/")
+    assert tools.is_dir()
+    for name in ("__init__.py", "common.py", "register.py", "predict.py", "annotation.py"):
+        assert (tools / name).is_file(), name
+
+
+def test_agent_skill_path_uses_sot_not_plugin():
+    from app.agent import skill_path
+    from app.bootstrap import skill_md
+
+    p = skill_path()
+    assert p is not None and p.is_file()
+    assert p.resolve() == skill_md().resolve()
+    agent_src = (ROOT / "app" / "agent.py").read_text(encoding="utf-8")
+    assert "plugin/nanobot" not in agent_src.replace("\\", "/")
+    assert "skill_md" in agent_src
+    assert (ROOT / "app" / "bootstrap" / "sot.py").is_file()
+    assert (ROOT / "app" / "bootstrap" / "sync_overlay.py").is_file()
+    assert (ROOT / "app" / "sync_overlay.py").is_file()
+    for removed in ("sot.py", "rbp_bootstrap.py", "integrate.py"):
+        assert not (ROOT / "app" / removed).is_file(), removed
+

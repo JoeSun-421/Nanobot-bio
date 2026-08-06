@@ -121,31 +121,32 @@ def test_literature_unavailable_does_not_deduct_confidence_points():
     """Literature offline is caveat-only; confidence_from_evidence must ignore it."""
     from app.core.verdict_schema import confidence_from_evidence
 
-    base = dict(
+    provenance = {
+        "aggregation": {
+            "terms": [
+                {"donor": "A", "prob": 0.5},
+                {"donor": "B", "prob": 0.6},
+                {"donor": "C", "prob": 0.7},
+            ],
+            "n_transfer_priors": 3,
+            "n_donor_quality": 3,
+        },
+        "predictions": [
+            {"prob": 0.5},
+            {"prob": 0.6},
+            {"prob": 0.7},
+        ],
+    }
+    without = confidence_from_evidence(
         mode="multi_head",
         p_hat=0.61,
-        provenance={
-            "aggregation": {
-                "terms": [
-                    {"donor": "A", "prob": 0.5},
-                    {"donor": "B", "prob": 0.6},
-                    {"donor": "C", "prob": 0.7},
-                ],
-                "n_transfer_priors": 3,
-                "n_donor_quality": 3,
-            },
-            "predictions": [
-                {"prob": 0.5},
-                {"prob": 0.6},
-                {"prob": 0.7},
-            ],
-        },
-    )
-    without = confidence_from_evidence(
-        **base, evidence_flags={"structure_evidence_available": True}
+        provenance=provenance,
+        evidence_flags={"structure_evidence_available": True},
     )
     with_lit = confidence_from_evidence(
-        **base,
+        mode="multi_head",
+        p_hat=0.61,
+        provenance=provenance,
         evidence_flags={
             "structure_evidence_available": True,
             "literature_unavailable": True,

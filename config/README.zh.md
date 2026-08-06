@@ -6,6 +6,17 @@
 
 ## 功能
 
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
 - 产品默认超参（`schema_version`、轴开关、融合权重、弃权/标签阈值、integrate / predict / structure / llm 块）
 - 可选已 promote 的演化叠层，以及被 gitignore 的候选文件
 - 受 `tests/test_proposal_compliance.py` 对照提案矩阵约束
@@ -33,7 +44,7 @@
 
 ```bash
 # 演化产出候选后：
-nanobot-bio promote-evolved          # 有门禁；或 python -m rbp_eval.evolve.promote
+nanobot-bio promote-evolved # 有门禁；或 python -m rbp_eval.evolve.promote
 pytest tests/test_proposal_compliance.py
 ```
 

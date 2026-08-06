@@ -7,8 +7,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-PROPOSAL_MD = REPO_ROOT / "docs" / "proposal.md"
-PROPOSAL_ZH_MD = REPO_ROOT / "docs" / "proposal.zh.md"
+PROPOSAL_MD = REPO_ROOT / "docs" / "product" / "proposal.md"
+PROPOSAL_ZH_MD = REPO_ROOT / "docs" / "product" / "proposal.zh.md"
 
 DELIVERY_AGENT_MD = (
     "AGENT_BUILD_SPEC.zh.md",
@@ -22,17 +22,10 @@ DELIVERY_REGISTRY_NAME = "agent/tools/registry.json"
 
 
 def delivery_root() -> Path | None:
-    import os
+    """Resolve delivery package root (delegates to delivery env)."""
+    from app.backends.delivery.env import try_delivery_root
 
-    raw = (os.environ.get("DELIVERY_ROOT") or "").strip()
-    if raw:
-        p = Path(raw).expanduser()
-        if p.is_dir():
-            return p.resolve()
-    sibling = REPO_ROOT.parent / "rhobind_agent_delivery"
-    if sibling.is_dir():
-        return sibling.resolve()
-    return None
+    return try_delivery_root()
 
 
 def delivery_registry_path() -> Path | None:

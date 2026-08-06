@@ -1,47 +1,143 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup_af3_blackwell.sh — Blackwell / CC12 专用 AF3 隔离栈
+# setup_af3_blackwell.sh — isolated AF3 stack for Blackwell / CC12
 #
-# 做什么：
-#   在 delivery 仓外安装较新上游 AlphaFold3 + 支持 CC12 的 jax（cuda12）。
-#   RTX 5090 / compute capability 12 需要 AF3 ≥3.0.x + jax ≥0.10；
-#   delivery 钉死的 jax 0.4.34 无法在本机推理。
+# What it does:
+#   Installs a newer upstream AlphaFold3 + CC12-capable jax (cuda12) outside
+#   the delivery tree. RTX 5090 / compute capability 12 needs AF3 >=3.0.x +
+#   jax >=0.10; delivery's pinned jax 0.4.34 cannot run inference on this GPU.
 #
-# 何时跑：
-#   - 单独补装 / 重装 Blackwell 栈时：bash scripts/setup/setup_af3_blackwell.sh
-#   - 通常不必手跑：setup_all.sh 检测到 GPU CC 12.* 且栈缺失时会自动调用本脚本
-#   - 重跑默认幂等：若 af3_blackwell 已能 import alphafold3 且 jax/cuda 可用，
-#     则跳过耗时的 pip install -e / wheel 重建；CCD pickle 已存在则跳过 build_data
-#   - 强制重装：bash scripts/setup/setup_af3_blackwell.sh --force-reinstall
-#                （别名 --rebuild）
-#   - 仅 smoke：bash scripts/setup/setup_af3_blackwell.sh --smoke-only
-#                （跳过 clone/env/pip/build_data，只跑 [4/4]）
+# When to run:
+#   - Standalone install / reinstall of the Blackwell stack:
+#       bash scripts/setup/setup_af3_blackwell.sh
+#   - Usually not needed by hand: setup_all.sh auto-invokes this when GPU CC
+#     is 12.* and the stack is missing
+#   - Re-runs are idempotent by default: if af3_blackwell can already import
+#     alphafold3 and jax/cuda works, skip the slow pip install -e / wheel
+#     rebuild; skip build_data when the CCD pickle already exists
+#   - Force reinstall: bash scripts/setup/setup_af3_blackwell.sh --force-reinstall
+#                       (alias --rebuild)
+#   - Smoke only: bash scripts/setup/setup_af3_blackwell.sh --smoke-only
+#                 (skip clone/env/pip/build_data; run [4/4] only)
 #
-# 不做什么：
-#   - 不 onboard LLM / nanobot agent（那是 setup_all 其它步骤）
-#   - 不下载遗传搜索库 / 不跑官方 data pipeline（MSA 仍走 ColabFold）
-#   - 不创建、不修改经典 conda env `af3`（delivery 官方栈保持不动）
+# What it does NOT do:
+#   - Does not onboard LLM / nanobot agent (other setup_all steps)
+#   - Does not download genetic search DBs / run the official data pipeline
+#     (MSA still goes through ColabFold)
+#   - Does not create or modify the classic conda env `af3` (delivery's
+#     official stack stays untouched)
 #
-# 关键产出：
-#   - AF3_DIR  → $AF3_ROOT/alphafold3（默认 /root/autodl-tmp/af3_blackwell/alphafold3）
-#   - conda    → env 前缀 $ENV_PREFIX（默认 .../conda/envs/af3_blackwell）
-#   - smoke    → /tmp/af3_blackwell_smoke.json（须含 "ok": true）
-#   - status   → 本脚本只做 smoke；setup_all 成功时写
-#                ~/.cache/nanobot-bio/af3_status（可用 AF3_STATUS_FILE 覆盖）
+# Success outputs:
+#   - AF3_DIR  -> $AF3_ROOT/alphafold3 (portable path discovery, not AutoDL-bound)
+#   - conda    -> env prefix $ENV_PREFIX (conda info --base / ENV_PREFIX / common roots)
+#   - smoke    -> /tmp/af3_blackwell_smoke.json (must contain "ok": true)
+#   - status   -> this script only smokes; setup_all writes on success to
+#                ~/.cache/nanobot-bio/af3_status (override with AF3_STATUS_FILE)
 #
-# 跑完后请在 nanobot-bio/.env 指向本栈：
-#   AF3_DIR=/root/autodl-tmp/af3_blackwell/alphafold3
-#   AF3_PYTHON=/root/autodl-tmp/conda/envs/af3_blackwell/bin/python
-#   AF3_PARAMS=$DELIVERY_ROOT/af3_assets/alphafold_param   # 复用 delivery 权重
-#   AF3_CACHE=/root/autodl-tmp/af3_blackwell/alphafold_cache
+# Overrides: AF3_ROOT / AF3_BLACKWELL_ROOT, ENV_PREFIX / AF3_BLACKWELL_ENV, DELIVERY_ROOT
+# Afterward: ./scripts/nbio.sh start --heal can write discovered local paths into .env.
 # =============================================================================
 set -euo pipefail
 
-AF3_ROOT="${AF3_ROOT:-/root/autodl-tmp/af3_blackwell}"
-ENV_PREFIX="${ENV_PREFIX:-/root/autodl-tmp/conda/envs/af3_blackwell}"
-DELIVERY_ROOT="${DELIVERY_ROOT:-/root/autodl-tmp/bio_agent/rhobind_agent_delivery}"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_AGENT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_BIO_ROOT="$(cd "${BIO_ROOT:-$_AGENT_ROOT/..}" && pwd)"
+
+_discover_af3_root() {
+  local r parent
+  parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
+  for r in \
+    "${AF3_ROOT:-}" \
+    "${AF3_BLACKWELL_ROOT:-}" \
+    "$_BIO_ROOT/af3_blackwell" \
+    "${parent}/af3_blackwell" \
+    "${HOME}/af3_blackwell" \
+    "/opt/af3_blackwell"
+  do
+    [[ -n "$r" ]] || continue
+    if [[ -f "${r%/}/alphafold3/run_alphafold.py" ]]; then
+      printf '%s\n' "${r%/}"
+      return 0
+    fi
+  done
+  # New install default: sibling of BIO_ROOT (portable).
+  if [[ -n "${AF3_ROOT:-}" ]]; then
+    printf '%s\n' "${AF3_ROOT%/}"
+  elif [[ -n "${AF3_BLACKWELL_ROOT:-}" ]]; then
+    printf '%s\n' "${AF3_BLACKWELL_ROOT%/}"
+  else
+    printf '%s\n' "${parent:-$_BIO_ROOT}/af3_blackwell"
+  fi
+}
+
+_discover_env_prefix() {
+  local name="af3_blackwell"
+  local _base _py parent
+  parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
+  if [[ -n "${ENV_PREFIX:-}" ]]; then
+    printf '%s\n' "${ENV_PREFIX%/}"
+    return 0
+  fi
+  if [[ -n "${AF3_BLACKWELL_ENV:-}" ]]; then
+    printf '%s\n' "${AF3_BLACKWELL_ENV%/}"
+    return 0
+  fi
+  if command -v conda >/dev/null 2>&1; then
+    _base="$(conda info --base 2>/dev/null || true)"
+    if [[ -n "$_base" && -x "${_base%/}/envs/${name}/bin/python" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  fi
+  for _base in \
+    "${CONDA_PREFIX:-}" \
+    "${MAMBA_ROOT_PREFIX:-}" \
+    "${HOME}/miniconda3" \
+    "${HOME}/miniforge3" \
+    "${HOME}/mambaforge" \
+    "${HOME}/anaconda3" \
+    "${parent}/conda" \
+    "$_BIO_ROOT/conda"
+  do
+    [[ -n "$_base" ]] || continue
+    if [[ -x "${_base%/}/envs/${name}/bin/python" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  done
+  # Default create location under conda base (or home miniconda).
+  if command -v conda >/dev/null 2>&1; then
+    _base="$(conda info --base 2>/dev/null || true)"
+    if [[ -n "$_base" ]]; then
+      printf '%s\n' "${_base%/}/envs/${name}"
+      return 0
+    fi
+  fi
+  printf '%s\n' "${HOME}/miniconda3/envs/${name}"
+}
+
+AF3_ROOT="$(_discover_af3_root)"
+ENV_PREFIX="$(_discover_env_prefix)"
+DELIVERY_ROOT="${DELIVERY_ROOT:-$_BIO_ROOT/rhobind_agent_delivery}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-export PIP_INDEX_URL CONDA_PKGS_DIRS="${CONDA_PKGS_DIRS:-/root/autodl-tmp/conda/pkgs}"
+# pkgs cache: prefer sibling-of-BIO conda pkgs, else conda base/pkgs or XDG cache.
+if [[ -z "${CONDA_PKGS_DIRS:-}" ]]; then
+  _pkgs_parent="$(cd "$_BIO_ROOT/.." 2>/dev/null && pwd || true)"
+  if [[ -n "$_pkgs_parent" && -d "${_pkgs_parent}/conda/pkgs" ]]; then
+    CONDA_PKGS_DIRS="${_pkgs_parent}/conda/pkgs"
+  elif [[ -d "$_BIO_ROOT/conda/pkgs" ]]; then
+    CONDA_PKGS_DIRS="$_BIO_ROOT/conda/pkgs"
+  elif command -v conda >/dev/null 2>&1; then
+    CONDA_PKGS_DIRS="$(conda info --base 2>/dev/null)/pkgs"
+  else
+    CONDA_PKGS_DIRS="${XDG_CACHE_HOME:-$HOME/.cache}/conda/pkgs"
+  fi
+fi
+export PIP_INDEX_URL CONDA_PKGS_DIRS
+export AF3_BLACKWELL_ROOT="$AF3_ROOT"
+echo "[setup_af3_blackwell] AF3_ROOT=$AF3_ROOT"
+echo "[setup_af3_blackwell] ENV_PREFIX=$ENV_PREFIX"
+echo "[setup_af3_blackwell] DELIVERY_ROOT=$DELIVERY_ROOT"
 
 FORCE_REINSTALL=0
 SMOKE_ONLY=0
@@ -108,7 +204,7 @@ fi
 
 mkdir -p "$AF3_ROOT" "$(dirname "$ENV_PREFIX")" "$CONDA_PKGS_DIRS"
 
-# [1/4] 仓外 clone 上游 AF3（不碰 delivery/third_party）
+# [1/4] Clone upstream AF3 outside delivery (do not touch delivery/third_party)
 if [[ ! -f "$AF3_ROOT/alphafold3/run_alphafold.py" ]]; then
   echo "[1/4] clone google-deepmind/alphafold3 → $AF3_ROOT/alphafold3"
   git clone --depth 1 https://github.com/google-deepmind/alphafold3.git "$AF3_ROOT/alphafold3"
@@ -116,7 +212,7 @@ else
   echo "[1/4] AF3 tree present: $AF3_ROOT/alphafold3"
 fi
 
-# [2/4] 独立 env af3_blackwell（不覆盖经典 af3）
+# [2/4] Isolated env af3_blackwell (do not overwrite classic af3)
 if [[ ! -x "$ENV_PREFIX/bin/python" ]]; then
   echo "[2/4] conda create $ENV_PREFIX (python 3.12)"
   conda create -y -p "$ENV_PREFIX" python=3.12 pip cmake ninja
@@ -124,7 +220,7 @@ else
   echo "[2/4] env exists: $ENV_PREFIX"
 fi
 
-# [3/4] pip -e 安装（拉 jax cuda12）+ build_data（可幂等跳过）
+# [3/4] pip install -e (pull jax cuda12) + build_data (idempotent skip OK)
 if (( FORCE_REINSTALL )); then
   echo "[3/4] --force-reinstall: pip install -e alphafold3 (jax cuda12)"
   "$ENV_PREFIX/bin/python" -m pip install -U pip setuptools wheel
@@ -144,5 +240,5 @@ else
   "$ENV_PREFIX/bin/build_data" || true
 fi
 
-# [4/4] 短推理 smoke（复用 delivery 权重；MSA 仍走 ColabFold）
+# [4/4] Short inference smoke (reuse delivery weights; MSA still via ColabFold)
 run_smoke

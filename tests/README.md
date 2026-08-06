@@ -6,6 +6,17 @@ Pytest suite for layout, contracts, CLI/UX, delivery bridge, and offline eval lo
 
 ## Features
 
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
 - Proposal / Table compliance and slim-vendor package layout asserts
 - Capability-matrix honesty, soft-fail caveats, verdict / stage contracts
 - Chat UX, onboard, device, session date layout, memory/promotion phase checks
@@ -32,8 +43,8 @@ Pytest suite for layout, contracts, CLI/UX, delivery bridge, and offline eval lo
 source .venv/bin/activate
 pytest -q
 pytest tests/test_proposal_compliance.py tests/test_package_layout.py
-bash scripts/ci/ci_gate.sh          # ruff + pytest + layout (app gate)
-bash scripts/cert/certify.sh        # longer certify path including pytest
+bash scripts/ci/ci_gate.sh # ruff + pytest + layout (app gate)
+bash scripts/cert/certify.sh # longer certify path including pytest
 ```
 
 Useful env: `NANOBOT_BIO_ROOT`, optional `DELIVERY_ROOT`, `RHOBIND_DEVICE`.

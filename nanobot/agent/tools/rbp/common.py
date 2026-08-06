@@ -1,11 +1,23 @@
 # -*- coding: utf-8 -*-
-"""
-Shared helpers for RBP tools.
+"""Shared helpers for curated RBP agent tools (SoT: this file).
 
-Path (source of truth)::
-    nanobot/agent/tools/rbp/common.py
+This module does **not** compute scientific scores. It does not implement
+RhoBind, Foldseek, ESM, or literature retrieval. Responsibilities:
 
-Delivery science is NOT reimplemented — bridged via DeliveryToolClient.
+* Locate the ``nanobot-bio`` package root and ensure ``app`` is on ``sys.path``
+* Obtain a ``DeliveryToolClient`` for read-only calls into delivery scripts
+* Resolve compute device (``cuda`` / ``cpu``), protein sequences, structure paths
+* Build tool return envelopes (``ok`` / ``err``) and JSON ``dumps``
+* Cross-cutting caches (structure / literature) and catalogue FASTA helpers
+
+Invariant: probs, similarities, and sequences come from delivery or upstream
+tool results. This file is orchestration glue only.
+
+CLI examples:
+  nanobot-bio doctor
+  python -m app.sync_overlay
+  nanobot-bio nanobot-smoke
+  source scripts/nbio.sh
 """
 
 from __future__ import annotations
@@ -15,6 +27,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, Optional
 
 
@@ -481,8 +494,7 @@ def resolve_structure_file(structure_file: str) -> tuple[Optional[Path], Optiona
 
     Returns ``(resolved_path, error_reason)``. On success ``error_reason`` is None
     and ``resolved_path`` points to an existing file with a recognised structure
-    extension. This lets a collaborator supply a predicted/custom structure and
-    skip AFDB fetch — the path is transparently forwarded to struct_similarity.
+    extension under an allowlisted root (same jail as FASTA/doc tools).
     """
     s = (structure_file or "").strip()
     if not s:
@@ -491,15 +503,38 @@ def resolve_structure_file(structure_file: str) -> tuple[Optional[Path], Optiona
     if not p.is_absolute():
         # Reject relative paths to avoid surprising the workspace scope.
         return None, "structure_file must be an absolute path"
-    if not p.is_file():
-        return None, f"structure_file not found: {p}"
     if not p.name.lower().endswith(_STRUCTURE_EXTS):
         return None, (
             f"structure_file must be one of {', '.join(_STRUCTURE_EXTS)} "
             "(matching the filename suffix); "
             f"got {p.name}"
         )
-    return p, None
+    try:
+        from nanobot.agent.tools.rbp.path_guard import resolve_allowed_path
+
+        resolved = resolve_allowed_path(
+            p,
+            allowed_suffixes={
+                ".pdb",
+                ".cif",
+                ".mmcif",
+                ".mcif",
+                ".ent",
+                ".gz",  # *.pdb.gz matched via name.endswith above; suffix may be .gz
+            },
+        )
+    except ValueError as e:
+        return None, str(e)
+    except Exception as e:  # noqa: BLE001
+        return None, f"structure_file allowlist error: {type(e).__name__}: {e}"
+    # Double-check compound suffixes like .pdb.gz (suffix alone is .gz).
+    name_l = resolved.name.lower()
+    if not name_l.endswith(_STRUCTURE_EXTS):
+        return None, (
+            f"structure_file must be one of {', '.join(_STRUCTURE_EXTS)}; "
+            f"got {resolved.name}"
+        )
+    return resolved, None
 
 
 def catalogue_pdb_path(*, uniprot: str = "", alias: str = "") -> Optional[Path]:
@@ -642,7 +677,7 @@ def err(reason: str, latency_ms: float = 0.0) -> dict[str, Any]:
     return {"status": "error", "reason": str(reason), "latency_ms": round(float(latency_ms), 3)}
 
 
-def timed_call(fn):
+def timed_call(fn: Callable[[], Any]) -> tuple[Any, float, str | None]:
     t0 = time.perf_counter()
     try:
         v = fn()

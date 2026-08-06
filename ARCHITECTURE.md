@@ -1,13 +1,22 @@
 # Architecture
 
+<p><b>English</b> · <a href="ARCHITECTURE.zh.md">中文</a></p>
+
 Engineering map of `nanobot-bio`: layers, workspace stores, eval/promote,
-slim-vendor policy, and release checklist. Setup: [`INSTALL.md`](INSTALL.md).
-Agent gates: [`AGENTS.md`](AGENTS.md). History: [`CHANGELOG.md`](CHANGELOG.md).
-Per-package README pairs (`README.md` + `README.zh.md`): see the package map in
-[`README.md`](README.md) / [`README.zh.md`](README.zh.md) (e.g. [`app/`](app/README.md),
-[`nanobot/`](nanobot/README.md), [`rbp_eval/`](rbp_eval/README.md),
-[`scripts/`](scripts/README.md)).
-Local proposal / maturity detail stays under git-ignored `docs/`.
+slim-vendor policy, and release checklist. Setup: [`INSTALL.md`](INSTALL.md) /
+[`INSTALL.zh.md`](INSTALL.zh.md). Agent gates: [`AGENTS.md`](AGENTS.md).
+Collaborator overview: [`HANDOFF.md`](HANDOFF.md). History: [`CHANGELOG.md`](CHANGELOG.md).
+Package map: [`README.md`](README.md) / [`README.zh.md`](README.zh.md).
+Local proposal detail may stay under git-ignored `docs/`.
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+# DELIVERY_ROOT=$BIO_ROOT/rhobind_agent_delivery
+```
 
 ---
 
@@ -18,7 +27,7 @@ Local proposal / maturity detail stays under git-ignored `docs/`.
 | Agent CLI + core | `app/` | Argparse CLI (`rbp-agent` / `nanobot-bio`), verdict schema, runtime config, onboarding, delivery bridge. Never computes `p_hat` itself. |
 | Runtime + skill (SoT) | `nanobot/` | Slim in-repo Nanobot **plus** `rbp-agent` skill and RBP tools. SoT == runtime — `import nanobot` must resolve here. |
 | Offline eval + evolve | `rbp_eval/` | LOO, fusion, metrics, accept, self-evolution under real subpackages. |
-| Science bundle (read-only) | `../rhobind_agent_delivery/` | Delivery tools + data. Call via App bridge; do not edit. |
+| Science bundle (read-only) | `$BIO_ROOT/rhobind_agent_delivery/` | Delivery tools + data. Call via App bridge; do not edit. |
 
 `NANOBOT_SRC` defaults to in-repo `nanobot/`. There is **no** sibling-clone runtime;
 `rbp-agent layout` asserts PA surfaces (channels/webui/cli/…) are stripped.
@@ -43,7 +52,8 @@ physical path = import path (no top-level facade).
 ## 2. Workspace: sessions vs long-term memory
 
 **Canonical store is `artifacts/`** (`workspace/sessions` and `workspace/memory`
-are symlinks only). Chinese detail: [`docs/MEMORY_AND_SESSIONS.zh.md`](docs/MEMORY_AND_SESSIONS.zh.md).
+are symlinks only). Detail: this section below (local `docs/guides/MEMORY_*`
+files are gitignored and may be absent on a fresh clone).
 
 | Store | Path | Purpose |
 |-------|------|---------|
@@ -58,9 +68,12 @@ scientific prompt. Recent-history injection is allowed only for the exact,
 nonempty current session key. Automatic Dream, idle compaction, and
 token-triggered Consolidator runs are disabled for the RBP agent.
 
-For `accept-llm` / eval, use `ephemeral=True` or clear the matching session file —
-editing `MEMORY.md` alone will not reset chat reuse. An ephemeral turn may read
-the existing session as context, but does not append messages or write memory.
+For `accept-llm` / eval / `nanobot-bio chat|agent`, use `ephemeral=True` (product
+default on `RBPAgent.run` / `run_streamed`). Editing `MEMORY.md` alone will not
+reset chat reuse. In **scientific mode**, an ephemeral turn does **not** replay
+prior session tool/verdict transcripts into the LLM context (avoids skipping
+Stage 0–3); it also does not append messages or write memory. Non-scientific
+ephemeral turns may still read the current session for context.
 
 Implementation: `nanobot/session/manager.py`, `nanobot/agent/memory.py`.
 Do not remove the `session` / `memory` stacks casually.
@@ -101,7 +114,7 @@ against delivery `agent/tools/registry.json` and fails closed on stale bindings.
 `apply_delivery_env()` resolves paths, AF3 interpreter, USalign→Foldseek
 fallback, `OMP_NUM_THREADS`.
 
-Where delivery and `docs/proposal.md` conflict on transfer aggregation, code
+Where delivery and `docs/product/proposal.md` conflict on transfer aggregation, code
 follows delivery. Prediction rows keep the delivery shape
 (`alias`, `prob`, `head_index`, `cohort`); agent provenance is stored separately.
 

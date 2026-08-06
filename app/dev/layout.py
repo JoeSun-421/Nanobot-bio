@@ -6,6 +6,7 @@ import importlib
 import os
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[2]
 BIO_ROOT = ROOT.parent
@@ -50,9 +51,9 @@ FORBIDDEN_SURFACE = [
 ]
 
 
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     print(f"FAIL: {msg}", file=sys.stderr)
-    sys.exit(1)
+    raise SystemExit(1)
 
 
 def main() -> None:
@@ -122,6 +123,38 @@ def main() -> None:
     if (ROOT / "rbp_eval" / "fusion.py").exists():
         fail("rbp_eval/fusion.py removed — import rbp_eval.scoring.fuse_hits")
 
+    # Live SoT must resolve via app.bootstrap (never plugin/nanobot).
+    root_s = str(ROOT)
+    while root_s in sys.path:
+        sys.path.remove(root_s)
+    sys.path.insert(0, root_s)
+    try:
+        from app.bootstrap import skill_md, tools_rbp
+
+        sot_skill = skill_md()
+        sot_tools = tools_rbp()
+    except Exception as e:
+        fail(f"app.bootstrap SoT resolution failed: {e}")
+    else:
+        if not sot_skill.is_file():
+            fail(f"app.bootstrap.skill_md missing: {sot_skill}")
+        if "/plugin/" in str(sot_skill).replace("\\", "/"):
+            fail(f"skill SoT must not live under plugin/: {sot_skill}")
+        if not sot_tools.is_dir():
+            fail(f"app.bootstrap.tools_rbp missing: {sot_tools}")
+        for name in ("__init__.py", "common.py", "register.py", "predict.py", "annotation.py"):
+            if not (sot_tools / name).is_file():
+                fail(f"missing SoT tool: {sot_tools / name}")
+
+    agent_py = (ROOT / "app" / "agent.py").read_text(encoding="utf-8", errors="replace")
+    if "plugin" in agent_py and "plugin/nanobot" in agent_py.replace("\\", "/"):
+        fail("app/agent.py must not reference plugin/nanobot as live skill path")
+    if "skill_md" not in agent_py:
+        fail("app/agent.py must resolve skill via app.bootstrap.skill_md")
+    for removed in ("app/sot.py", "app/rbp_bootstrap.py", "app/integrate.py"):
+        if (ROOT / removed).is_file():
+            fail(f"removed shim must not exist: {removed}")
+
     for rel in (
         "rbp_eval/scoring/fuse_hits.py",
         "rbp_eval/evolve/proxy_cache.py",
@@ -138,11 +171,7 @@ def main() -> None:
         if not (runtime / "__init__.py").is_file() and not (runtime / "nanobot.py").is_file():
             fail(f"NANOBOT_SRC runtime missing at {runtime}")
 
-    # Prefer in-repo package for import check.
-    root_s = str(ROOT)
-    while root_s in sys.path:
-        sys.path.remove(root_s)
-    sys.path.insert(0, root_s)
+    # Prefer in-repo package for import check (root already on path from sot check).
     bio_s = str(BIO_ROOT)
     while bio_s in sys.path:
         sys.path.remove(bio_s)

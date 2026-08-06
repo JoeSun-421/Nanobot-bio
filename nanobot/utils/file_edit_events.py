@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -13,6 +14,21 @@ TRACKED_FILE_EDIT_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
 _MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
 _LIVE_EMIT_INTERVAL_S = 0.18
 _LIVE_EMIT_LINE_STEP = 24
+
+
+def _as_path(value: object) -> Path | None:
+    """Convert resolver output to ``Path``, rejecting unsupported types."""
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, str):
+        return Path(value)
+    if isinstance(value, os.PathLike):
+        fspath = os.fspath(value)
+        if isinstance(fspath, str):
+            return Path(fspath)
+        if isinstance(fspath, bytes):
+            return Path(fspath.decode())
+    return None
 
 
 @dataclass(slots=True)
@@ -62,10 +78,7 @@ def resolve_file_edit_path(
     if callable(resolver):
         try:
             resolved = resolver(raw_path)
-            if isinstance(resolved, Path):
-                return resolved
-            if resolved:
-                return Path(resolved)
+            return _as_path(resolved)
         except Exception:
             return None
     if workspace is None:
@@ -245,10 +258,7 @@ def _resolve_raw_file_edit_path(
     if callable(resolver):
         try:
             resolved = resolver(raw_path)
-            if isinstance(resolved, Path):
-                return resolved
-            if resolved:
-                return Path(resolved)
+            return _as_path(resolved)
         except Exception:
             return None
     if workspace is None:

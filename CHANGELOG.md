@@ -4,6 +4,19 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 
 ## [Unreleased]
 
+### Added — portable launcher & path discovery
+
+- **`./scripts/nbio.sh start` / `up`:** one-click adaptive launcher — host path discovery, GPU classic vs Blackwell AF3 selection, heal `.env` (backup), then chat. `--dry-run` prints candidates only.
+- **Portable path discovery:** `AF3_BLACKWELL_ROOT` / conda / delivery candidates are host-relative; AutoDL absolute paths are optional last-resort candidates, not the sole source of truth. Canonical entry is `scripts/nbio.sh`; Ampere/Blackwell/`activate_env.sh` remain thin compat wrappers.
+
+### Changed — AF3 skill policy (AFDB → miss → AF3)
+
+- **Structure axis:** AFDB `structure_fetch` first; AF3 `predict_structure` only on AFDB miss (`use_af3_fallback` default on). Sequence-only / no-accession QUERY must call `predict_structure` once with `sequence=`; do not invent UniProt or borrow a homolog accession to skip AF3. Soft-fail → `structure_axis_unavailable` caveat (never sim `0`).
+
+### Changed — full tool surface default
+
+- **`RBP_RAW_TOOLS` product default `all`:** curated P0–P2 plus every delivery-ready `SCRIPT_MAP` tool. Narrow MVP opt-out: `RBP_RAW_TOOLS=whitelist` (or `include_raw_delivery="whitelist"`). Skill playbooks treat stages as scientific gates, not a fixed ~12-tool / ≤15-call pipeline; score authority unchanged (`p_hat` from predict/vote only; Checkpoint 1 selects donors without inventing scores; fail-closed).
+
 ### Changed — maturity packaging & honesty
 
 - **Capability matrix SoT:** `app/core/capability_matrix.py` drives doctor/layout honesty (AF3 real-smoke state, RNA peak-homology weights `0` without `PEAKS_DB`, `feature_attribution_source=unavailable`).
@@ -12,13 +25,14 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 - **Evolve loop:** real `rbp_eval.evolve.run_eval` + modality ablation; smoke script `scripts/cert/smoke_evolve_loop.sh`.
 - **Chat UX:** tool-wait spinner shows active tool count / elapsed time.
 - **Docs:** root docs slimmed — [`INSTALL.md`](INSTALL.md) (setup), [`ARCHITECTURE.md`](ARCHITECTURE.md) (layers / memory / eval-promote / slim vendor / release), [`AGENTS.md`](AGENTS.md) (gates). Removed standalone `RELEASE.md`, `VENDOR.md`, `SELF_EVOLUTION_ASSESSMENT.md` (content folded in).
+- **Docs (Feishu):** consolidated group progress + Nanobot-based architecture (+ delivery bridge) into a single Chinese report [`docs/reports/FEISHU_SUMMARY_REPORT.zh.md`](docs/reports/FEISHU_SUMMARY_REPORT.zh.md); removed superseded `GROUP_PROGRESS_REPORT.*`, `NANOBOT_BASED_ARCHITECTURE.*`, and their `.feishu.html`/`.feishu.txt` paste variants.
 
 ### Changed — delivery-aligned transfer scoring
 
 - **Deterministic Stage-1 fusion:** `commit_proxy_candidates` may select/explain candidates, but authoritative `s_i` and modality breakdowns are copied from `fuse_similarity_views`. Stage contract: fuse → commit → abstain → predict.
 - **Default aggregation `weighted`:** transfer `p_hat = Σ(s_i·πtr_i·q_i·p_i) / Σ(s_i·πtr_i·q_i)` is computed by delivery `similarity_weighted_vote`. The proposal-only donor-confidence factor is not implemented because delivery prediction rows contain only `alias, prob, head_index, cohort`.
 - **AF3 fallback default on:** `axes.use_af3=true`, `structure_policy.use_af3_fallback=true` (probe failure → caveat, ≠ sim 0).
-- **Conflict recorded:** `docs/proposal.md` remains untouched; agent runtime and documentation follow delivery where the aggregation definitions differ.
+- **Conflict recorded:** `docs/product/proposal.md` remains untouched; agent runtime and documentation follow delivery where the aggregation definitions differ.
 
 ## [0.5.1] — 2026-07-24
 
@@ -86,7 +100,7 @@ Changes to the RBP Agent application (`nanobot-bio`). Format: [Keep a Changelog]
 
 - Final delivery alignment: `include_raw_delivery=all`; `check_near_known`; dual-axis `hits_emb`/`hits_seq`; AF3 `regions`; `function_category` in annotation; abstain-before-predict guards.
 - App-side `mmseqs_wrap.sh` for `rna_blastn` / `protein_seq_similarity` (injects `--threads` without editing delivery).
-- Eval helpers: `rbp_eval/{accept_llm,gap_closure,heavy_loo,rna_fm_gate}.py`; worklog under `docs/worklog/`.
+- Eval helpers: `rbp_eval/{accept_llm,gap_closure,heavy_loo,rna_fm_gate}.py`; worklog under `docs/guides/worklog/`.
 
 ### Changed
 

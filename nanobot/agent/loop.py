@@ -1,4 +1,10 @@
-"""Agent loop: the core processing engine."""
+"""Agent loop: the core processing engine.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  nanobot-bio agent --message "Does PTBP1 bind this RNA?"
+"""
 
 from __future__ import annotations
 
@@ -162,6 +168,11 @@ class AgentLoop:
     @property
     def tool_names(self) -> list[str]:
         return self.tools.tool_names
+
+    @property
+    def workspace_sandbox(self) -> Any:
+        """Sandbox enforcement status exposed to MyTool / RuntimeState."""
+        return self.workspace_scopes.sandbox_status
 
     def llm_runtime(self) -> LLMRuntime:
         """Return the current provider/model pair owned by this loop."""
@@ -903,7 +914,8 @@ class AgentLoop:
                 except asyncio.CancelledError:
                     # Preserve real task cancellation so shutdown can complete cleanly.
                     # Only ignore non-task CancelledError signals that may leak from integrations.
-                    if not self._running or asyncio.current_task().cancelling():
+                    task = asyncio.current_task()
+                    if not self._running or task is None or task.cancelling():
                         raise
                     continue
                 except Exception as e:
@@ -991,7 +1003,8 @@ class AgentLoop:
                 pending = asyncio.Queue(maxsize=20)
                 self._pending_queues[session_key] = pending
                 try:
-                    on_stream = on_stream_end = None
+                    on_stream: Callable[[str], Awaitable[None]] | None = None
+                    on_stream_end: Callable[..., Awaitable[None]] | None = None
                     if msg.metadata.get("_wants_stream"):
                         # Split one answer into distinct stream segments.
                         stream_base_id = f"{msg.session_key}:{time.time_ns()}"
@@ -1000,7 +1013,7 @@ class AgentLoop:
                         def _current_stream_id() -> str:
                             return f"{stream_base_id}:{stream_segment}"
 
-                        async def on_stream(delta: str) -> None:
+                        async def _on_stream(delta: str) -> None:
                             meta = dict(msg.metadata or {})
                             meta["_stream_delta"] = True
                             meta["_stream_id"] = _current_stream_id()
@@ -1010,7 +1023,7 @@ class AgentLoop:
                                 metadata=meta,
                             ))
 
-                        async def on_stream_end(*, resuming: bool = False) -> None:
+                        async def _on_stream_end(*, resuming: bool = False) -> None:
                             nonlocal stream_segment
                             meta = dict(msg.metadata or {})
                             meta["_stream_end"] = True
@@ -1022,6 +1035,9 @@ class AgentLoop:
                                 metadata=meta,
                             ))
                             stream_segment += 1
+
+                        on_stream = _on_stream
+                        on_stream_end = _on_stream_end
 
                     response = await self._process_message(
                         msg, on_stream=on_stream, on_stream_end=on_stream_end,
@@ -1390,7 +1406,7 @@ class AgentLoop:
             metadata=meta,
         )
 
-    async def _state_restore(self, ctx: TurnContext) -> TurnState:
+    async def _state_restore(self, ctx: TurnContext) -> str:
         """Restore checkpoint / pending user turn; extract documents."""
         msg = ctx.msg
 
@@ -1404,15 +1420,14 @@ class AgentLoop:
 
         # Session is already fetched by the caller (_process_message) but
         # ensure it exists in case this handler is invoked independently.
-        if ctx.session is None:
-            ctx.session = self.sessions.get_or_create(ctx.session_key)
+        session = self._require_session(ctx)
         await self._runtime_events().session_turn_started(msg, ctx.session_key)
-        self.workspace_scopes.persist_message_scope(ctx.session, msg)
+        self.workspace_scopes.persist_message_scope(session, msg)
 
-        if self._restore_runtime_checkpoint(ctx.session):
-            self.sessions.save(ctx.session)
-        if self._restore_pending_user_turn(ctx.session):
-            self.sessions.save(ctx.session)
+        if self._restore_runtime_checkpoint(session):
+            self.sessions.save(session)
+        if self._restore_pending_user_turn(session):
+            self.sessions.save(session)
 
         return "ok"
 
@@ -1426,18 +1441,28 @@ class AgentLoop:
             return True
         return self.channels_config.extract_document_text
 
+    def _require_session(self, ctx: TurnContext) -> Session:
+        """Return a concrete session (create if missing) and bind it on ``ctx``."""
+        session = ctx.session
+        if session is None:
+            session = self.sessions.get_or_create(ctx.session_key)
+            ctx.session = session
+        return session
+
     async def _state_compact(self, ctx: TurnContext) -> str:
         if not self._automatic_memory_consolidation:
             ctx.pending_summary = None
             return "ok"
-        ctx.session, pending = self.auto_compact.prepare_session(ctx.session, ctx.session_key)
+        session = self._require_session(ctx)
+        ctx.session, pending = self.auto_compact.prepare_session(session, ctx.session_key)
         ctx.pending_summary = pending
         return "ok"
 
     async def _state_command(self, ctx: TurnContext) -> str:
+        session = self._require_session(ctx)
         raw = ctx.msg.content.strip()
         cmd_ctx = CommandContext(
-            msg=ctx.msg, session=ctx.session, key=ctx.session_key, raw=raw, loop=self
+            msg=ctx.msg, session=session, key=ctx.session_key, raw=raw, loop=self
         )
         result = await self.commands.dispatch(cmd_ctx)
         if result is not None:
@@ -1449,20 +1474,21 @@ class AgentLoop:
             # intentionally clears the session.
             if raw.lower() != "/new":
                 ctx.user_persisted_early = self._persist_user_message_early(
-                    ctx.msg, ctx.session, _command=True
+                    ctx.msg, session, _command=True
                 )
-                ctx.session.add_message(
+                session.add_message(
                     "assistant", result.content, _command=True
                 )
-                self.sessions.save(ctx.session)
-                self._clear_pending_user_turn(ctx.session)
+                self.sessions.save(session)
+                self._clear_pending_user_turn(session)
             return "shortcut"
         return "dispatch"
 
     async def _state_build(self, ctx: TurnContext) -> str:
+        session = self._require_session(ctx)
         if not ctx.ephemeral and self._automatic_memory_consolidation:
             await self.consolidator.maybe_consolidate_by_tokens(
-                ctx.session,
+                session,
                 replay_max_messages=self._max_messages,
             )
         self._set_tool_context(
@@ -1482,7 +1508,13 @@ class AgentLoop:
             "include_timestamps": True,
             "extend_to_user": False,
         }
-        ctx.history = ctx.session.get_history(**_hist_kwargs)
+        # Scientific ephemeral: do not feed prior tool/verdict transcripts to the
+        # LLM. Otherwise the model can skip Stage 0–3 and copy a stored p_hat.
+        # (ephemeral already skips persist; reading history alone still enables reuse.)
+        if ctx.ephemeral and self._scientific_mode:
+            ctx.history = []
+        else:
+            ctx.history = session.get_history(**_hist_kwargs)
         self._runtime_events().record_turn_runtime(
             ctx.session_key,
             self.llm_runtime(),
@@ -1490,14 +1522,14 @@ class AgentLoop:
 
         ctx.initial_messages = self._build_initial_messages(
             ctx.msg,
-            ctx.session,
+            session,
             ctx.history,
             ctx.pending_summary,
             include_memory_recent_history=not ctx.ephemeral,
         )
         if not ctx.ephemeral:
             ctx.user_persisted_early = self._persist_user_message_early(
-                ctx.msg, ctx.session
+                ctx.msg, session
             )
 
         if ctx.on_progress is None:
@@ -1564,37 +1596,40 @@ class AgentLoop:
             # context, but it must not append messages, archive history, advance
             # consolidation cursors, or write session metadata.
             return "ok"
+        session = self._require_session(ctx)
         self._save_turn(
-            ctx.session, ctx.all_messages, ctx.save_skip,
+            session, ctx.all_messages, ctx.save_skip,
             turn_latency_ms=ctx.turn_latency_ms,
         )
         self._runtime_events().record_turn_latency(
             ctx.session_key,
             ctx.turn_latency_ms,
         )
-        if not ctx.ephemeral:
-            ctx.session.enforce_file_cap(
-                on_archive=partial(self.context.memory.raw_archive, session_key=ctx.session_key)
-            )
-            if self._automatic_memory_consolidation:
-                self._schedule_background(
-                    self.consolidator.maybe_consolidate_by_tokens(
-                        ctx.session,
-                        replay_max_messages=self._max_messages,
-                    )
+        session.enforce_file_cap(
+            on_archive=partial(self.context.memory.raw_archive, session_key=ctx.session_key)
+        )
+        if self._automatic_memory_consolidation:
+            self._schedule_background(
+                self.consolidator.maybe_consolidate_by_tokens(
+                    session,
+                    replay_max_messages=self._max_messages,
                 )
-        self._clear_pending_user_turn(ctx.session)
-        self._clear_runtime_checkpoint(ctx.session)
-        self.sessions.save(ctx.session)
+            )
+        self._clear_pending_user_turn(session)
+        self._clear_runtime_checkpoint(session)
+        self.sessions.save(session)
         return "ok"
 
     async def _state_respond(self, ctx: TurnContext) -> str:
         if ctx.suppress_response:
             ctx.outbound = None
             return "ok"
+        final_content = ctx.final_content
+        if final_content is None:
+            final_content = EMPTY_FINAL_RESPONSE_MESSAGE
         ctx.outbound = self._assemble_outbound(
             ctx.msg,
-            ctx.final_content,
+            final_content,
             ctx.all_messages,
             ctx.stop_reason,
             ctx.had_injections,

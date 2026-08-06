@@ -183,6 +183,157 @@ def retune_weights(
     }
 
 
+def retune_fusion_on_dval_ce(
+    scored_labels: list[dict[str, Any]],
+    *,
+    base_weights: Optional[dict[str, float]] = None,
+    held_to_hit_lists: Optional[dict[str, list[list[dict[str, Any]]]]] = None,
+    grid: Optional[list[float]] = None,
+    scale_grid: Optional[list[float]] = None,
+    top_k: int = 5,
+) -> dict[str, Any]:
+    """Proposal §7.3: CE on D_val — primary fusion weights + logit_scale.
+
+    When ``held_to_hit_lists`` is available, coordinate-descent over fusion
+    weights minimizes CE of a donor-policy proxy vs held-level mean(y*).
+    Always fits ``logit_scale`` on instance-level (p_hat, y). LOO-AUPRC
+    ``retune_weights`` remains an auxiliary report metric.
+    """
+    pairs = [
+        (float(x["p_hat"]), int(x["y"]))
+        for x in scored_labels
+        if x.get("p_hat") is not None and x.get("y") is not None
+    ]
+    weights = {**DEFAULT_WEIGHTS, **(base_weights or {})}
+    if len(pairs) < 5:
+        return {
+            "status": "skipped",
+            "reason": "need ≥5 labeled (p_hat, y) pairs",
+            "n": len(pairs),
+            "weights_passthrough": weights,
+            "tuned_weights": weights,
+            "objective": "calibrated_cross_entropy_on_dval",
+        }
+
+    def _ce_scaled(raw_pairs: list[tuple[float, int]], scale: float) -> float:
+        eps = 1e-6
+        loss = 0.0
+        for p, y in raw_pairs:
+            z = max(-20.0, min(20.0, scale * (p - 0.5)))
+            pred = 1.0 / (1.0 + math.exp(-z))
+            pred = min(1.0 - eps, max(eps, pred))
+            loss += -(y * math.log(pred) + (1 - y) * math.log(1.0 - pred))
+        return loss / len(raw_pairs)
+
+    scale_grid = scale_grid or [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+    best_s = 8.0
+    best_ce_inst = _ce_scaled(pairs, best_s)
+    for s in scale_grid:
+        ce = _ce_scaled(pairs, s)
+        if ce < best_ce_inst - 1e-9:
+            best_ce_inst = ce
+            best_s = s
+
+    # Per-held mean y* for weight CE (when held_rbp present)
+    held_mean_y: dict[str, float] = {}
+    held_counts: dict[str, int] = {}
+    for x in scored_labels:
+        held = x.get("held_rbp")
+        if held is None or x.get("y") is None:
+            continue
+        h = str(held)
+        held_mean_y[h] = held_mean_y.get(h, 0.0) + float(int(x["y"]))
+        held_counts[h] = held_counts.get(h, 0) + 1
+    for h, n in held_counts.items():
+        held_mean_y[h] = held_mean_y[h] / n
+
+    tuned_w = dict(weights)
+    weight_ce = None
+    weight_history: list[dict[str, Any]] = []
+    hmap = held_to_hit_lists or {}
+    if hmap and held_mean_y:
+        _, matrix = _load_loo_matrix()
+        w_grid = grid or [0.0, 0.3, 0.6, 1.0, 1.5]
+        tune_keys = [
+            "esmc_cosine",
+            "domain_jaccard",
+            "domain_overlap",
+            "seq_identity",
+            "tm_score",
+            "function_similarity",
+        ]
+
+        def _held_proxy(w: dict[str, float]) -> list[tuple[float, int]]:
+            """Map fused donor policy → soft p vs held mean_y (rounded for CE)."""
+            out: list[tuple[float, int]] = []
+            for held, lists in hmap.items():
+                if held not in held_mean_y:
+                    continue
+                s = _policy_score(held, lists, matrix, w, top_k)
+                if s is None:
+                    continue
+                p = max(0.0, min(1.0, float(s)))
+                # replicate by count so CE reflects label mass
+                n = held_counts.get(held, 1)
+                y_soft = held_mean_y[held]
+                y_bin = 1 if y_soft >= 0.5 else 0
+                for _ in range(max(1, n)):
+                    out.append((p, y_bin))
+            return out
+
+        def _ce_w(w: dict[str, float], scale: float) -> float:
+            prox = _held_proxy(w)
+            if len(prox) < 3:
+                return 1e9
+            return _ce_scaled(prox, scale)
+
+        base_w_ce = _ce_w(tuned_w, best_s)
+        weight_ce = base_w_ce
+        weight_history.append(
+            {"step": "init", "ce": round(base_w_ce, 6), "weights": dict(tuned_w)}
+        )
+        for key in tune_keys:
+            if key not in tuned_w:
+                continue
+            local_best_val = tuned_w.get(key, 1.0)
+            local_best_ce = weight_ce
+            for g in w_grid:
+                trial = dict(tuned_w)
+                trial[key] = g
+                ce = _ce_w(trial, best_s)
+                if ce < local_best_ce - 1e-9:
+                    local_best_ce = ce
+                    local_best_val = g
+            if abs(float(local_best_val) - float(tuned_w.get(key, local_best_val))) > 1e-12:
+                tuned_w[key] = local_best_val
+                weight_ce = local_best_ce
+                weight_history.append(
+                    {
+                        "step": f"tune:{key}",
+                        "ce": round(weight_ce, 6),
+                        "weights": {key: local_best_val},
+                    }
+                )
+
+    return {
+        "status": "ok",
+        "objective": "calibrated_cross_entropy_on_dval",
+        "n": len(pairs),
+        "ce": round(best_ce_inst, 6),
+        "ce_instance": round(best_ce_inst, 6),
+        "ce_fusion_proxy": None if weight_ce is None else round(float(weight_ce), 6),
+        "logit_scale": best_s,
+        "base_weights": weights,
+        "tuned_weights": tuned_w,
+        "weights_passthrough": tuned_w,
+        "weight_history": weight_history,
+        "note": (
+            "Primary promote weights from D_val CE (fusion + logit_scale); "
+            "LOO-AUPRC retune is auxiliary."
+        ),
+    }
+
+
 def retune_label_thresholds(
     scored_labels: list[dict[str, Any]],
     *,

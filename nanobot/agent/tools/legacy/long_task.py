@@ -6,11 +6,13 @@ from nanobot.agent.tools.core.base import Tool
 
 
 class LongTaskTool(Tool):
-    name = "long_task"
-
     @classmethod
     def enabled(cls, ctx: Any) -> bool:
         return False
+
+    @property
+    def name(self) -> str:
+        return "long_task"
 
     @property
     def description(self) -> str:
@@ -25,4 +27,6 @@ class LongTaskTool(Tool):
 
 
 class CompleteGoalTool(LongTaskTool):
-    name = "complete_goal"
+    @property
+    def name(self) -> str:
+        return "complete_goal"

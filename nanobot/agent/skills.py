@@ -1,4 +1,10 @@
-"""Skills loader for agent capabilities."""
+"""Skills loader for agent capabilities.
+
+CLI examples:
+  nanobot-bio agent --example pos
+  nanobot-bio chat
+  nanobot-bio doctor
+"""
 
 import json
 import os

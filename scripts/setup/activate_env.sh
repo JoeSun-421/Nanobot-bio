@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compatibility wrapper — prefer: source scripts/nbio
+# Compatibility wrapper — prefer: source scripts/nbio.sh
 # Usage (must be sourced):
 #   source scripts/setup/activate_env.sh
 #   ACTIVATE_HEAVY=1 source scripts/setup/activate_env.sh

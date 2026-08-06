@@ -73,6 +73,8 @@ def _make_provider_core(
     elif backend == "azure_openai":
         from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
 
+        if not p or not p.api_base:
+            raise ValueError("Azure OpenAI requires api_base in config.")
         provider = AzureOpenAIProvider(
             api_key=p.api_key or "",
             api_base=p.api_base,

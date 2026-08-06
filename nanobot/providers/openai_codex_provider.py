@@ -53,7 +53,7 @@ class OpenAICodexProvider(LLMProvider):
         system_prompt, input_items = convert_messages(messages)
 
         token = await asyncio.to_thread(get_codex_token)
-        headers = _build_headers(token.account_id, token.access)
+        headers = _build_headers(token.account_id or "", token.access)
 
         body: dict[str, Any] = {
             "model": _strip_model_prefix(model),

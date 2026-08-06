@@ -1,4 +1,9 @@
-"""Track file-read state for read-before-edit warnings and read deduplication."""
+"""Track file-read state for read-before-edit warnings and read deduplication.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
 
 from __future__ import annotations
 

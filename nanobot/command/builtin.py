@@ -355,13 +355,7 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             elapsed = time.monotonic() - t0
             content = f"Dream failed after {elapsed:.1f}s: {e}"
         finally:
-            from nanobot.webui.token_usage import record_response_token_usage
-
-            record_response_token_usage(
-                resp,
-                source="dream",
-                timezone_name=getattr(loop.context, "timezone", None),
-            )
+            # WebUI was stripped in the slim vendor; Dream token accounting is a no-op.
             if store.git.is_initialized():
                 commit_msg = build_dream_commit_message("dream: manual run", resp)
                 sha = store.git.auto_commit(commit_msg)
@@ -666,14 +660,12 @@ async def cmd_goal(ctx: CommandContext) -> OutboundMessage | None:
 
 async def cmd_pairing(ctx: CommandContext) -> OutboundMessage:
     """List, approve, deny or revoke pairing requests."""
-    from nanobot.pairing import PAIRING_COMMAND_META_KEY, handle_pairing_command
-
-    reply = handle_pairing_command(ctx.msg.channel, ctx.args)
+    # Pairing channel was stripped in the slim vendor (ARCHITECTURE §6).
     return OutboundMessage(
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
-        content=reply,
-        metadata={PAIRING_COMMAND_META_KEY: True},
+        content="Pairing is disabled in the slim nanobot vendor.",
+        metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
     )
 
 

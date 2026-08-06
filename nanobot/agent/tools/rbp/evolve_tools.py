@@ -1,5 +1,24 @@
 # -*- coding: utf-8 -*-
-"""Self-evolution runtime tools: proxy cache lookup + multi-view fusion."""
+"""Stage-1 integrate helpers: promoted proxy cache + multi-view fusion.
+
+Tools:
+
+* ``lookup_proxy_cache`` — after ``resolve_rbp`` when ``in_panel=false``, look up
+  offline-promoted proxy donors; on hit, bypass Stage-1 multi-view retrieve
+* ``fuse_similarity_views`` — fuse seq/struct/domain/(soft)function hit lists
+  with evolved or default ``fusion_weights`` into ranked donors
+
+Delivery / offline code owns the numeric scores. This module only orchestrates
+cache lookup and fusion; the LLM must not invent ``s_i`` or ``p_hat``. On the
+unseen/transfer path: retrieve → fuse → ``commit_proxy_candidates`` →
+``confidence_abstain`` → ``predict_interaction``.
+
+CLI examples:
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio evolve --medoids
+  nanobot-bio run-eval --medoids
+  nanobot-bio promote-evolved
+"""
 
 from __future__ import annotations
 
@@ -33,7 +52,7 @@ from nanobot.agent.tools.rbp.common import dumps, err, ok, timed_call
     }
 )
 class LookupProxyCacheTool(Tool):
-    """Bypass Stage 1 when (p* → proxies) has been promoted."""
+    """Stage-1 bypass — return promoted proxy donors from the offline cache."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
@@ -82,6 +101,7 @@ class LookupProxyCacheTool(Tool):
                         "alias": alias,
                         "uniprot": uniprot,
                         "proxies": [],
+                        "stage1_bypassed": False,
                         "note": "no promoted cache entry — run Stage 1 multi-view retrieval",
                     }
                 )
@@ -92,7 +112,11 @@ class LookupProxyCacheTool(Tool):
                     "uniprot": uniprot,
                     "proxies": proxies,
                     "n": len(proxies),
-                    "note": "cache hit — skip Stage 1; predict with these proxy aliases",
+                    "stage1_bypassed": True,
+                    "note": (
+                        "cache hit — Stage 1 multi-view retrieve is hard-blocked; "
+                        "fuse/commit with these proxies"
+                    ),
                 }
             )
 
@@ -102,6 +126,14 @@ class LookupProxyCacheTool(Tool):
             return dumps(err(error, ms))
         if isinstance(out, dict):
             out["latency_ms"] = round(float(ms or 0.0), 3)
+            value = out.get("value") if out.get("status") == "ok" else out
+            if isinstance(value, dict) and value.get("hit"):
+                try:
+                    from nanobot.agent.tools.rbp.turn_guards import mark_stage1_bypassed
+
+                    mark_stage1_bypassed(list(value.get("proxies") or []))
+                except Exception:
+                    pass
         return dumps(out)
 
 
@@ -147,12 +179,22 @@ class LookupProxyCacheTool(Tool):
                 "type": "number",
                 "description": "Drop donors with fused score below this (default from config).",
             },
+            "fusion_weights": {
+                "type": "object",
+                "description": (
+                    "Optional per-turn modality weight overrides (floats). "
+                    "Merged over runtime defaults; each value clamped to "
+                    "[0, 2.0]. Use to raise/lower seq/struct/function axes "
+                    "from evidence (never invent per-donor s_i or p_hat)."
+                ),
+                "additionalProperties": {"type": "number"},
+            },
         },
         "required": [],
     }
 )
 class FuseSimilarityViewsTool(Tool):
-    """Fuse multi-view hits with evolved (or default) fusion_weights."""
+    """Stage-1 fuse — rank donors from multi-view hits; no invented s_i."""
 
     _plugin_discoverable = True
     _scopes = {"core", "subagent"}
@@ -164,15 +206,15 @@ class FuseSimilarityViewsTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Fuse multi-view RbpHit lists into ranked donors using runtime "
-            "fusion_weights (delivery-style: emb/seq + Foldseek structure + "
-            "domain Jaccard). Runtime blocks fuse until structure + domain "
-            "retrieves have been attempted (or honest unavailable / domain_empty "
-            "flags are set). Each donor includes an authoritative deterministic "
-            "similarity_score and breakdown for Checkpoint 1. "
-            "After fuse: select donors with commit_proxy_candidates (numeric scores "
-            "cannot be changed), then confidence_abstain, then predict_interaction "
-            "(proposal §4: fuse → commit → abstain → predict)."
+            "Fuse multi-view RbpHit lists into ranked donors. Pass optional "
+            "fusion_weights floats to reweight axes this turn (clamped "
+            "[0,2]); YAML defaults are the fallback. Auto-injects Function "
+            "axis hits (literature_cooccurrence from PMC/UniProt peers). "
+            "Tool scores only — never invent s_i or p_hat. Runtime blocks "
+            "fuse until structure + domain retrieves have been attempted "
+            "(or honest unavailable / domain_empty). Then "
+            "commit_proxy_candidates → confidence_abstain → predict "
+            "(proposal §4)."
         )
 
     @property
@@ -202,10 +244,33 @@ class FuseSimilarityViewsTool(Tool):
                 tau_drop_facade as cfg_tau,
             )
             from nanobot.agent.tools.rbp.turn_guards import (
+                add_evidence_flag,
+                cache_proxies,
                 canonical_request,
                 cohort_head_aliases,
+                corroborate_literature_hits_for_aliases,
+                register_retrieve_donors,
+                set_turn_fusion_weights,
+                stage1_bypassed,
             )
-            from rbp_eval.scoring.fuse_hits import fuse_rbp_hits
+            from rbp_eval.scoring.fuse_hits import (
+                apply_fusion_weight_override,
+                fuse_rbp_hits,
+            )
+
+            # Remap common LLM aliases (seq_hits → hits_seq, …) before fuse.
+            _alias_map = {
+                "emb_hits": "hits_emb",
+                "seq_hits": "hits_seq",
+                "struct_hits": "hits_struct",
+                "dom_hits": "hits_dom",
+                "rna_hits": "hits_rna",
+                "lit_hits": "hits_lit",
+                "func_hits": "hits_func",
+            }
+            for alias, canonical in _alias_map.items():
+                if kwargs.get(canonical) is None and isinstance(kwargs.get(alias), list):
+                    kwargs[canonical] = kwargs[alias]
 
             hit_lists = kwargs.get("hit_lists")
             if not hit_lists:
@@ -217,6 +282,8 @@ class FuseSimilarityViewsTool(Tool):
                     "hits_struct",
                     "hits_dom",
                     "hits_rna",
+                    "hits_lit",
+                    "hits_func",
                     "hits",
                 ):
                     part = kwargs.get(key)
@@ -224,9 +291,12 @@ class FuseSimilarityViewsTool(Tool):
                         axes.append(part)
                 if axes:
                     hit_lists = axes
+                elif stage1_bypassed() and cache_proxies():
+                    hit_lists = [cache_proxies()]
                 else:
                     return err(
-                        "provide hit_lists, or hits_emb/hits_seq(/hits_struct/…), or hits"
+                        "provide hit_lists, or hits_emb/hits_seq(/hits_struct/…), "
+                        "or aliases seq_hits/struct_hits/…, or hits"
                     )
             # LLM sometimes passes a modality dict at the top level
             if isinstance(hit_lists, dict):
@@ -247,16 +317,54 @@ class FuseSimilarityViewsTool(Tool):
                 ):
                     # accidental flat list wrapped as one dict — skip noise
                     continue
+            if not lists and stage1_bypassed() and cache_proxies():
+                lists = [cache_proxies()]
             if not lists:
                 return err(
                     "no hit lists to fuse; pass hit_lists as "
                     "[[{alias,score,...}], ...] or [{hits:[...]}, ...]"
                 )
+
+            # Register hard-retrieve aliases; Function peers all eligible for fuse.
+            aliases_from_lists = {
+                str(hit.get("alias") or hit.get("rbp_id") or "")
+                for rows in lists
+                for hit in (rows or [])
+                if isinstance(hit, dict)
+                and (hit.get("alias") or hit.get("rbp_id"))
+                and str(hit.get("metric") or "") != "literature_cooccurrence"
+            }
+            register_retrieve_donors(aliases_from_lists)
+            lit_hits = corroborate_literature_hits_for_aliases(aliases_from_lists)
+            has_lit = any(
+                isinstance(h, dict)
+                and str(h.get("metric") or "") == "literature_cooccurrence"
+                for lst in lists
+                for h in (lst or [])
+            )
+            explicit_lit = kwargs.get("hits_lit")
+            if isinstance(explicit_lit, list) and explicit_lit and not has_lit:
+                filtered = [h for h in explicit_lit if isinstance(h, dict) and h.get("alias")]
+                if filtered:
+                    lists.append(filtered)
+                    lit_hits = filtered
+                    has_lit = True
+            elif lit_hits and not has_lit:
+                lists.append(lit_hits)
+                has_lit = True
+
             excl = set(kwargs.get("exclude_aliases") or [])
             top_k = int(kwargs.get("top_k") or 5)
             tau = kwargs.get("tau_drop")
             tau_f = float(tau) if tau is not None else cfg_tau()
-            weights = fusion_weights()
+            base_weights = fusion_weights()
+            weights, clamped = apply_fusion_weight_override(
+                base_weights, kwargs.get("fusion_weights")
+            )
+            try:
+                set_turn_fusion_weights(weights, clamped=clamped)
+            except Exception:
+                pass
             cfg = get_runtime_config()
             canonical = canonical_request() or {}
             cohort = str(
@@ -285,6 +393,20 @@ class FuseSimilarityViewsTool(Tool):
                 use_rank_normalize=True,
                 tau_drop=tau_f,
             )
+            gap_aliases: list[str] = []
+            if lit_hits:
+                try:
+                    add_evidence_flag("literature_function_axis", True)
+                    add_evidence_flag(
+                        "literature_function_aliases",
+                        [
+                            str(h.get("alias"))
+                            for h in lit_hits
+                            if isinstance(h, dict) and h.get("alias")
+                        ],
+                    )
+                except Exception:
+                    pass
             # Honest multi-view provenance: which delivery axes contributed hits.
             metrics_seen: set[str] = set()
             for lst in lists:
@@ -304,7 +426,11 @@ class FuseSimilarityViewsTool(Tool):
                 "domain": any(
                     m in metrics_seen for m in ("domain_overlap", "domain_jaccard")
                 ),
-                "function": "function_similarity" in metrics_seen,
+                "function": any(
+                    m in metrics_seen
+                    for m in ("function_similarity", "literature_cooccurrence")
+                ),
+                "literature": "literature_cooccurrence" in metrics_seen,
                 "rna": "rna_peak_homology" in metrics_seen,
             }
             missing = [k for k, present in coverage.items() if not present and k in (
@@ -331,9 +457,14 @@ class FuseSimilarityViewsTool(Tool):
                     "weights_source": config_source(),
                     "tau_drop": tau_f,
                     "fusion_weights": weights,
+                    "fusion_weights_applied": weights,
+                    "fusion_weights_clamped": clamped,
+                    "fusion_weights_base": base_weights,
                     "modality_coverage": coverage,
                     "missing_modalities": missing,
                     "metrics_present": sorted(metrics_seen),
+                    "literature_injected": bool(has_lit and lit_hits),
+                    "literature_gap_fill": gap_aliases,
                     "next": "commit_proxy_candidates (select deterministic s_i), then "
                     "confidence_abstain, then predict_interaction",
                 }
@@ -353,7 +484,8 @@ class FuseSimilarityViewsTool(Tool):
             if isinstance(obj, dict) and obj.get("status") == "ok":
                 from nanobot.agent.tools.rbp.turn_guards import set_fused_proxies
 
-                value = obj.get("value") if isinstance(obj.get("value"), dict) else {}
+                raw_value = obj.get("value")
+                value = raw_value if isinstance(raw_value, dict) else {}
                 set_fused_proxies(list(value.get("donors") or []))
         except Exception:
             pass

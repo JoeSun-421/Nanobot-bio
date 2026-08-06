@@ -54,24 +54,13 @@ WORKSPACE = PACKAGE_ROOT / "workspace"
 DEFAULT_TRACE = DEFAULT_AGENT_TRACE
 ensure_artifact_dirs()
 
-_SKILL_CANDIDATES = (
-    PACKAGE_ROOT / "plugin" / "nanobot" / "skills" / "rbp-agent" / "SKILL.md",
-    PACKAGE_ROOT / "workspace" / "skills" / "rbp-agent" / "SKILL.md",
-)
-
 
 # ---------------------------------------------------------------------------
 # Install / skill
 # ---------------------------------------------------------------------------
 
-def install_rbp_tools_into_nanobot() -> Path:
-    """Sync SoT tools/skill into installed nanobot runtime + workspace."""
-    from app.sync_overlay import sync_overlay
-
-    sync_overlay()
-    nb = Path(os.environ.get("NANOBOT_SRC", _DEFAULT_NANOBOT_SRC)).expanduser().resolve()
-    return nb / "agent" / "tools" / "rbp"
-
+# Re-export: keep public API; implementation lives in rbp_bootstrap (no import cycle).
+from app.bootstrap import install_rbp_tools_into_nanobot  # noqa: E402
 
 _AGENTS_BOOTSTRAP = """# RNA–RBP agent
 
@@ -83,22 +72,69 @@ You predict RNA–RBP interactions using delivery tools only.
 2. Map `predictions[0].prob` → `p_hat` / label; emit **JSON only**; **stop**.
 3. Do **not** call transfer / seq_similarity / domain / literature for in-panel targets.
 
+**LOO / force_transfer override:** when the user requests leave-one-out, treat-as-unseen, or `force_transfer=true`, Stage 0 own-head STOP does **not** apply. Still `resolve_rbp`, then retrieve → fuse → commit → abstain → predict on **foreign donors only** (never the query/target alias alone).
+
 Golden: delivery `agent/examples/sample_rna_pos.txt` × PTBP1 → own-head ≈ 0.966.
 
 Unseen RBPs: retrieve → predict donor heads → integrate (BUILD_SPEC §4).
 `p_hat` comes only from predict tools; RNA is not passed into protein-only tools.
+
+## Structure (unseen / AFDB miss)
+
+AFDB `structure_fetch` → `struct_similarity`; **AF3 only on AFDB miss**.
+No QUERY UniProt/alias → `predict_structure(sequence=…)` once. Never invent UniProt
+or borrow a homolog accession to skip AF3. Failure ≠ sim 0.
 """
+
+
+def _skill_sources() -> list[Path]:
+    """Prefer ``app.bootstrap.skill_md()`` (nanobot/skills); workspace is fallback only."""
+    out: list[Path] = []
+    try:
+        from app.bootstrap import skill_md
+
+        sot = skill_md()
+        if sot.is_file():
+            out.append(sot.resolve())
+    except FileNotFoundError:
+        pass
+    fallback = (PACKAGE_ROOT / "workspace" / "skills" / "rbp-agent" / "SKILL.md").resolve()
+    if fallback not in out:
+        out.append(fallback)
+    return out
+
+
+def skill_path() -> Optional[Path]:
+    for p in _skill_sources():
+        if p.is_file():
+            return p
+    return None
 
 
 def ensure_workspace_skill(workspace: Optional[Path] = None) -> Path:
     """Skill + AGENTS.md under nanobot workspace (always-on Stage 0 rules)."""
     ws = Path(workspace or WORKSPACE)
     dest = ws / "skills" / "rbp-agent" / "SKILL.md"
-    for src in _SKILL_CANDIDATES:
-        if src.is_file():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-            break
+    src = skill_path()
+    if src is not None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            same = dest.exists() and dest.resolve() == src.resolve()
+        except OSError:
+            same = False
+        # Preserve sync_overlay symlinks that already point at SoT.
+        if not same:
+            if dest.is_symlink():
+                try:
+                    dest.unlink()
+                except OSError:
+                    pass
+            try:
+                from app.bootstrap.sync_overlay import _link_or_copy
+
+                _link_or_copy(src, dest)
+            except Exception:
+                dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     agents = ws / "AGENTS.md"
     agents.parent.mkdir(parents=True, exist_ok=True)
     # Keep our Stage-0 contract at the top; preserve any extra user notes below a marker.
@@ -114,22 +150,15 @@ def ensure_workspace_skill(workspace: Optional[Path] = None) -> Path:
     return dest
 
 
-def skill_path() -> Optional[Path]:
-    for p in _SKILL_CANDIDATES:
-        if p.is_file():
-            return p
-    return None
-
-
 def _raw_mode() -> str:
-    """Product default whitelist; override via RBP_RAW_TOOLS=all|none|whitelist."""
+    """Product default all; narrow via RBP_RAW_TOOLS=whitelist|none."""
     import os
 
-    return os.environ.get("RBP_RAW_TOOLS", "whitelist")
+    return os.environ.get("RBP_RAW_TOOLS", "all")
 
 
 def _register_tools(registry) -> list[str]:
-    """Register curated P0–P2 tools + delivery-ready tools (whitelist by default)."""
+    """Register curated P0–P2 tools + full delivery surface (default all)."""
     try:
         from nanobot.agent.tools.rbp.register import register_rbp_tools
 
@@ -162,6 +191,8 @@ def _register_tools(registry) -> list[str]:
     # Fallback: delivery registry (requires real nanobot Tool base)
     from app.backends.delivery.registry import register_tools
 
+    if registry is None:
+        raise TypeError("register_tools requires a ToolRegistry")
     return register_tools(registry, include_raw_delivery=_raw_mode())
 
 
@@ -226,6 +257,8 @@ class AgentResult:
 class RBPAgent:
     """Nanobot controller + RBP delivery tools. No fixed pipeline fallback."""
 
+    _bot: Any = None
+
     def __init__(
         self,
         *,
@@ -246,7 +279,12 @@ class RBPAgent:
 
             resolved = resolve_device(device)
         except Exception:
-            resolved = "cuda" if str(device).lower() in ("cuda", "gpu", "auto", "") else str(device or "cpu")
+            # Fail safe to CPU when device probe is unavailable (no silent CUDA assume).
+            d = str(device or "cpu").lower()
+            if d in ("cuda", "gpu"):
+                resolved = "cuda"
+            else:
+                resolved = "cpu"
         os.environ["RHOBIND_DEVICE"] = resolved
         self.workspace = Path(workspace or WORKSPACE)
         self.config_path = Path(config_path).expanduser() if config_path else None
@@ -380,11 +418,15 @@ class RBPAgent:
         fallback_kwargs: Optional[dict[str, Any]] = None,
         trace_path: Optional[Union[str, Path]] = None,
         extra_hooks: Optional[list[Any]] = None,
-        ephemeral: bool = False,
+        ephemeral: bool = True,
         model: Optional[str] = None,
         model_preset: Optional[str] = None,
     ) -> AgentResult:
-        """Run Nanobot LLM agent (primary path). No pipeline fallback."""
+        """Run Nanobot LLM agent (primary path). No pipeline fallback.
+
+        Defaults to ``ephemeral=True`` so each query does not persist or replay
+        prior scientific tool/verdict transcripts as authoritative scores.
+        """
         notes = linux_feasibility_notes()
         if force_fallback or fallback_kwargs:
             err = (
@@ -425,9 +467,9 @@ class RBPAgent:
             bot = self.get_nanobot()
             # Per-query Stage 0–3 guards (own-head STOP must not leak across turns).
             try:
-                from nanobot.agent.tools.rbp.annotation import reset_tool_turn_guards
+                from nanobot.agent.tools.rbp.annotation import prepare_tool_turn_guards
 
-                reset_tool_turn_guards()
+                prepare_tool_turn_guards(message)
             except Exception:
                 try:
                     from nanobot.agent.tools.rbp.turn_guards import reset_stage_guards
@@ -524,8 +566,14 @@ class RBPAgent:
         extra_hooks: Optional[list[Any]] = None,
         renderer: Any = None,
         trace_path: Optional[Union[str, Path]] = None,
+        ephemeral: bool = True,
+        model: Optional[str] = None,
+        model_preset: Optional[str] = None,
     ) -> AgentResult:
-        """Like ``run`` but drives ``Nanobot.run_streamed`` into a StreamRenderer."""
+        """Like ``run`` but drives ``Nanobot.run_streamed`` into a StreamRenderer.
+
+        Defaults to ``ephemeral=True`` (same contract as ``run``).
+        """
         notes = linux_feasibility_notes()
         tp = Path(trace_path or DEFAULT_TRACE)
         tp.parent.mkdir(parents=True, exist_ok=True)
@@ -555,9 +603,9 @@ class RBPAgent:
 
             bot = self.get_nanobot()
             try:
-                from nanobot.agent.tools.rbp.annotation import reset_tool_turn_guards
+                from nanobot.agent.tools.rbp.annotation import prepare_tool_turn_guards
 
-                reset_tool_turn_guards()
+                prepare_tool_turn_guards(message)
             except Exception:
                 try:
                     from nanobot.agent.tools.rbp.turn_guards import reset_stage_guards
@@ -565,10 +613,18 @@ class RBPAgent:
                     reset_stage_guards()
                 except Exception:
                     pass
+            run_kwargs: dict[str, Any] = {
+                "session_key": session_key,
+                "hooks": hooks,
+                "ephemeral": ephemeral,
+            }
+            if model:
+                run_kwargs["model"] = model
+            if model_preset:
+                run_kwargs["model_preset"] = model_preset
             stream = await bot.run_streamed(
                 message,
-                session_key=session_key,
-                hooks=hooks,
+                **run_kwargs,
             )
             async for ev in stream.stream_events():
                 et = getattr(ev, "type", None)
@@ -578,8 +634,9 @@ class RBPAgent:
                         await renderer.on_delta(delta)
                 elif renderer is not None and et == STREAM_EVENT_TEXT_COMPLETED:
                     # Defer final print — caller shows verdict JSON block
-                    if getattr(renderer, "_live", None) is not None:
-                        renderer._live.stop()
+                    live = getattr(renderer, "_live", None)
+                    if live is not None:
+                        live.stop()
                         renderer._live = None
                     if hasattr(renderer, "_stop_spinner"):
                         renderer._stop_spinner()
@@ -633,7 +690,7 @@ def linux_feasibility_notes() -> list[str]:
     ]
 
 
-def _make_trace_hook(path: Path, session_key: str):
+def _make_trace_hook(path: Path, session_key: str) -> Any:
     try:
         from rbp_eval.runtime.nanobot_hooks import RBPTraceHook
 

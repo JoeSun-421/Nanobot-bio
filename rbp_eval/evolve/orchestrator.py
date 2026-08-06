@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -23,6 +24,7 @@ from rbp_eval.evolve.proxy_cache import promote_from_traces
 from rbp_eval.evolve.retune import (
     _hit_lists_from_results,
     retune_abstain_thresholds,
+    retune_fusion_on_dval_ce,
     retune_label_thresholds,
     retune_tau_drop,
     retune_weights,
@@ -36,12 +38,14 @@ class EvolutionReport:
     n_val: int = 0
     tool_attribution: dict[str, Any] = field(default_factory=dict)
     weight_retune: dict[str, Any] = field(default_factory=dict)
+    dval_ce_retune: dict[str, Any] = field(default_factory=dict)
     threshold_retune: dict[str, Any] = field(default_factory=dict)
     abstain_retune: dict[str, Any] = field(default_factory=dict)
     tau_drop_retune: dict[str, Any] = field(default_factory=dict)
     toolkit_proposals: list[dict[str, Any]] = field(default_factory=list)
     cache_promotion: dict[str, Any] = field(default_factory=dict)
     promotion_evidence: dict[str, Any] = field(default_factory=dict)
+    transfer_dir: Optional[str] = None
     evolved_config_path: Optional[str] = None
     notes: list[str] = field(default_factory=list)
 
@@ -60,6 +64,11 @@ def run_self_evolution(
     write_config: bool = True,
     require_loo_report: bool = True,
     allow_retrieval_only: bool = False,
+    transfer_dir: Optional[str | Path] = None,
+    run_calibration: bool = True,
+    calibration_max_seqs: int = 32,
+    calibration_cohort: str = "K562",
+    calibration_device: str = "cuda",
 ) -> EvolutionReport:
     """
     Full offline self-evolution loop.
@@ -87,7 +96,20 @@ def run_self_evolution(
         run_eval,
     )
 
+    prev_transfer = os.environ.get("RBP_LOO_TRANSFER_DIR")
+
+    def _restore_transfer_env() -> None:
+        if transfer_dir:
+            if prev_transfer is None:
+                os.environ.pop("RBP_LOO_TRANSFER_DIR", None)
+            else:
+                os.environ["RBP_LOO_TRANSFER_DIR"] = prev_transfer
+
+    if transfer_dir:
+        os.environ["RBP_LOO_TRANSFER_DIR"] = str(Path(transfer_dir).expanduser().resolve())
+
     report = EvolutionReport(n_val=len(results), n_traces=len(traces or []))
+    report.transfer_dir = os.environ.get("RBP_LOO_TRANSFER_DIR")
     report.promotion_evidence = {
         "status": "required_at_promote",
         "metric": "real_transfer_calibration.delta_auprc",
@@ -124,6 +146,7 @@ def run_self_evolution(
             )
             report.notes.append(f"Report → {EVOLVED_REPORT}")
             report.evolved_config_path = None
+            _restore_transfer_env()
             return report
 
     synthetic = results_are_retrieval_only_synthetic(results)
@@ -142,6 +165,19 @@ def run_self_evolution(
                 "Refuse promotable candidate from retrieval-only synthetic "
                 "No/p_hat=null batches (use heavy-loo / scored labels)."
             )
+    elif scored_labels:
+        report_dict_extra["scores_source"] = "scored_loo_rhobind"
+        report_dict_extra["n_scored_labels"] = len(scored_labels)
+    else:
+        # Transfer-mode results with p_hat but no separate label list
+        n_phat = sum(
+            1
+            for r in results
+            if (r.get("verdict") or {}).get("p_hat") is not None
+        )
+        if n_phat:
+            report_dict_extra["scores_source"] = "scored_transfer_verdicts"
+            report_dict_extra["n_scored_verdicts"] = n_phat
 
     # base weights from runtime config when not supplied
     if base_weights is None:
@@ -170,25 +206,42 @@ def run_self_evolution(
         }
         report.notes.append("Weight retune skipped — provide LOO hit lists.")
 
-    # 3 thresholds
+    # 3 thresholds + D_val CE (proposal §7.3 — CE primary for promote weights)
     if scored_labels:
         report.threshold_retune = retune_label_thresholds(scored_labels)
+        auprc_w = None
+        if report.weight_retune.get("status") == "ok":
+            auprc_w = report.weight_retune.get("tuned_weights")
+            report.weight_retune["role"] = "auxiliary_loo_auprc"
+        report.dval_ce_retune = retune_fusion_on_dval_ce(
+            scored_labels,
+            base_weights=auprc_w or base_weights,
+            held_to_hit_lists=hmap,
+            top_k=top_k,
+        )
     else:
         report.threshold_retune = retune_label_thresholds([])
+        report.dval_ce_retune = {
+            "status": "skipped",
+            "reason": "need scored_labels / --with-labels",
+            "objective": "calibrated_cross_entropy_on_dval",
+        }
         report.notes.append(
-            "Threshold CE skipped — pass scored_labels / --with-labels for (p_hat,y) pairs."
+            "Threshold/D_val CE skipped — pass scored_labels / --with-labels for (p_hat,y) pairs."
         )
 
-    # 3b abstain thresholds
+    # 3b abstain thresholds (prefer CE-tuned fusion weights)
+    promote_weights = None
+    if report.dval_ce_retune.get("status") == "ok":
+        promote_weights = report.dval_ce_retune.get("tuned_weights")
+    if promote_weights is None and report.weight_retune.get("status") == "ok":
+        promote_weights = report.weight_retune.get("tuned_weights")
     if hmap:
-        tuned_w = None
-        if report.weight_retune.get("status") == "ok":
-            tuned_w = report.weight_retune.get("tuned_weights")
         report.abstain_retune = retune_abstain_thresholds(
-            hmap, weights=tuned_w or base_weights, top_k=top_k
+            hmap, weights=promote_weights or base_weights, top_k=top_k
         )
         report.tau_drop_retune = retune_tau_drop(
-            hmap, weights=tuned_w or base_weights, top_k=top_k
+            hmap, weights=promote_weights or base_weights, top_k=top_k
         )
     else:
         report.abstain_retune = {
@@ -204,6 +257,32 @@ def run_self_evolution(
     report.toolkit_proposals = propose_toolkit_expansions(
         results, attribution=report.tool_attribution
     )
+    try:
+        from app.core.paths import REPORTS_JSON
+
+        prop_path = REPORTS_JSON / "toolkit_proposals.json"
+        prop_path.parent.mkdir(parents=True, exist_ok=True)
+        prop_path.write_text(
+            json.dumps(
+                {
+                    "schema": "toolkit_proposals/v1",
+                    "human_review": True,
+                    "auto_install": False,
+                    "n": len(report.toolkit_proposals),
+                    "proposals": report.toolkit_proposals,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        report.notes.append(
+            f"Toolkit proposals → {prop_path} "
+            "(review: nanobot-bio review-toolkit-proposals; do not auto-install)."
+        )
+    except Exception as e:  # noqa: BLE001
+        report.notes.append(f"toolkit_proposals persist failed: {type(e).__name__}: {e}")
     report.notes.append(
         "Toolkit expansion proposals require human review "
         "(do not claim toolkit self-evolved)."
@@ -261,6 +340,7 @@ def run_self_evolution(
     # write evolved *candidate* config (promote separately after eval gate)
     can_write = (
         report.weight_retune.get("status") == "ok"
+        or report.dval_ce_retune.get("status") == "ok"
         or report.abstain_retune.get("status") == "ok"
         or report.tau_drop_retune.get("status") == "ok"
     )
@@ -270,16 +350,26 @@ def run_self_evolution(
             "likely": 0.50,
             "unlikely": 0.25,
         }
-        tuned_w = (report.weight_retune or {}).get("tuned_weights") or (base_weights or {})
+        tuned_w = promote_weights or (base_weights or {})
+        logit_s = None
+        if report.dval_ce_retune.get("status") == "ok":
+            logit_s = report.dval_ce_retune.get("logit_scale")
         abstain = (report.abstain_retune or {}).get("tuned_thresholds")
         tuned_tau = None
         if (report.tau_drop_retune or {}).get("status") == "ok":
             tuned_tau = report.tau_drop_retune.get("tuned_tau_drop")
+        soft = list(
+            (report.tool_attribution or {}).get("soft_disabled_suggestions")
+            or (report.tool_attribution or {}).get("retirement_candidates")
+            or []
+        )
         path = write_evolved_config(
             tuned_weights=tuned_w,
             thresholds=thr,
             abstain_thresholds=abstain,
             tau_drop=tuned_tau,
+            soft_disabled=soft,
+            logit_scale=float(logit_s) if logit_s is not None else None,
             path=CANDIDATE_CONFIG,
             promoted=False,
         )
@@ -294,6 +384,33 @@ def run_self_evolution(
         except Exception:
             pass
 
+        if run_calibration and not synthetic:
+            try:
+                from rbp_eval.evolve.calibration_evidence import (
+                    attach_calibration_evidence,
+                )
+
+                cal = attach_calibration_evidence(
+                    candidate=CANDIDATE_CONFIG,
+                    live=EVOLVED_CONFIG,
+                    cohort=calibration_cohort,
+                    top_k=top_k,
+                    max_seqs=calibration_max_seqs,
+                    device=calibration_device,
+                )
+                report.promotion_evidence = {
+                    **report.promotion_evidence,
+                    **cal,
+                }
+                report.notes.append(
+                    f"calibration_evidence status={cal.get('status')} "
+                    f"decision={cal.get('decision')} reason={cal.get('reason')}"
+                )
+            except Exception as e:  # noqa: BLE001
+                report.notes.append(
+                    f"calibration_evidence failed: {type(e).__name__}: {e}"
+                )
+
     # persist report (include promote honesty fields)
     EVOLVED_REPORT.parent.mkdir(parents=True, exist_ok=True)
     payload = {**report.to_dict(), **report_dict_extra}
@@ -304,6 +421,7 @@ def run_self_evolution(
         encoding="utf-8",
     )
     report.notes.append(f"Report → {EVOLVED_REPORT}")
+    _restore_transfer_env()
     return report
 
 

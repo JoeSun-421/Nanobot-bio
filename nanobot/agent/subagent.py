@@ -1,4 +1,9 @@
-"""Subagent manager for background task execution."""
+"""Subagent manager for background task execution.
+
+CLI examples:
+  nanobot-bio chat
+  nanobot-bio agent --example pos
+"""
 
 import asyncio
 import json

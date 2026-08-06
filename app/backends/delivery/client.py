@@ -176,7 +176,15 @@ class DeliveryToolClient:
                 f"No validated mapping.yaml script binding for tool {name!r}. "
                 f"Reconcile mapping.yaml with tools/registry.json."
             )
-        p = (self.root / rel).resolve()
+        root = self.root.resolve()
+        p = (root / rel).resolve()
+        try:
+            p.relative_to(root)
+        except ValueError as e:
+            raise FileNotFoundError(
+                f"Delivery script for {name!r} escapes DELIVERY_ROOT "
+                f"({root}): {p}"
+            ) from e
         if not p.is_file():
             raise FileNotFoundError(
                 f"Delivery script missing for {name!r}: {p} "
@@ -269,8 +277,16 @@ class DeliveryToolClient:
                     "_latency_ms": 0.0,
                     "_invocation": "skipped_axis",
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            # Fail closed: never run a gated axis when the gate itself breaks.
+            return {
+                "ok": False,
+                "skipped": True,
+                "tool": name,
+                "error": f"axis_gate_unavailable: {type(e).__name__}: {e}",
+                "_latency_ms": 0.0,
+                "_invocation": "skipped_axis",
+            }
 
         meta = self.meta.get(name, {})
 
@@ -325,19 +341,24 @@ class DeliveryToolClient:
                 out = self._call_subprocess(name, payload)
                 invocation = "subprocess_json"
 
-            if not isinstance(out, dict):
-                out = {"value": out}
-            # Preserve delivery ``ok`` semantics; default True only if absent
-            out.setdefault("ok", True)
-            out["_tool"] = name
-            out["_script"] = str(self.script_path(name))
-            out["_invocation"] = invocation
-            out["_args_hash"] = ah
-            out["_latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
-            self._recent_calls[ah] = (now, dict(out))
-            if name == "esm_similarity" and out.get("ok", True) and not out.get("skipped"):
-                self._esm_disk_put(payload, out)
-            return out
+            result: dict[str, Any] = dict(out) if isinstance(out, dict) else {"value": out}
+            # Missing ok + error/reason → failure; never invent success.
+            if "ok" not in result:
+                if result.get("error") or result.get("reason"):
+                    result["ok"] = False
+                else:
+                    result["ok"] = True
+            result["_tool"] = name
+            result["_script"] = str(self.script_path(name))
+            result["_invocation"] = invocation
+            result["_args_hash"] = ah
+            result["_latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
+            # Dedupe / disk-cache only successful non-skipped envelopes.
+            if result.get("ok") is True and not result.get("skipped"):
+                self._recent_calls[ah] = (now, dict(result))
+                if name == "esm_similarity":
+                    self._esm_disk_put(payload, result)
+            return result
 
         except Exception as e:  # noqa: BLE001 — return envelope, do not crash agent
             err = {
@@ -349,7 +370,7 @@ class DeliveryToolClient:
                 "_args_hash": ah,
                 "_latency_ms": round((time.perf_counter() - t0) * 1000.0, 3),
             }
-            self._recent_calls[ah] = (now, dict(err))
+            # Do not sticky-cache failures for the full TTL.
             return err
 
     # ------------------------------------------------------------------
@@ -383,7 +404,8 @@ class DeliveryToolClient:
         spec.loader.exec_module(mod)
 
         if hasattr(mod, "run") and callable(mod.run):
-            return mod.run(payload)
+            ran = mod.run(payload)
+            return ran if isinstance(ran, dict) else {"value": ran}
         # Some delivery tools expose no run(payload) and a non-JSON CLI (e.g.
         # colabfold_msa uses get_msa()/--seq). Adapt those without editing delivery.
         adapter = _IMPORT_ADAPTERS.get(name)
@@ -469,7 +491,7 @@ class DeliveryToolClient:
             cmd,
             capture_output=True,
             text=True,
-            timeout=int(payload.get("timeout_s") or 3600),
+            timeout=max(1, min(int(payload.get("timeout_s") or 3600), 3600)),
             env=env,
             cwd=str(self.root),
         )
@@ -528,13 +550,26 @@ class DeliveryToolClient:
 
     @staticmethod
     def _conda_env_prefix(name: str) -> Optional[Path]:
-        # Fast path: CONDA_ENVS_PATH / common local layouts (no host-specific paths)
+        # Portable: CONDA_ENVS_* / conda info --base / home installs; host-specific last.
         envs_roots: list[Path] = []
         for key in ("CONDA_ENVS_PATH", "CONDA_ENVS_DIRS"):
             raw = os.environ.get(key) or ""
             for part in raw.split(os.pathsep):
                 if part.strip():
                     envs_roots.append(Path(part.strip()))
+        try:
+            r_base = subprocess.run(
+                ["conda", "info", "--base"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if r_base.returncode == 0:
+                base = (r_base.stdout or "").strip()
+                if base:
+                    envs_roots.append(Path(base) / "envs")
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
         for base in (
             os.environ.get("CONDA_PREFIX"),
             os.environ.get("MAMBA_ROOT_PREFIX"),
@@ -549,7 +584,24 @@ class DeliveryToolClient:
                 p = Path(base)
                 if p.name != "envs" and (p.parent / "envs").is_dir():
                     envs_roots.append(p.parent / "envs")
+        # Portable: conda trees next to BIO_ROOT / this checkout.
+        try:
+            bio_agent = Path(__file__).resolve().parents[4]
+            for root in (bio_agent.parent / "conda", bio_agent / "conda"):
+                envs_roots.append(root / "envs")
+        except IndexError:
+            pass
+        bio = os.environ.get("BIO_ROOT")
+        if bio:
+            bp = Path(bio).expanduser()
+            for root in (bp.parent / "conda", bp / "conda"):
+                envs_roots.append(root / "envs")
+        seen: set[str] = set()
         for root in envs_roots:
+            key = str(root)
+            if key in seen:
+                continue
+            seen.add(key)
             cand = root / name
             if (cand / "bin" / "python").is_file():
                 return cand

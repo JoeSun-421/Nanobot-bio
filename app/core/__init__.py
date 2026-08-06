@@ -7,17 +7,26 @@ Kept:
   - ``verdict_schema`` — verdict JSON normalize/validate
 
 Eval-only fusion helpers live under ``rbp_eval``. The fixed ``pipeline``
-module was removed — product path is ``app.agent.RBPAgent`` → ``Nanobot.run``
-(``app.integrate`` remains a thin re-export).
+module was removed — product path is ``app.agent.RBPAgent`` → ``Nanobot.run``.
 """
 
 from __future__ import annotations
 
-__all__ = ["normalize_verdict", "validate_verdict", "extract_verdict_from_content"]
+__all__ = [
+    "normalize_verdict",
+    "validate_verdict",
+    "extract_verdict_from_content",
+    "looks_like_tool_markup",
+]
 
 
 def __getattr__(name: str):
-    if name in ("normalize_verdict", "validate_verdict", "extract_verdict_from_content"):
+    if name in (
+        "normalize_verdict",
+        "validate_verdict",
+        "extract_verdict_from_content",
+        "looks_like_tool_markup",
+    ):
         from . import verdict_schema
 
         return getattr(verdict_schema, name)

@@ -107,6 +107,9 @@ venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
 extraPaths = ["."]
+stubPath = "typings"
+# basedpyright defaults to "all"; keep IDE-aligned "standard" for red diagnostics.
+typeCheckingMode = "standard"
 
 [tool.ruff]
 target-version = "py310"

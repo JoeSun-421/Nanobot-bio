@@ -7,6 +7,7 @@ Your workspace is at: {{ workspace_path }}
 - Scientific mode: personal long-term memory (`MEMORY.md` / Dream) is disabled.
 - Chat transcripts live under the sessions store (canonical: `artifacts/sessions/`; `workspace/sessions` is a symlink).
 - Domain memory for retrieval shortcuts is `artifacts/cache/proxy_map.json` (not PA memory).
+- Each new user binding question must re-call science tools (Stage 0–3). Never treat prior-turn tool transcripts or verdicts as the scientific result.
 {% else %}
 - Long-term memory: {{ workspace_path }}/memory/MEMORY.md (automatically managed by Dream — do not edit directly)
 - History log: {{ workspace_path }}/memory/history.jsonl (append-only JSONL; prefer built-in `grep` for search).

@@ -1,0 +1,16 @@
+{
+  "include": ["app", "nanobot", "rbp_eval", "tests"],
+  "exclude": [
+    "**/.venv",
+    "**/artifacts",
+    "**/workspace",
+    "**/__pycache__",
+    "**/node_modules"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "extraPaths": ["."],
+  "stubPath": "typings",
+  "typeCheckingMode": "standard"
+}

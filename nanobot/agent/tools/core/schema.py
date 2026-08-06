@@ -7,6 +7,10 @@
 Shared validation and fragment normalization are on the class methods of :class:`~nanobot.agent.tools.core.base.Schema`.
 
 Note: Python does not allow subclassing ``bool``, so booleans use :class:`BooleanSchema`.
+
+CLI examples:
+  nanobot-bio nanobot-smoke
+  nanobot-bio agent --example pos
 """
 
 from __future__ import annotations

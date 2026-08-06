@@ -4,50 +4,94 @@
 
 [English](README.md) · [中文]
 
-## 功能
+## 用途
 
-- 稳定的命令面：console_scripts 与 `python -m app` 共用
-- 分组实现：日常用户命令、验收、离线评估/演化、工程维护
-- `common.py` 提供共享 bootstrap（环境 / `sys.path` / 路径）
+本包是控制台脚本与 `python -m app` 共用的薄而稳定的命令面。处理器按组划分，使日常 chat、科学验收、离线 evolve 与工程门禁可独立演进，且不改公共命令名。这里**不实现**科学打分——处理器委托给 `app.agent`、`rbp_eval.*`、`app.dev.*` 或 delivery。
 
-## 实现方法
+## 布局
 
-| 文件 | 命令域（稳定名） |
-|------|------------------|
-| `parser.py` | 构建 argparse；**命令名保持稳定** |
-| `user.py` | `agent`、`chat`、`onboard`、`doctor`、`nanobot-smoke` |
-| `accept.py` | `accept-golden` / `own-head`、`accept-llm`、`gap-closure` |
+
+
+## 通用布局（Linux）
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# 检出目录常见为 Nanobot-bio（GitHub）；小写 nanobot-bio 亦可。
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
+| 文件 | 领域（稳定命令名） |
+|------|-------------------|
+| `parser.py` | 构建 argparse；**名称保持稳定** |
+| `user.py` | `doctor`、`onboard`、`nanobot-smoke`、`agent`、`chat` |
+| `accept.py` | `own-head` / `accept-golden`、`accept-llm`、`gap-closure` |
 | `eval_cmds.py` | `run-eval`、`heavy-loo`、`evolve*`、`eval-plan`、`promote-evolved` |
 | `maint.py` | `gate`、`layout`、`mvp`、`compliance` |
-| `common.py` | 环境 / 路径 bootstrap（import 即有副作用） |
-| `__init__.py` | `main()`；`pyproject` scripts 指向此处 |
+| `common.py` | 环境 / `sys.path` 引导（导入有意带副作用） |
+| `__init__.py` | `main()`、`build_parser()` — `[project.scripts]` 入口 |
+| `__main__.py` | `python -m app.cli` |
 
-入口：`pyproject.toml` 的 `[project.scripts]` → `app.cli:main`。
-
-## 怎么使用
+## 入口
 
 ```bash
 nanobot-bio --help
-nanobot-bio doctor              # 功能能力表；--verbose 看路径明细
-source scripts/nbio             # 日常激活（见 scripts/nbio）
-python -m app chat
-bash scripts/ci/ci_gate.sh          # → python -m app gate
+python -m app --help
+python -m app.cli --help
 ```
 
-常用参数：
+```python
+from app.cli import main, build_parser
 
-- `agent` / `chat`：`--device auto|cuda|cpu`，`--query` / `--rna-file` / `--example`
-- `onboard`：交互式，或 `--provider` / `--model` / `--key`（密钥进 `.env`，config 只存 `${VAR}`）
-- `gate`：工程门禁（ruff + pytest + layout）；见 `scripts/ci/`
+raise SystemExit(main(["doctor"]))
+# 或查看 flags：
+build_parser().print_help()
+```
 
-认证编排在 [`scripts/cert/certify.sh`](../../scripts/cert/README.zh.md)（内部调 doctor / accept）。
+## 代码示例
+
+**日常用户路径**
+
+```bash
+source scripts/nbio.sh # 可选日常激活
+nanobot-bio doctor # 能力表；--verbose 打印路径
+nanobot-bio onboard # 交互式 LLM 配置
+nanobot-bio chat # 多轮
+nanobot-bio agent --example pos
+# 或：nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+```
+
+**验收 / 评估 / 维护**
+
+```bash
+nanobot-bio own-head # delivery own-head（无 LLM）
+nanobot-bio accept-llm
+nanobot-bio run-eval
+nanobot-bio heavy-loo
+nanobot-bio evolve
+nanobot-bio gate # 工程：ruff + pytest + layout
+bash scripts/ci/ci_gate.sh # → python -m app gate
+```
+
+**常用 flags**（`parser.py` / `user.py`）：
+
+- `agent` / `chat`：`--device auto|cuda|cpu`、`--query`、`--rna-file`、`--example`
+- `onboard`：`--provider` / `--model` / `--key`（密钥进 `.env`；配置保留 `${VAR}`）
+- `gate`：仅工程——见 [`../dev/`](../dev/README.zh.md)
+
+认证编排：[`scripts/cert/certify.sh`](../../scripts/cert/README.zh.md)。
+
+## 依赖 / 环境
+
+- 同 [`app/`](../README.zh.md)：editable install；科学命令需要 delivery。
+- 导入 `app.cli.common` 会有意引导路径——嵌入 `main()` 时请保留该副作用。
 
 ## 设计思路
 
-- CLI 保持薄层，避免产品 UX 变动牵动 Nanobot API。
-- user / accept / eval / maint 分文件，便于 CI 只跑 maint/accept。
-- 本层不算科学分——委托给 `app.agent`、`rbp_eval.*` 或 delivery。
+- 薄 argparse，产品 UX 变更不必牵动 Nanobot API。
+- 拆分 user / accept / eval / maint，便于 CI 不加载 chat UX。
+- CLI 层绝不编造分数。
 
 ## 相关文档
 
-[`../README.zh.md`](../README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [`../../scripts/ci/README.zh.md`](../../scripts/ci/README.zh.md)
+[`../README.zh.md`](../README.zh.md) · [`../dev/README.zh.md`](../dev/README.zh.md) · [`INSTALL.md`](../../INSTALL.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../scripts/ci/README.zh.md`](../../scripts/ci/README.zh.md)

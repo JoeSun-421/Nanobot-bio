@@ -1,50 +1,52 @@
 # nanobot/sdk/
 
-支撑高阶 Nanobot Python API 的内部辅助模块。
+高层 Nanobot Python API 的内部辅助。
 
 [English](README.md) · [中文]
 
-## 功能
+> 包地图与 `$BIO_ROOT` 布局见仓库根 [`README.zh.md`](../../README.zh.md)。激活：`cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`。
 
-- 支撑 `nanobot.nanobot.Nanobot` 的内部实现（流式事件、客户端、运行时类型）
-- **不是**给产品协作方用的第二套公共 API
+## 用途
 
-## 实现方法
+为 `nanobot.nanobot.Nanobot` 提供流式事件、薄客户端（session / memory / runtime）与共享类型。这**不是**给产品协作者的第二套公共 API——请优先 `from nanobot import Nanobot` 或 App CLI。
+
+## 布局
 
 | 文件 | 角色 |
 |------|------|
-| `clients.py` | SDK 客户端辅助 |
-| `runtime.py` | 运行时胶水 |
-| `streaming.py` | 流式事件相关 |
-| `types.py` | 共享类型 |
-| `__init__.py` | 包说明（internal helpers） |
+| `clients.py` | `SessionClient`、`MemoryClient`、`RuntimeClient` |
+| `runtime.py` | `SDKRuntimeController`、进程参数辅助 |
+| `streaming.py` | `RunStream`、`SDKStreamEmitter`、流式 hook |
+| `types.py` | `RunResult`、`StreamEvent`、流事件常量 |
+| `__init__.py` | 包说明（内部辅助） |
 
-关系：
+## 入口
 
+```python
+from nanobot import Nanobot, RunResult, RunStream
+from nanobot.sdk.types import STREAM_EVENT_TOOL_COMPLETED
 ```
-nanobot/nanobot.py  (公共 API)
-    └── nanobot/sdk/*  (内部细节)
-app/agent.py        (产品组装 → Nanobot)
+
+## 代码示例
+
+```python
+from nanobot import Nanobot
+
+bot = Nanobot.from_config(scientific_mode=True)
+print(bot.sessions, bot.memory, bot.runtime)
+
+async for event in bot.run_streamed("Ping"):
+ print(event.type)
 ```
-
-## 怎么使用
-
-优先用产品 CLI 或高阶导入：
 
 ```bash
 nanobot-bio chat|agent
 ```
 
-```python
-from nanobot import Nanobot  # 或 Nanobot.from_config
-```
+## 依赖 / 环境
 
-不要把 `nanobot.sdk.*` 当成对外稳定契约。
-
-## 设计思路
-
-- 公共面保持小（`Nanobot` + CLI），内部可重构 streaming/client 细节。
-- LLM 凭证仍走 onboard / `.env` / `~/.nanobot/config.json`，不在此硬编码。
+- 与 Nanobot 相同的 LLM 配置（`~/.nanobot/config.json` / `.env`）。
+- 不要把 `nanobot.sdk.*` 当作跨版本稳定外部契约。
 
 ## 相关文档
 

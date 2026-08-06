@@ -4,50 +4,94 @@ Argparse product CLI for `nanobot-bio` / `rbp-agent`.
 
 [English] · [中文](README.zh.md)
 
-## Features
+## Purpose
 
-- Stable command surface shared by console scripts and `python -m app`
-- Grouped handlers: daily user commands, acceptance, offline eval/evolve, engineering maint
-- Shared bootstrap in `common.py` (env / `sys.path` / path helpers)
+This package is the thin, stable command surface shared by console scripts and `python -m app`. Handlers stay grouped so daily chat, scientific acceptance, offline evolve, and engineering gates can evolve independently without renaming public commands. Science scoring is never implemented here — handlers delegate to `app.agent`, `rbp_eval.*`, `app.dev.*`, or delivery.
 
-## Implementation
+## Layout
 
-| File | Domain (stable names) |
-|------|------------------------|
-| `parser.py` | Builds argparse; **command names stay stable** |
-| `user.py` | `agent`, `chat`, `onboard`, `doctor`, `nanobot-smoke` |
-| `accept.py` | `accept-golden` / `own-head`, `accept-llm`, `gap-closure` |
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
+| File | Domain (stable command names) |
+|------|-------------------------------|
+| `parser.py` | Builds argparse; **names stay stable** |
+| `user.py` | `doctor`, `onboard`, `nanobot-smoke`, `agent`, `chat` |
+| `accept.py` | `own-head` / `accept-golden`, `accept-llm`, `gap-closure` |
 | `eval_cmds.py` | `run-eval`, `heavy-loo`, `evolve*`, `eval-plan`, `promote-evolved` |
 | `maint.py` | `gate`, `layout`, `mvp`, `compliance` |
-| `common.py` | Env / path bootstrap (import has intentional side effects) |
-| `__init__.py` | `main()` entry used by `pyproject` scripts |
+| `common.py` | Env / `sys.path` bootstrap (import has intentional side effects) |
+| `__init__.py` | `main()`, `build_parser()` — `[project.scripts]` target |
+| `__main__.py` | `python -m app.cli` |
 
-Entry wiring: `[project.scripts]` in `pyproject.toml` → `app.cli:main`.
-
-## How to use
+## Entry points
 
 ```bash
 nanobot-bio --help
-nanobot-bio doctor              # capability table; --verbose for path dumps
-source scripts/nbio             # daily activate (see scripts/nbio)
-python -m app chat
-bash scripts/ci/ci_gate.sh          # → python -m app gate
+python -m app --help
+python -m app.cli --help
 ```
 
-Notable flags:
+```python
+from app.cli import main, build_parser
 
-- `agent` / `chat`: `--device auto|cuda|cpu`, `--query` / `--rna-file` / `--example`
-- `onboard`: interactive or `--provider` / `--model` / `--key` (keys land in `.env`, config keeps `${VAR}` refs)
-- `gate`: engineering gate (ruff + pytest + layout); see `scripts/ci/`
+raise SystemExit(main(["doctor"]))
+# or inspect flags:
+build_parser().print_help()
+```
 
-Certification orchestration lives in [`scripts/cert/certify.sh`](../../scripts/cert/README.md) (calls doctor / accept modules).
+## Code examples
+
+**Daily user path**
+
+```bash
+source scripts/nbio.sh # optional daily activate helper
+nanobot-bio doctor # capability table; --verbose for path dumps
+nanobot-bio onboard # interactive LLM setup
+nanobot-bio chat # multi-turn
+nanobot-bio agent --example pos
+# or: nanobot-bio agent --query PTBP1 --rna-file path/to/rna.txt
+```
+
+**Acceptance / eval / maint**
+
+```bash
+nanobot-bio own-head # delivery own-head (no LLM)
+nanobot-bio accept-llm
+nanobot-bio run-eval
+nanobot-bio heavy-loo
+nanobot-bio evolve
+nanobot-bio gate # engineering: ruff + pytest + layout
+bash scripts/ci/ci_gate.sh # → python -m app gate
+```
+
+**Notable flags** (`parser.py` / `user.py`):
+
+- `agent` / `chat`: `--device auto|cuda|cpu`, `--query`, `--rna-file`, `--example`
+- `onboard`: `--provider` / `--model` / `--key` (keys in `.env`; config keeps `${VAR}` refs)
+- `gate`: engineering only — see [`../dev/`](../dev/README.md)
+
+Certification orchestration: [`scripts/cert/certify.sh`](../../scripts/cert/README.md).
+
+## Dependencies / env
+
+- Same as [`app/`](../README.md): editable install, optional delivery for science commands.
+- Importing `app.cli.common` bootstraps paths intentionally — keep that side effect when embedding `main()`.
 
 ## Design rationale
 
-- Keep a thin argparse layer so product UX changes do not force Nanobot API churn.
-- Split user / accept / eval / maint modules so CI can call maint/accept without loading chat UX.
-- Do not bake science scores here — handlers delegate to `app.agent`, `rbp_eval.*`, or delivery.
+- Thin argparse so product UX can change without forcing Nanobot API churn.
+- Split user / accept / eval / maint so CI can call maint without loading chat UX.
+- Never invent scores in the CLI layer.
 
 ## See also
 
-[`../README.md`](../README.md) · [`INSTALL.md`](../../INSTALL.md) · [`../../scripts/ci/README.md`](../../scripts/ci/README.md)
+[`../README.md`](../README.md) · [`../dev/README.md`](../dev/README.md) · [`INSTALL.md`](../../INSTALL.md) · [rbp-agent SKILL.md](../../nanobot/skills/rbp-agent/SKILL.md) · [`../../scripts/ci/README.md`](../../scripts/ci/README.md)

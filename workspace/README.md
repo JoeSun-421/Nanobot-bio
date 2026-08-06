@@ -8,6 +8,17 @@ Nanobot workspace root: synced skills and symlinked session/memory views.
 
 - Runtime workspace expected by Nanobot (`NANOBOT_WORKSPACE`)
 - Synced skill copies under `skills/` (see [`skills/README.md`](skills/README.md))
+
+
+## Portable layout (Linux)
+
+```bash
+export BIO_ROOT="${BIO_ROOT:-$HOME/bio_agent}"
+# Checkout folder is often Nanobot-bio (GitHub); lowercase nanobot-bio also OK.
+cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}"
+source scripts/nbio.sh
+```
+
 - Symlinks `sessions` → `../artifacts/sessions`, `memory` → `../artifacts/memory` (no dual-write)
 - Short workspace bootstrap notes in `AGENTS.md`
 
@@ -20,7 +31,7 @@ Nanobot workspace root: synced skills and symlinked session/memory views.
 | `memory` → `../artifacts/memory` | PA long-term memory symlink (excluded from scientific prompts) |
 | `AGENTS.md` | Workspace-level short cues (Stage 0 own-head, …) |
 
-Canonical stores and helpers: `app.core.paths.ensure_artifact_dirs()`. Detail: [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2 (local `docs/MEMORY_AND_SESSIONS.zh.md` if present).
+Canonical stores and helpers: `app.core.paths.ensure_artifact_dirs()`. Detail: [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2 .
 
 Env:
 
@@ -32,7 +43,7 @@ Env:
 ## How to use
 
 ```bash
-export NANOBOT_WORKSPACE=$PWD/workspace   # usually set by setup / defaults
+export NANOBOT_WORKSPACE=$PWD/workspace # usually set by setup / defaults
 python -m app.sync_overlay
 nanobot-bio chat
 ```

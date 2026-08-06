@@ -4,53 +4,78 @@ Agent loop, memory/context, skills loader, and tool packages.
 
 [English] · [中文](README.zh.md)
 
-## Features
+> Parent package map and `$BIO_ROOT` layout: [`README.md`](../../README.md). Activate with `cd "${NANOBOT_BIO_ROOT:-$BIO_ROOT/Nanobot-bio}" && source scripts/nbio.sh`.
 
-- Multi-turn agent loop and runner wrappers
-- Context assembly, memory hooks, skill loading
-- Tool trees: `tools/core` (runtime infra), `tools/rbp` (product), `tools/legacy` (PA stubs, not in default allow list)
-- Optional framework helpers (autocompact, subagent, cron turns) — product path keeps these constrained
+## Purpose
 
-## Implementation
+This package is the heart of a Nanobot turn: build context, call the LLM provider, execute tools, stream progress, and persist memory/session side effects. For nanobot-bio, product science behaviour is driven by **RBP tools + skill**, with outbound science calls through the App delivery bridge. Operators do not invoke this package as a CLI — `RBPAgent` / `Nanobot.from_config` load it.
+
+## Layout
 
 | Path | Role |
 |------|------|
 | `loop.py` / `runner.py` | Main loop and run wrappers |
-| `context.py` | Context assembly |
-| `memory.py` | Long-term memory hooks (PA memory off in scientific_mode) |
-| `skills.py` | Skill loading |
-| `autocompact.py` / `hook.py` / `progress_hook.py` / `subagent.py` / `cron_turns.py` | Framework capabilities (tightened for RBP product) |
+| `context.py` | Context assembly (`ContextBuilder`) |
+| `memory.py` | Long-term memory hooks (PA memory off in `scientific_mode`) |
+| `skills.py` | Skill loading (`SkillsLoader`) |
+| `hook.py` / `progress_hook.py` | Hook interfaces / progress |
+| `autocompact.py` / `subagent.py` / `cron_turns.py` | Framework capabilities (tightened for RBP) |
 | `model_presets.py` | Model presets |
-| `tools/core/` | Tool runtime infrastructure |
-| `tools/rbp/` | **Product toolkit** (retrieve / predict / structure / …) |
-| `tools/legacy/` | PA / legacy stubs; default not allow-listed |
+| [`tools/`](tools/README.md) | Tool package root |
+| [`tools/core/`](tools/core/README.md) | Tool runtime infrastructure |
+| [`tools/rbp/`](tools/rbp/README.md) | **Product toolkit** |
+| [`tools/legacy/`](tools/legacy/README.md) | PA / legacy stubs; default not allow-listed |
 
-Skill SoT for stage discipline (Stage 0 own-head fast path, etc.): `nanobot/skills/rbp-agent/SKILL.md`.
+Skill SoT: [`../skills/rbp-agent/SKILL.md`](../skills/README.md). Canonical session/memory stores: `artifacts/` ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §2).
 
-Canonical session/memory stores live under `artifacts/` (see [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §2); `workspace/` holds symlinks.
+## Entry points / imports
 
-## How to use
+```python
+from nanobot.agent import AgentLoop, ContextBuilder, MemoryStore, SkillsLoader
+from nanobot.agent.tools import ToolRegistry, Tool
+```
 
-Loaded indirectly via `app.agent.RBPAgent` / `Nanobot.from_config`. Operators do not invoke this package as a CLI.
+Loaded indirectly via:
 
-Defaults:
+```python
+from nanobot import Nanobot
+from app.agent import RBPAgent
+```
 
-- `NANOBOT_TOOL_ALLOW=rbp`
-- `NANOBOT_TOOL_PLUGINS` unset / off
+## Code examples
 
-After editing `tools/rbp` or the skill, sync overlay and run compliance tests:
+**Register curated RBP tools**
+
+```python
+from nanobot.agent.tools import ToolRegistry
+from nanobot.agent.tools.rbp import register_all
+
+reg = ToolRegistry()
+names = register_all(reg)
+print(names) # predict_interaction, seq_similarity, …
+```
+
+**Defaults after product chat start**
 
 ```bash
+# Env typically set by app bootstrap:
+# NANOBOT_TOOL_ALLOW=rbp
+# NANOBOT_TOOL_PLUGINS unset / off
 python -m app.sync_overlay
 pytest tests/test_proposal_compliance.py tests/test_package_layout.py
 ```
 
+## Dependencies / env
+
+- Requires a configured LLM provider for real turns.
+- RBP tools call `app.backends.delivery` — need `DELIVERY_ROOT` for science.
+- Optional: `RBP_PHMMER=1` enables phmmer remote-homology tool.
+
 ## Design rationale
 
-- Product science behaviour is driven by **RBP tools + skill**, with outbound calls through the App delivery bridge.
 - Legacy PA tools remain on disk for framework compatibility but stay off the allow list unless maintainers widen policy ([`AGENTS.md`](../../AGENTS.md)).
 - LLM must not bypass `similarity_weighted_vote` or invent `prob` / `p_hat`.
 
 ## See also
 
-[`../README.md`](../README.md) · [`../sdk/README.md`](../sdk/README.md) · [`../../app/README.md`](../../app/README.md)
+[`../README.md`](../README.md) · [`tools/rbp/README.md`](tools/rbp/README.md) · [`../sdk/README.md`](../sdk/README.md) · [rbp-agent SKILL.md](../skills/rbp-agent/SKILL.md) · [`../../app/README.md`](../../app/README.md)

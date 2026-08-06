@@ -1,21 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Stage 0–3 contract — single source of truth for tool ordering (Proposal §5/§9).
+"""Declarative Stage 0–3 tool-ordering contract (Proposal §5 / §9).
 
-This module replaces the scattered hardcoded tool-name sets that previously lived
-in ``turn_guards`` with a declarative contract:
+Single source of truth for which tools may run when. ``turn_guards`` holds
+per-turn *state*; this module holds *policy*:
 
-* ``STAGE_RETRIEVE`` — Stage-1 retrieve tools. These are ``concurrency_safe``
-  (``read_only=True``), so the nanobot runner batches consecutive calls into a
-  single ``asyncio.gather`` → true parallel four-view retrieval.
-* ``REQUIRES`` — serial edges on the unseen/transfer path. Each entry says the
-  key tool may only execute after the listed prerequisite tools have been
-  marked done this turn. ``turn_guards`` consults this map instead of hardcoding
-  the fuse → abstain → predict chain.
-* ``OWN_HEAD_STOP_BLOCKED`` — tools refused after a successful own-head
-  ``predict_interaction`` (Stage 0 STOP: emit verdict, do not retrieve/transfer).
+* ``STAGE_RETRIEVE`` — Stage-1 retrieve tools (read-only / concurrency-safe).
+  The nanobot runner may ``asyncio.gather`` consecutive calls in one turn.
+* ``REQUIRES`` — serial edges on the unseen/transfer path
+  (retrieve → fuse → commit → abstain → predict). Keys are tool names;
+  values are prerequisite tool names or sentinels such as
+  ``__any_retrieve__``, ``__structure_axis__``, ``__domain_axis__``.
+* ``OWN_HEAD_STOP_BLOCKED`` — tools refused after a successful in-catalogue
+  own-head ``predict_interaction`` (Stage 0 STOP).
 
-The contract is data-driven so a future runner-level scheduler can consume the
-same edges (B2: scheduling-layer prevention, not just post-hoc guard blocking).
+Kept data-driven so a future scheduler can consume the same edges instead of
+post-hoc blocking only.
+
+CLI examples:
+  nanobot-bio agent --force-transfer --query PTBP1 --rna-file path/to/rna.txt
+  nanobot-bio agent --example pos
+  nanobot-bio mvp
 """
 
 from __future__ import annotations
